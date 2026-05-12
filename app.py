@@ -1228,6 +1228,10 @@ def api_storico_kpi():
     return jsonify({'n_lotti':len(lotti),'n_pezzi':n_pezzi,'costo_tot':round(costo_tot,2),
                     'durata_media':round(sum(durate)/len(durate),1) if durate else 0,'top_codici':top})
 
+@app.route('/initdb')
+def initdb():
+    db.create_all()
+    return 'DB inizializzato OK!'
 
 # ── ENTRY POINT ─────────────────────────────────────────────────
 if __name__ == '__main__':
