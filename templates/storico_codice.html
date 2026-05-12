@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}{{ prodotto.codice }} — Storico{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{{ url_for('storico') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h1 class="h3 mb-0">{{ prodotto.codice }}</h1>
+    <p class="text-muted mb-0">{{ prodotto.descrizione }} — <span class="badge bg-light text-dark border">{{ prodotto.famiglia|title }}</span></p>
+  </div>
+</div>
+
+<!-- STANDARD ATTUALE -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card border-success border-2 shadow-sm">
+      <div class="card-body text-center">
+        <div class="small text-muted mb-1">Costo Standard attuale</div>
+        <div class="fs-2 fw-bold text-success">€{{ "%.4f"|format(prodotto.costo_standard) }}</div>
+        <div class="small text-muted">da {{ prodotto.n_campioni_standard }} passaggi reali</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center">
+        <div class="small text-muted mb-1">Tempo Standard</div>
+        <div class="fs-2 fw-bold text-primary">{{ "%.3f"|format(prodotto.tempo_standard_min) }} min</div>
+        <div class="small text-muted">per pezzo in linea</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center">
+        <div class="small text-muted mb-1">Superficie m²</div>
+        <div class="fs-2 fw-bold">{{ "%.3f"|format(prodotto.superficie_m2) }}</div>
+        <div class="small text-muted">Peso: {{ prodotto.peso_kg }} kg</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center">
+        <div class="small text-muted mb-1">Passo gancio</div>
+        <div class="fs-2 fw-bold">{{ "%.0f"|format(prodotto.passo_gancio_mm) }} mm</div>
+        <div class="small text-muted">Complessità: {{ prodotto.complessita_aggancio }}/3</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GRAFICO TREND STORICO -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-transparent pt-3 pb-0 border-0">
+    <h5 class="fw-semibold">
+      <i class="bi bi-graph-up me-2 text-success"></i>
+      Andamento costo unitario — ultimi 90 giorni
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if serie %}
+      <canvas id="chartTrend" height="100"></canvas>
+    {% else %}
+      <div class="text-center text-muted py-4">
+        <i class="bi bi-clock-history fs-2 d-block mb-2"></i>
+        Nessun dato storico disponibile. Completa i primi lotti per vedere il trend.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- TABELLA STORICO DETTAGLIATO -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent pt-3 pb-0 border-0">
+    <h5 class="fw-semibold">
+      <i class="bi bi-list-ul me-2 text-warning"></i>Ultimi passaggi in verniciatura
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Data</th>
+          <th class="text-end">Qtà</th>
+          <th class="text-end">€ Materiale</th>
+          <th class="text-end">€ Processo</th>
+          <th class="text-end">€ Manodopera</th>
+          <th class="text-end fw-bold">€ Unitario</th>
+          <th class="text-end">Tempo (min)</th>
+          <th class="text-end">v catena</th>
+          <th>Lotto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ultimi %}
+        <tr>
+          <td>{{ r.data }}</td>
+          <td class="text-end">{{ r.quantita }}</td>
+          <td class="text-end text-muted small">€{{ "%.4f"|format(r.costo_materiale) }}</td>
+          <td class="text-end text-muted small">€{{ "%.4f"|format(r.costo_processo) }}</td>
+          <td class="text-end text-muted small">€{{ "%.4f"|format(r.costo_manodopera) }}</td>
+          <td class="text-end fw-bold text-success">€{{ "%.4f"|format(r.costo_totale) }}</td>
+          <td class="text-end">{{ "%.3f"|format(r.tempo_min) }}</td>
+          <td class="text-end text-muted small">{{ r.velocita_catena }} m/min</td>
+          <td>
+            <a href="{{ url_for('lotto_detail', lotto_id=r.lotto_id) }}" 
+               class="text-decoration-none small text-muted">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Lotto #{{ r.lotto_id }}
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center text-muted py-4">Nessun passaggio registrato</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const serie = {{ serie | tojson }};
+if (serie.length > 0 && document.getElementById('chartTrend')) {
+  // Aggiungi linea standard
+  const standard = {{ prodotto.costo_standard }};
+  new Chart(document.getElementById('chartTrend'), {
+    type: 'line',
+    data: {
+      labels: serie.map(d => d.data),
+      datasets: [
+        {
+          label: 'Costo unitario reale',
+          data: serie.map(d => d.costo_medio),
+          borderColor: '#28a745',
+          backgroundColor: 'rgba(40,167,69,0.1)',
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointRadius: 4,
+        },
+        {
+          label: 'Standard attuale',
+          data: serie.map(() => standard),
+          borderColor: '#ffc107',
+          borderWidth: 2,
+          borderDash: [6,3],
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: €${(ctx.raw||0).toFixed(4)}` }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { callback: v => '€' + v.toFixed(4) },
+          title: { display: true, text: '€ / pezzo' }
+        }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

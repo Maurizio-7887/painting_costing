@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Storico Lotti – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-collection me-2"></i>Storico Lotti{% endblock %}
+
+{% block content %}
+<div class="section-title mt-3"><i class="bi bi-collection"></i> Lotti Pianificati</div>
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr>
+          <th>#</th><th>Nome Lotto</th>
+          <th class="text-center">Saturaz.</th>
+          <th class="text-end">Peso kg</th>
+          <th class="text-end">Lungh. usata</th>
+          <th class="text-end">T.ciclo</th>
+          <th class="text-end">Costo €</th>
+          <th>Data</th><th>Stato</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for l in lotti %}
+        <tr>
+          <td><strong>#{{ l.id }}</strong></td>
+          <td>{{ l.nome }}</td>
+          <td>
+            <div class="progress" style="height:18px;width:100px">
+              <div class="progress-bar bg-success" style="width:{{ l.saturazione_pct or 0 }}%">
+                {{ '%.0f'|format(l.saturazione_pct or 0) }}%
+              </div>
+            </div>
+          </td>
+          <td class="text-end">{{ '%.1f'|format(l.peso_totale_kg or 0) }}</td>
+          <td class="text-end">{{ '%.1f'|format(l.lunghezza_usata_m or 0) }}m</td>
+          <td class="text-end">{{ '%.1f'|format(l.tempo_ciclo_min or 0) }} min</td>
+          <td class="text-end fw-bold text-success">€ {{ '%.2f'|format(l.costo_totale_eur or 0) }}</td>
+          <td><small>{{ l.creato_il[:16] }}</small></td>
+          <td><span class="badge bg-success">{{ l.stato }}</span></td>
+          <td>
+            <a href="{{ url_for('lotto_detail', lotto_id=l.id) }}"
+               class="btn btn-sm btn-outline-primary py-0 px-2">
+              <i class="bi bi-eye" style="font-size:.75rem"></i>
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="text-center text-muted py-4">Nessun lotto ancora pianificato</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

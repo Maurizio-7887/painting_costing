@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Ordini Produzione – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-clipboard-data me-2"></i>Ordini di Produzione{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+  <div class="section-title mb-0">
+    <i class="bi bi-clipboard-data"></i> {{ ordini|length }} ordini
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('import_sap') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-cloud-download me-1"></i>Import SAP
+    </a>
+    <button class="btn btn-enorossi btn-sm" data-bs-toggle="modal" data-bs-target="#modalNuovoOrdine">
+      <i class="bi bi-plus-circle me-1"></i>Nuovo Ordine
+    </button>
+  </div>
+</div>
+
+<!-- Filtri stato -->
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% for s in stati %}
+  <a href="{{ url_for('ordini', stato=s) }}"
+     class="btn btn-sm {% if stato_sel==s %}btn-enorossi{% else %}btn-outline-secondary{% endif %}">
+    {{ s or 'Tutti' }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Tabella ordini -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr>
+          <th>N. Ordine</th>
+          <th>Codice Prodotto</th>
+          <th class="text-center">Qty</th>
+          <th>Colore</th>
+          <th class="text-center">Priorità</th>
+          <th>Data Rich.</th>
+          <th>Origine</th>
+          <th>Centro Lav.</th>
+          <th class="text-center">Stato</th>
+          <th class="text-center">Azioni</th>
+        </tr></thead>
+        <tbody>
+        {% for o in ordini %}
+        <tr>
+          <td><code>{{ o.numero_ordine }}</code></td>
+          <td class="fw-bold">{{ o.codice_prodotto }}</td>
+          <td class="text-center fw-bold fs-6">{{ o.quantita }}</td>
+          <td>
+            <span class="badge" style="background:var(--en-green);font-size:.7rem">{{ o.colore }}</span>
+          </td>
+          <td class="text-center">
+            <span class="prio-badge prio-{{ o.priorita }}">P{{ o.priorita }}</span>
+          </td>
+          <td><small>{{ o.data_richiesta }}</small></td>
+          <td>
+            <span class="badge {% if o.origine=='SAP' %}bg-primary{% elif o.origine=='NETPRO' %}bg-info{% else %}bg-secondary{% endif %} text-white" style="font-size:.7rem">
+              {{ o.origine }}
+            </span>
+          </td>
+          <td><small class="text-muted">{{ o.centro_lavoro or '–' }}</small></td>
+          <td class="text-center">
+            <form method="post" action="{{ url_for('ordine_stato', ordine_id=o.id) }}" class="d-inline">
+              <select name="stato" class="form-select form-select-sm py-0"
+                      style="width:auto;font-size:.75rem" onchange="this.form.submit()">
+                {% for s in ['ATTESA','PIANIFICATO','IN CORSO','EVASO'] %}
+                <option {% if o.stato==s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          <td class="text-center">
+            <form method="post" action="{{ url_for('ordine_delete', ordine_id=o.id) }}"
+                  onsubmit="return confirm('Elimina ordine {{ o.numero_ordine }}?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                <i class="bi bi-trash" style="font-size:.75rem"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="text-center text-muted py-4">
+          <i class="bi bi-inbox fs-2 d-block mb-2"></i>Nessun ordine trovato
+        </td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL Nuovo Ordine Manuale -->
+<div class="modal fade" id="modalNuovoOrdine" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--en-green);color:#fff">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-1"></i>Nuovo Ordine Manuale</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('ordine_nuovo') }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">N. Ordine</label>
+              <input name="numero_ordine" class="form-control" placeholder="es. 100001">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Codice Prodotto *</label>
+              <input name="codice_prodotto" class="form-control text-uppercase" required
+                     placeholder="es. FALC-TF280">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Quantità *</label>
+              <input name="quantita" type="number" min="1" value="1" class="form-control" required>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Colore</label>
+              <select name="colore" class="form-select">
+                {% for c in colori %}<option>{{ c }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Priorità (1=alta)</label>
+              <input name="priorita" type="number" min="1" max="10" value="5" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Data Richiesta</label>
+              <input name="data_richiesta" type="date" class="form-control" value="{{ oggi }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Centro Lavoro</label>
+              <input name="centro_lavoro" class="form-control" value="VERN-01">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">Note</label>
+              <input name="note" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+          <button type="submit" class="btn btn-enorossi">
+            <i class="bi bi-save me-1"></i>Salva Ordine
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

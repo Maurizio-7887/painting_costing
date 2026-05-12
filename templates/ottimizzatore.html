@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% block title %}Ottimizzatore Carico – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-diagram-3 me-2"></i>Ottimizzatore Carico Tunnel v3.0{% endblock %}
+
+{% block content %}
+<div class="section-title mt-3">
+  <i class="bi bi-arrow-repeat"></i> Tunnel Loop 30m · 10 Zone · 70 Ganci · Knowledge Base Attiva
+</div>
+
+<!-- FORM SELEZIONE PEZZI -->
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-sliders me-2"></i>Parametri Ottimizzazione</div>
+  <div class="card-body">
+    <form method="post" id="formOttimizza">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Velocità catena (m/min)</label>
+          <input type="number" name="velocita" class="form-control"
+                 value="{{ config.velocita_default }}" min="{{ config.velocita_min }}"
+                 max="{{ config.velocita_max }}" step="0.1">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Operatore</label>
+          <input type="text" name="operatore" class="form-control" placeholder="Nome operatore">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="auto_velocita" id="autoVel">
+            <label class="form-check-label" for="autoVel">
+              Velocità automatica (calcolata da saturazione)
+            </label>
+          </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="submit" class="btn btn-enorossi w-100">
+            <i class="bi bi-play-fill me-1"></i> Ottimizza Carico
+          </button>
+        </div>
+      </div>
+
+      <!-- Selezione pezzi -->
+      <div class="table-responsive">
+        <table class="table table-sm" id="tablePezzi">
+          <thead>
+            <tr>
+              <th style="width:45%">Prodotto</th>
+              <th style="width:15%">Quantità</th>
+              <th style="width:15%">Passo (mm)</th>
+              <th style="width:15%">Peso (kg)</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody id="righe">
+            <tr class="riga-pezzo">
+              <td>
+                <select name="codice[]" class="form-select form-select-sm select-prodotto">
+                  <option value="">— Seleziona prodotto —</option>
+                  {% for p in prodotti %}
+                  <option value="{{ p.codice }}" data-passo="{{ p.passo_gancio_mm }}" data-peso="{{ p.peso_kg }}">
+                    [{{ p.famiglia }}] {{ p.codice }} — {{ p.descrizione[:50] }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input type="number" name="quantita[]" class="form-control form-control-sm" value="1" min="1" max="50"></td>
+              <td><span class="passo-display text-muted">—</span></td>
+              <td><span class="peso-display text-muted">—</span></td>
+              <td>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="rimuoviRiga(this)">✕</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="aggiungiRiga()">
+        <i class="bi bi-plus-lg me-1"></i>Aggiungi prodotto
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if result %}
+<!-- ── RISULTATI ──────────────────────────────────────── -->
+
+<!-- Avvisi KB -->
+{% if result.avvisi_kb %}
+<div class="alert alert-warning py-2 mb-3">
+  <strong><i class="bi bi-lightbulb me-2"></i>Knowledge Base applicata:</strong>
+  <ul class="mb-0 mt-1">
+    {% for av in result.avvisi_kb %}
+    <li><small>{{ av }}</small></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- KPI risultato -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-2">
+    <div class="card text-center border-success">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold text-success">{{ result.n_pezzi_totali }}</div>
+        <small class="text-muted">Pezzi assegnati</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold" style="color:var(--en-yellow)">{{ result.saturazione_pct }}%</div>
+        <small class="text-muted">Saturazione tunnel</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold">{{ result.peso_totale_kg }} kg</div>
+        <small class="text-muted">Peso totale</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold">{{ result.tempo_totale_min }} min</div>
+        <small class="text-muted">Tempo ciclo</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center border-success">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold text-success">€ {{ '%.2f'|format(result.costo_totale) }}</div>
+        <small class="text-muted">Costo totale ABC</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold">{{ result.velocita_usata }} m/min</div>
+        <small class="text-muted">Velocità catena</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VISUALIZZAZIONE LOOP TUNNEL -->
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-arrow-repeat me-2"></i>
+    Tunnel Loop — 30m · 10 Zone · 70 Ganci (passo 400mm)
+  </div>
+  <div class="card-body p-2" style="background:#1a1a2e;border-radius:8px;">
+    <svg viewBox="0 0 900 260" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <!-- Sfondo -->
+      <rect width="900" height="260" fill="#1a1a2e" rx="8"/>
+
+      <!-- Etichette impianto -->
+      <text x="450" y="20" fill="#f5c518" font-size="11" text-anchor="middle" font-family="Arial" font-weight="bold">FORNO TUNNEL 30m · 200°C · CATENA LOOP</text>
+
+      <!-- Tratto superiore (forno attivo) -->
+      <rect x="80" y="40" width="740" height="50" rx="6" fill="#2d5a27" stroke="#1c6e2e" stroke-width="2"/>
+      <text x="450" y="70" fill="#88cc88" font-size="10" text-anchor="middle" font-family="Arial">▶▶▶ CATENA FORNO ATTIVO (200°C) ▶▶▶</text>
+
+      <!-- Curva sinistra -->
+      <ellipse cx="80" cy="130" rx="40" ry="90" fill="none" stroke="#e53935" stroke-width="3" stroke-dasharray="6,3"/>
+      <text x="80" y="130" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial" font-weight="bold">CURVA</text>
+      <text x="80" y="143" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial">CARICO</text>
+      <text x="80" y="156" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial">SCARICO</text>
+
+      <!-- Curva destra -->
+      <ellipse cx="820" cy="130" rx="40" ry="90" fill="none" stroke="#e53935" stroke-width="3" stroke-dasharray="6,3"/>
+      <text x="820" y="130" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial" font-weight="bold">CURVA</text>
+      <text x="820" y="143" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial">RINVIO</text>
+
+      <!-- Tratto inferiore (ritorno catena) -->
+      <rect x="80" y="170" width="740" height="30" rx="4" fill="#2a2a3e" stroke="#444" stroke-width="1"/>
+      <text x="450" y="190" fill="#555" font-size="9" text-anchor="middle" font-family="Arial">◀◀◀ RITORNO CATENA ◀◀◀</text>
+
+      <!-- Zone da 3m (10 zone) -->
+      {% for zona in result.zone %}
+      {% set x_start = 80 + (zona.numero - 1) * 74 %}
+      {% set sat_pct = zona.saturazione_pct / 100 %}
+      {% if zona.e_curva %}
+        {% set fill_col = '#e53935' %}
+      {% elif sat_pct > 0.7 %}
+        {% set fill_col = '#1c6e2e' %}
+      {% elif sat_pct > 0.3 %}
+        {% set fill_col = '#2d7a3a' %}
+      {% else %}
+        {% set fill_col = '#1a3a20' %}
+      {% endif %}
+
+      <!-- Rettangolo zona sul tratto superiore -->
+      <rect x="{{ x_start + 2 }}" y="42" width="70" height="46"
+            rx="3" fill="{{ fill_col }}" opacity="{{ [0.3 + sat_pct * 0.7, 1.0]|min }}"/>
+
+      <!-- Numero zona -->
+      <text x="{{ x_start + 37 }}" y="58" fill="white" font-size="10"
+            text-anchor="middle" font-family="Arial" font-weight="bold">Z{{ zona.numero }}</text>
+
+      <!-- Saturazione zona -->
+      <text x="{{ x_start + 37 }}" y="72" fill="#f5c518" font-size="9"
+            text-anchor="middle" font-family="Arial">{{ zona.saturazione_pct }}%</text>
+
+      <!-- Peso zona -->
+      <text x="{{ x_start + 37 }}" y="83" fill="#aaa" font-size="8"
+            text-anchor="middle" font-family="Arial">{{ zona.peso_kg }}kg</text>
+
+      {% endfor %}
+
+      <!-- Frecce direzione catena -->
+      <text x="200" y="35" fill="#f5c518" font-size="14" font-family="Arial">→</text>
+      <text x="400" y="35" fill="#f5c518" font-size="14" font-family="Arial">→</text>
+      <text x="600" y="35" fill="#f5c518" font-size="14" font-family="Arial">→</text>
+
+      <!-- Indicatore polvere -->
+      <text x="80" y="240" fill="#66bb6a" font-size="9" text-anchor="middle" font-family="Arial">💨 POLVERE</text>
+
+      <!-- Leggenda -->
+      <rect x="350" y="220" width="12" height="10" fill="#1c6e2e" rx="2"/>
+      <text x="368" y="229" fill="#888" font-size="9" font-family="Arial">Zone cariche</text>
+      <rect x="460" y="220" width="12" height="10" fill="#e53935" rx="2"/>
+      <text x="478" y="229" fill="#888" font-size="9" font-family="Arial">Curve (Z1,Z10)</text>
+      <rect x="570" y="220" width="12" height="10" fill="#1a3a20" rx="2"/>
+      <text x="588" y="229" fill="#888" font-size="9" font-family="Arial">Zone vuote</text>
+    </svg>
+  </div>
+</div>
+
+<!-- Tabella zone -->
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-grid-3x3-gap me-2"></i>Dettaglio Zone ({{ num_zone }} zone · {{ ganci_per_zona }} ganci/zona)</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Zona</th><th>Tipo</th><th>Ganci usati</th><th>Ganci liberi</th>
+            <th>Saturazione</th><th>Peso (kg)</th><th>Prodotti</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for zona in result.zone %}
+        <tr class="{{ 'table-danger' if zona.e_curva else '' }}">
+          <td><strong>Z{{ zona.numero }}</strong></td>
+          <td>
+            {% if zona.e_curva %}
+              <span class="badge bg-danger">🔄 Curva</span>
+            {% else %}
+              <span class="badge bg-secondary">Linea</span>
+            {% endif %}
+          </td>
+          <td>{{ zona.ganci_usati }} / {{ ganci_per_zona }}</td>
+          <td>{{ zona.ganci_liberi }}</td>
+          <td>
+            <div class="progress" style="height:16px;min-width:80px;">
+              <div class="progress-bar {{ 'bg-success' if zona.saturazione_pct < 70 else 'bg-warning' if zona.saturazione_pct < 90 else 'bg-danger' }}"
+                   role="progressbar" style="width:{{ zona.saturazione_pct }}%">
+                {{ zona.saturazione_pct }}%
+              </div>
+            </div>
+          </td>
+          <td>{{ zona.peso_kg }}</td>
+          <td><small class="text-muted">{{ zona.pezzi | join(', ') if zona.pezzi else '—' }}</small></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Tabella dettaglio ABC per pezzo -->
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-table me-2"></i>Dettaglio Costi ABC per Codice</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Codice</th><th>Q.tà</th><th>Zona</th><th>Ganci</th>
+            <th class="text-end">€ Materiale</th>
+            <th class="text-end">€ Processo</th>
+            <th class="text-end">€ Man.d'opera</th>
+            <th class="text-end">€ Unitario</th>
+            <th class="text-end fw-bold">€ Riga</th>
+            <th class="text-end">T. occ. (min)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for pr in result.pezzi %}
+        <tr>
+          <td><code>{{ pr.codice }}</code></td>
+          <td>{{ pr.quantita }}</td>
+          <td><span class="badge bg-primary">Z{{ pr.zona_inizio }}</span></td>
+          <td>{{ pr.n_ganci }}</td>
+          <td class="text-end">{{ '%.4f'|format(pr.costo_materiale) }}</td>
+          <td class="text-end">{{ '%.4f'|format(pr.costo_processo) }}</td>
+          <td class="text-end">{{ '%.4f'|format(pr.costo_manodopera) }}</td>
+          <td class="text-end">{{ '%.4f'|format(pr.costo_unitario) }}</td>
+          <td class="text-end fw-bold">€ {{ '%.2f'|format(pr.costo_riga) }}</td>
+          <td class="text-end">{{ '%.3f'|format(pr.tempo_unitario_min) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot class="fw-bold bg-light">
+          <tr>
+            <td colspan="4">TOTALE</td>
+            <td class="text-end">€ {{ '%.2f'|format(result.costo_totale_materiale) }}</td>
+            <td class="text-end">€ {{ '%.2f'|format(result.costo_totale_processo) }}</td>
+            <td class="text-end">€ {{ '%.2f'|format(result.costo_totale_manodopera) }}</td>
+            <td class="text-end"></td>
+            <td class="text-end text-success">€ {{ '%.2f'|format(result.costo_totale) }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- Nessun risultato ancora — mostra loop vuoto -->
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-arrow-repeat me-2"></i>
+    Tunnel Loop — 30m · 10 Zone · 70 Ganci (passo 400mm)
+  </div>
+  <div class="card-body p-2" style="background:#1a1a2e;border-radius:8px;">
+    <svg viewBox="0 0 900 260" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <rect width="900" height="260" fill="#1a1a2e" rx="8"/>
+      <text x="450" y="20" fill="#f5c518" font-size="11" text-anchor="middle" font-family="Arial" font-weight="bold">FORNO TUNNEL 30m · 200°C · CATENA LOOP</text>
+      <rect x="80" y="40" width="740" height="50" rx="6" fill="#2d5a27" stroke="#1c6e2e" stroke-width="2"/>
+      <text x="450" y="70" fill="#88cc88" font-size="10" text-anchor="middle" font-family="Arial">▶▶▶ CATENA FORNO ATTIVO (200°C) ▶▶▶</text>
+      <ellipse cx="80" cy="130" rx="40" ry="90" fill="none" stroke="#e53935" stroke-width="3" stroke-dasharray="6,3"/>
+      <text x="80" y="130" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial" font-weight="bold">CURVA</text>
+      <text x="80" y="143" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial">CARICO</text>
+      <text x="80" y="156" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial">SCARICO</text>
+      <ellipse cx="820" cy="130" rx="40" ry="90" fill="none" stroke="#e53935" stroke-width="3" stroke-dasharray="6,3"/>
+      <text x="820" y="130" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial" font-weight="bold">CURVA</text>
+      <text x="820" y="143" fill="#e53935" font-size="9" text-anchor="middle" font-family="Arial">RINVIO</text>
+      <rect x="80" y="170" width="740" height="30" rx="4" fill="#2a2a3e" stroke="#444" stroke-width="1"/>
+      <text x="450" y="190" fill="#555" font-size="9" text-anchor="middle" font-family="Arial">◀◀◀ RITORNO CATENA ◀◀◀</text>
+      {% for i in range(1, 11) %}
+      {% set x_start = 80 + (i - 1) * 74 %}
+      <rect x="{{ x_start + 2 }}" y="42" width="70" height="46" rx="3"
+            fill="{{ '#3a1a1a' if i == 1 or i == 10 else '#1a2a20' }}" opacity="0.7"/>
+      <text x="{{ x_start + 37 }}" y="62" fill="{{ '#e53935' if i == 1 or i == 10 else '#555' }}"
+            font-size="10" text-anchor="middle" font-family="Arial" font-weight="bold">Z{{ i }}</text>
+      <text x="{{ x_start + 37 }}" y="78" fill="#333" font-size="8"
+            text-anchor="middle" font-family="Arial">vuota</text>
+      {% endfor %}
+      <text x="200" y="35" fill="#f5c518" font-size="14" font-family="Arial">→</text>
+      <text x="400" y="35" fill="#f5c518" font-size="14" font-family="Arial">→</text>
+      <text x="600" y="35" fill="#f5c518" font-size="14" font-family="Arial">→</text>
+      <text x="80" y="240" fill="#66bb6a" font-size="9" text-anchor="middle" font-family="Arial">💨 POLVERE</text>
+      <rect x="350" y="220" width="12" height="10" fill="#1c6e2e" rx="2"/>
+      <text x="368" y="229" fill="#888" font-size="9" font-family="Arial">Zone cariche</text>
+      <rect x="460" y="220" width="12" height="10" fill="#e53935" rx="2"/>
+      <text x="478" y="229" fill="#888" font-size="9" font-family="Arial">Curve (Z1,Z10)</text>
+      <rect x="570" y="220" width="12" height="10" fill="#1a3a20" rx="2"/>
+      <text x="588" y="229" fill="#888" font-size="9" font-family="Arial">Zone vuote</text>
+    </svg>
+  </div>
+</div>
+{% endif %}
+
+{% block scripts %}
+<script>
+function aggiungiRiga() {
+  const tbody = document.getElementById('righe');
+  const prima = tbody.querySelector('.riga-pezzo');
+  const nuova = prima.cloneNode(true);
+  // Reset values
+  nuova.querySelector('select').selectedIndex = 0;
+  nuova.querySelector('input[type=number]').value = 1;
+  nuova.querySelector('.passo-display').textContent = '—';
+  nuova.querySelector('.peso-display').textContent = '—';
+  tbody.appendChild(nuova);
+  // Attach listener
+  attachSelectListener(nuova.querySelector('.select-prodotto'));
+}
+
+function rimuoviRiga(btn) {
+  const righe = document.querySelectorAll('.riga-pezzo');
+  if (righe.length > 1) {
+    btn.closest('.riga-pezzo').remove();
+  }
+}
+
+function attachSelectListener(sel) {
+  sel.addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    const riga = this.closest('.riga-pezzo');
+    const passo = opt.dataset.passo || '—';
+    const peso = opt.dataset.peso || '—';
+    riga.querySelector('.passo-display').textContent = passo !== '—' ? passo + ' mm' : '—';
+    riga.querySelector('.peso-display').textContent = peso !== '—' ? peso + ' kg' : '—';
+  });
+}
+
+// Attach listeners to existing rows
+document.querySelectorAll('.select-prodotto').forEach(attachSelectListener);
+</script>
+{% endblock %}
+{% endblock %}
