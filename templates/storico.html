@@ -2,79 +2,105 @@
 {% block title %}Storico Costi — Enorossi Paint{% endblock %}
 
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 mt-3">
   <div>
     <h1 class="h3 mb-1"><i class="bi bi-graph-up-arrow text-warning me-2"></i>Storico Costi Unitari</h1>
-    <p class="text-muted mb-0">Costo e tempo standard per codice — giornaliero e media periodo</p>
+    <p class="text-muted mb-0 small">Costo e tempo standard per codice — dati storici reali</p>
   </div>
-  <div class="d-flex gap-2">
-    <a href="{{ url_for('storico_export') }}?inizio={{ filtro.inizio }}&fine={{ filtro.fine }}" 
-       class="btn btn-outline-success btn-sm">
-      <i class="bi bi-file-earmark-excel me-1"></i>Esporta CSV
-    </a>
+  <a href="{{ url_for('storico_export') }}?inizio={{ filtro.inizio }}&fine={{ filtro.fine }}"
+     class="btn btn-outline-success btn-sm">
+    <i class="bi bi-file-earmark-excel me-1"></i>Esporta CSV
+  </a>
+</div>
+
+<!-- ── RICERCA INTELLIGENTE CODICE ─────────────────────────── -->
+<div class="card mb-4" style="border:2px solid var(--en-green)">
+  <div class="card-header" style="background:var(--en-green);color:#fff">
+    <i class="bi bi-search me-2"></i>Ricerca Rapida Codice — Storico + Costo Attuale
+  </div>
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label fw-bold">Cerca codice prodotto</label>
+        <div class="position-relative">
+          <input type="text" id="searchCodice" class="form-control form-control-lg"
+                 placeholder="Digita codice o nome... es. FALC, TF280, Trincia..."
+                 autocomplete="off" oninput="filtraCodici()">
+          <div id="dropdownRisultati"
+               style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+                      background:#0d1a0e;border:1px solid rgba(28,110,46,.4);border-radius:0 0 8px 8px;
+                      max-height:280px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Vai direttamente allo storico</label>
+        <div class="input-group">
+          <input type="text" id="codiceDisretto" class="form-control"
+                 placeholder="es. FALC-TF280">
+          <button class="btn btn-enorossi" onclick="vaiStorico()">
+            <i class="bi bi-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="alert alert-success py-2 mb-0 small" id="previewCosto" style="display:none">
+          <strong id="previewCod"></strong><br>
+          Costo std: <strong id="previewVal"></strong>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- KPI GIORNALIERI -->
+<!-- ── KPI ────────────────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="card kpi-card border-0 shadow-sm">
       <div class="card-body text-center py-3">
-        <div class="kpi-icon bg-success bg-opacity-10 text-success mb-2">
-          <i class="bi bi-boxes fs-4"></i>
-        </div>
-        <div class="kpi-value text-success">{{ kpi.n_lotti }}</div>
-        <div class="kpi-label">Lotti oggi</div>
+        <div class="kpi-num text-success">{{ kpi.n_lotti }}</div>
+        <div class="kpi-lbl">Lotti oggi</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="card kpi-card border-0 shadow-sm">
       <div class="card-body text-center py-3">
-        <div class="kpi-icon bg-warning bg-opacity-10 text-warning mb-2">
-          <i class="bi bi-layers fs-4"></i>
-        </div>
-        <div class="kpi-value text-warning">{{ kpi.n_pezzi }}</div>
-        <div class="kpi-label">Pezzi verniciati oggi</div>
+        <div class="kpi-num text-warning">{{ kpi.n_pezzi }}</div>
+        <div class="kpi-lbl">Pezzi verniciati oggi</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="card kpi-card border-0 shadow-sm">
       <div class="card-body text-center py-3">
-        <div class="kpi-icon bg-primary bg-opacity-10 text-primary mb-2">
-          <i class="bi bi-speedometer2 fs-4"></i>
-        </div>
-        <div class="kpi-value text-primary">{{ kpi.saturazione_media }}%</div>
-        <div class="kpi-label">Saturazione media</div>
+        <div class="kpi-num text-primary">{{ kpi.saturazione_media }}%</div>
+        <div class="kpi-lbl">Saturazione media</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="card kpi-card border-0 shadow-sm">
       <div class="card-body text-center py-3">
-        <div class="kpi-icon bg-danger bg-opacity-10 text-danger mb-2">
-          <i class="bi bi-currency-euro fs-4"></i>
-        </div>
-        <div class="kpi-value text-danger">€{{ "%.2f"|format(kpi.costo_totale_giornata) }}</div>
-        <div class="kpi-label">Costo totale oggi</div>
+        <div class="kpi-num text-danger">€{{ "%.2f"|format(kpi.costo_totale_giornata) }}</div>
+        <div class="kpi-lbl">Costo totale oggi</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- FILTRI PERIODO -->
+<!-- ── FILTRI PERIODO ─────────────────────────────────────────── -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body py-3">
     <form method="GET" class="row g-2 align-items-end">
       <div class="col-auto">
         <label class="form-label small fw-semibold mb-1">Dal</label>
-        <input type="date" name="inizio" class="form-control form-control-sm" 
+        <input type="date" name="inizio" class="form-control form-control-sm"
                value="{{ filtro.inizio }}" style="width:150px">
       </div>
       <div class="col-auto">
         <label class="form-label small fw-semibold mb-1">Al</label>
-        <input type="date" name="fine" class="form-control form-control-sm" 
+        <input type="date" name="fine" class="form-control form-control-sm"
                value="{{ filtro.fine }}" style="width:150px">
       </div>
       <div class="col-auto">
@@ -82,7 +108,7 @@
         <select name="famiglia" class="form-select form-select-sm" style="width:180px">
           <option value="">Tutte le famiglie</option>
           {% for f in famiglie %}
-          <option value="{{ f }}" {% if filtro.famiglia == f %}selected{% endif %}>{{ f|title }}</option>
+          <option value="{{ f }}" {% if filtro.famiglia == f %}selected{% endif %}>{{ f }}</option>
           {% endfor %}
         </select>
       </div>
@@ -92,20 +118,19 @@
         </button>
         <a href="{{ url_for('storico') }}" class="btn btn-outline-secondary btn-sm ms-1">Reset</a>
       </div>
-      <!-- Scorciatoie periodo -->
       <div class="col-auto ms-auto">
-        <div class="btn-group btn-group-sm" role="group">
-          <a href="?giorni=7" class="btn {% if filtro.giorni==7 %}btn-success{% else %}btn-outline-success{% endif %}">7gg</a>
+        <div class="btn-group btn-group-sm">
+          <a href="?giorni=7"  class="btn {% if filtro.giorni==7  %}btn-success{% else %}btn-outline-success{% endif %}">7gg</a>
           <a href="?giorni=30" class="btn {% if filtro.giorni==30 %}btn-success{% else %}btn-outline-success{% endif %}">30gg</a>
           <a href="?giorni=90" class="btn {% if filtro.giorni==90 %}btn-success{% else %}btn-outline-success{% endif %}">90gg</a>
-          <a href="?mese=1" class="btn btn-outline-warning">Questo mese</a>
+          <a href="?mese=1"    class="btn btn-outline-warning">Mese</a>
         </div>
       </div>
     </form>
   </div>
 </div>
 
-<!-- TABELLA COSTI PER CODICE -->
+<!-- ── TABELLA COSTI ───────────────────────────────────────────── -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-header bg-transparent border-0 pt-3 pb-0">
     <h5 class="fw-semibold mb-0">
@@ -117,21 +142,21 @@
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover mb-0 align-middle" id="tabellaStorico">
+      <table class="table table-hover mb-0 align-middle">
         <thead class="table-dark">
           <tr>
             <th>Codice</th>
             <th>Descrizione</th>
             <th>Famiglia</th>
-            <th class="text-end">N° Passaggi</th>
+            <th class="text-end">N° Pass.</th>
             <th class="text-end">N° Pezzi</th>
-            <th class="text-end">€ Materiale</th>
-            <th class="text-end">€ Processo</th>
-            <th class="text-end">€ Manodopera</th>
-            <th class="text-end fw-bold">€ Unitario medio</th>
-            <th class="text-end">Tempo (min)</th>
-            <th class="text-end">Standard attuale</th>
-            <th class="text-end">Scostamento</th>
+            <th class="text-end" title="Costo materiale/vernice">€ Vernice</th>
+            <th class="text-end" title="Costo energia + quota fissa impianto">€ Processo</th>
+            <th class="text-end">€ Man.op.</th>
+            <th class="text-end fw-bold">€ Unit. medio</th>
+            <th class="text-end">Tempo occ.</th>
+            <th class="text-end">Standard</th>
+            <th class="text-end">Scost.</th>
             <th class="text-center">Trend</th>
           </tr>
         </thead>
@@ -139,20 +164,20 @@
           {% for row in report %}
           <tr>
             <td>
-              <a href="{{ url_for('storico_codice', codice=row.codice) }}" 
+              <a href="{{ url_for('storico_codice', codice=row.codice) }}"
                  class="text-decoration-none fw-semibold text-success">
                 {{ row.codice }}
               </a>
             </td>
             <td class="text-muted small">{{ row.descrizione }}</td>
-            <td><span class="badge bg-light text-dark border">{{ row.famiglia|title }}</span></td>
+            <td><span class="badge bg-light text-dark border">{{ row.famiglia }}</span></td>
             <td class="text-end">{{ row.n_passaggi }}</td>
             <td class="text-end fw-semibold">{{ row.n_pezzi }}</td>
-            <td class="text-end text-muted small">€{{ "%.4f"|format(row.c_materiale) }}</td>
-            <td class="text-end text-muted small">€{{ "%.4f"|format(row.c_processo) }}</td>
-            <td class="text-end text-muted small">€{{ "%.4f"|format(row.c_manodopera) }}</td>
+            <td class="text-end text-warning small">€{{ "%.4f"|format(row.c_materiale) }}</td>
+            <td class="text-end text-primary small">€{{ "%.4f"|format(row.c_processo) }}</td>
+            <td class="text-end text-info small">€{{ "%.4f"|format(row.c_manodopera) }}</td>
             <td class="text-end fw-bold text-success">€{{ "%.4f"|format(row.costo_medio) }}</td>
-            <td class="text-end">{{ "%.3f"|format(row.tempo_medio_min) }}</td>
+            <td class="text-end text-muted small">{{ "%.3f"|format(row.tempo_medio_min) }} min</td>
             <td class="text-end text-primary">€{{ "%.4f"|format(row.standard_attuale) }}</td>
             <td class="text-end">
               {% if row.scostamento_pct is not none %}
@@ -163,23 +188,18 @@
                 {% else %}
                   <span class="badge bg-danger">{{ "%+.1f"|format(row.scostamento_pct) }}%</span>
                 {% endif %}
-              {% else %}
-                <span class="text-muted">—</span>
-              {% endif %}
+              {% else %}—{% endif %}
             </td>
             <td class="text-center">
-              <canvas class="sparkline" 
-                      data-codice="{{ row.codice }}" 
+              <canvas class="sparkline" data-codice="{{ row.codice }}"
                       width="80" height="30"></canvas>
             </td>
           </tr>
           {% else %}
-          <tr>
-            <td colspan="13" class="text-center text-muted py-5">
-              <i class="bi bi-inbox fs-2 d-block mb-2"></i>
-              Nessun dato nel periodo selezionato
-            </td>
-          </tr>
+          <tr><td colspan="13" class="text-center text-muted py-5">
+            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+            Nessun dato nel periodo — effettua una lavorazione per popolare lo storico
+          </td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -187,163 +207,99 @@
   </div>
 </div>
 
-<!-- GRAFICO TREND GIORNALIERO (top 5 codici per passaggi) -->
-{% if report %}
-<div class="row g-3 mb-4">
-  <div class="col-lg-8">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent border-0 pt-3 pb-0">
-        <h5 class="fw-semibold mb-0">
-          <i class="bi bi-bar-chart-line me-2 text-warning"></i>
-          Trend Costo Unitario (top 5 codici)
-        </h5>
-      </div>
-      <div class="card-body">
-        <canvas id="chartTrend" height="120"></canvas>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-4">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent border-0 pt-3 pb-0">
-        <h5 class="fw-semibold mb-0">
-          <i class="bi bi-pie-chart me-2 text-success"></i>
-          Breakdown costi
-        </h5>
-      </div>
-      <div class="card-body">
-        <canvas id="chartBreakdown" height="180"></canvas>
-        <div class="mt-3">
-          <div class="d-flex justify-content-between small text-muted">
-            <span><span class="badge bg-success me-1">■</span>Materiale</span>
-            <span>€{{ "%.2f"|format(report|sum(attribute='c_materiale') * report[0].n_pezzi if report else 0) }}</span>
-          </div>
-          <div class="d-flex justify-content-between small text-muted mt-1">
-            <span><span class="badge bg-warning text-dark me-1">■</span>Processo</span>
-            <span>€{{ "%.2f"|format(report|sum(attribute='c_processo') * report[0].n_pezzi if report else 0) }}</span>
-          </div>
-          <div class="d-flex justify-content-between small text-muted mt-1">
-            <span><span class="badge bg-primary me-1">■</span>Manodopera</span>
-            <span>€{{ "%.2f"|format(report|sum(attribute='c_manodopera') * report[0].n_pezzi if report else 0) }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+<!-- NOTE FORMULA -->
+<div class="card border-0 bg-light mb-3">
+  <div class="card-body py-2 small text-muted">
+    <strong>Formula costo unitario:</strong>
+    <span class="ms-2">€ Vernice = sup_m² × spessore × densità × €/kg / efficienza</span>
+    <span class="ms-2">| € Processo = kW_impianto × (passo_m / vel) × €/kWh + quota_fissa × (100/saturazione%)</span>
+    <span class="ms-2">| € Man.op. = (€/h / 60) × (t_aggancio + t_sgancio)</span>
   </div>
 </div>
-{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Dati dal server
-const reportData = {{ report | tojson }};
-const trendData  = {{ trend_top5 | tojson }};  // {codice: [{data, costo_medio}, ...]}
+// ── Dati dal server ──
+const trendData = {{ trend_top5 | tojson }};
+const PRODOTTI  = {{ prodotti_json | safe }};
 
-// ── Grafico Trend principale ─────────────────────────────────
-const top5 = reportData.slice(0, 5);
-const allDates = [...new Set(
-  Object.values(trendData).flat().map(d => d.data)
-)].sort();
-
-const colors = ['#28a745','#ffc107','#007bff','#dc3545','#6f42c1'];
-
-if (document.getElementById('chartTrend') && top5.length > 0) {
-  new Chart(document.getElementById('chartTrend'), {
-    type: 'line',
-    data: {
-      labels: allDates,
-      datasets: top5.map((row, i) => {
-        const serie = trendData[row.codice] || [];
-        const dataMap = Object.fromEntries(serie.map(d => [d.data, d.costo_medio]));
-        return {
-          label: row.codice,
-          data: allDates.map(d => dataMap[d] ?? null),
-          borderColor: colors[i],
-          backgroundColor: colors[i] + '20',
-          borderWidth: 2,
-          tension: 0.3,
-          spanGaps: true,
-          pointRadius: 3,
-        };
-      })
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: €${(ctx.raw||0).toFixed(4)}`
-          }
-        }
-      },
-      scales: {
-        y: {
-          ticks: { callback: v => '€' + v.toFixed(2) },
-          title: { display: true, text: '€ / pezzo' }
-        }
-      }
-    }
-  });
+// ── RICERCA INTELLIGENTE ──
+var debTimer;
+function filtraCodici() {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(function() {
+    var q = document.getElementById('searchCodice').value.toLowerCase().trim();
+    var dd = document.getElementById('dropdownRisultati');
+    if(q.length < 1) { dd.style.display='none'; return; }
+    var found = PRODOTTI.filter(function(p) {
+      return p.codice.toLowerCase().includes(q) ||
+             p.nome.toLowerCase().includes(q) ||
+             p.famiglia.toLowerCase().includes(q);
+    }).slice(0, 12);
+    if(!found.length) { dd.style.display='none'; return; }
+    dd.innerHTML = found.map(function(p) {
+      return '<div onclick="selezionaCodice('' + p.codice + '','' +
+        p.nome.replace(/'/g,"\'") + '',' + p.costo_std + ')" ' +
+        'style="padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);' +
+        'display:flex;justify-content:space-between;align-items:center" ' +
+        'onmouseenter="this.style.background='rgba(28,110,46,.2)'" ' +
+        'onmouseleave="this.style.background=''">' +
+        '<div>' +
+          '<div style="font-family:Barlow Condensed,sans-serif;font-weight:700;color:#f5c518;font-size:14px">' + p.codice + '</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,.4)">' + p.nome + ' · ' + p.famiglia + '</div>' +
+        '</div>' +
+        '<div style="font-family:Barlow Condensed,sans-serif;font-weight:900;color:#2d9c47;font-size:16px">€' +
+          (p.costo_std > 0 ? p.costo_std.toFixed(4) : '—') +
+        '</div>' +
+      '</div>';
+    }).join('');
+    dd.style.display = 'block';
+  }, 150);
 }
 
-// ── Grafico Breakdown Donut ──────────────────────────────────
-if (document.getElementById('chartBreakdown') && reportData.length > 0) {
-  const totMat  = reportData.reduce((s,r) => s + r.c_materiale * r.n_pezzi, 0);
-  const totProc = reportData.reduce((s,r) => s + r.c_processo  * r.n_pezzi, 0);
-  const totMan  = reportData.reduce((s,r) => s + r.c_manodopera * r.n_pezzi, 0);
-  new Chart(document.getElementById('chartBreakdown'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Materiale', 'Processo linea', 'Manodopera'],
-      datasets: [{
-        data: [totMat, totProc, totMan],
-        backgroundColor: ['#28a745','#ffc107','#007bff'],
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      cutout: '65%',
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${ctx.label}: €${ctx.raw.toFixed(2)} (${(ctx.raw/(totMat+totProc+totMan)*100).toFixed(1)}%)`
-          }
-        }
-      }
-    }
-  });
+function selezionaCodice(cod, nome, costo) {
+  document.getElementById('searchCodice').value = cod;
+  document.getElementById('dropdownRisultati').style.display = 'none';
+  document.getElementById('codiceDisretto').value = cod;
+  var prev = document.getElementById('previewCosto');
+  prev.style.display = 'block';
+  document.getElementById('previewCod').textContent = cod + ' — ' + nome;
+  document.getElementById('previewVal').textContent = costo > 0 ? '€' + costo.toFixed(4) : '—';
 }
 
-// ── Sparklines inline per ogni riga ─────────────────────────
-// (minigrafico 80×30 per ogni codice)
-document.querySelectorAll('canvas.sparkline').forEach(canvas => {
-  const codice = canvas.dataset.codice;
-  const serie = trendData[codice] || [];
-  if (serie.length < 2) return;
+function vaiStorico() {
+  var c = document.getElementById('codiceDisretto').value.trim().toUpperCase();
+  if(c) window.location.href = '/storico/' + c;
+}
+
+document.addEventListener('click', function(e) {
+  if(!e.target.closest('#searchCodice') && !e.target.closest('#dropdownRisultati'))
+    document.getElementById('dropdownRisultati').style.display='none';
+});
+
+// ── Sparklines ──
+document.querySelectorAll('canvas.sparkline').forEach(function(canvas) {
+  var codice = canvas.dataset.codice;
+  var serie = trendData[codice] || [];
+  if(serie.length < 2) return;
   new Chart(canvas, {
     type: 'line',
     data: {
-      labels: serie.map(d => d.data),
+      labels: serie.map(function(d){ return d.data; }),
       datasets: [{
-        data: serie.map(d => d.costo_medio),
-        borderColor: '#28a745',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        tension: 0.3,
-        fill: true,
+        data: serie.map(function(d){ return d.costo_medio; }),
+        borderColor: '#28a745', borderWidth: 1.5,
+        pointRadius: 0, tension: 0.3, fill: true,
         backgroundColor: 'rgba(40,167,69,0.1)',
       }]
     },
     options: {
       animation: false,
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: { x: { display: false }, y: { display: false } },
-      elements: { line: { borderWidth: 1.5 } }
+      scales: { x: { display: false }, y: { display: false } }
     }
   });
 });
