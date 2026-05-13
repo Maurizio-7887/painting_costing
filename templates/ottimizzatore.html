@@ -51,6 +51,29 @@
             </tr>
           </thead>
           <tbody id="righe">
+            {% if selezione %}
+              {% for cod, qty in selezione %}
+              {% if cod %}
+              <tr class="riga-pezzo">
+                <td>
+                  <select name="codice[]" class="form-select form-select-sm select-prodotto">
+                    <option value="">— Seleziona prodotto —</option>
+                    {% for p in prodotti %}
+                    <option value="{{ p.codice }}" data-passo="{{ p.passo_gancio_mm }}" data-peso="{{ p.peso_kg }}"
+                      {% if p.codice == cod %}selected{% endif %}>
+                      [{{ p.famiglia }}] {{ p.codice }} — {{ p.descrizione[:50] }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td><input type="number" name="quantita[]" class="form-control form-control-sm" value="{{ qty }}" min="1" max="50"></td>
+                <td><span class="passo-display text-muted">—</span></td>
+                <td><span class="peso-display text-muted">—</span></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="rimuoviRiga(this)">✕</button></td>
+              </tr>
+              {% endif %}
+              {% endfor %}
+            {% else %}
             <tr class="riga-pezzo">
               <td>
                 <select name="codice[]" class="form-select form-select-sm select-prodotto">
@@ -65,10 +88,9 @@
               <td><input type="number" name="quantita[]" class="form-control form-control-sm" value="1" min="1" max="50"></td>
               <td><span class="passo-display text-muted">—</span></td>
               <td><span class="peso-display text-muted">—</span></td>
-              <td>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="rimuoviRiga(this)">✕</button>
-              </td>
+              <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="rimuoviRiga(this)">✕</button></td>
             </tr>
+            {% endif %}
           </tbody>
         </table>
       </div>
@@ -80,6 +102,18 @@
 </div>
 
 {% if result %}
+<div class="alert alert-success d-flex align-items-center gap-3 py-2 mt-3">
+  <i class="bi bi-check-circle-fill fs-4"></i>
+  <div class="flex-grow-1">
+    <strong>Lotto #{{ result.lotto_id }} salvato</strong> — {{ result.n_pezzi_totali }} pezzi · {{ result.saturazione_pct }}% saturazione · €{{ "%.2f"|format(result.costo_totale) }}
+  </div>
+  <a href="{{ url_for('carico_guidato') }}?lotto_id={{ result.lotto_id }}" class="btn btn-success btn-sm text-nowrap">
+    <i class="bi bi-hand-index-thumb me-1"></i>Avvia Carico Guidato
+  </a>
+  <a href="{{ url_for('piano_carico') }}?lotto_id={{ result.lotto_id }}" class="btn btn-outline-info btn-sm text-nowrap">
+    <i class="bi bi-layout-three-columns me-1"></i>Piano di Carico
+  </a>
+</div>
 <!-- ── RISULTATI ──────────────────────────────────────── -->
 
 <!-- Avvisi KB -->
