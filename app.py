@@ -423,6 +423,9 @@ def ottimizzatore():
 
             # Calcola costi ABC
             costo_tot = 0
+            costo_tot_materiale = 0
+            costo_tot_processo = 0
+            costo_tot_manodopera = 0
             for item in items_tmp:
                 abc = calcola_abc(item.prodotto, cfg)
                 item.costo_materiale_unitario  = abc['costo_vernice']
@@ -431,6 +434,9 @@ def ottimizzatore():
                 item.costo_unitario_totale     = abc['costo_totale']
                 item.costo_riga = abc['costo_totale'] * item.quantita
                 costo_tot += item.costo_riga
+                costo_tot_materiale  += abc['costo_vernice']    * item.quantita
+                costo_tot_processo   += abc['costo_processo']   * item.quantita
+                costo_tot_manodopera += abc['costo_manodopera'] * item.quantita
 
             # ── SALVA LOTTO NEL DB ──
             operatore = request.form.get('operatore','')
@@ -487,6 +493,9 @@ def ottimizzatore():
                 'peso_totale_kg': round(ris['peso_tot'], 1),
                 'tempo_totale_min': ris['t_ciclo'],
                 'costo_totale': round(costo_tot, 2),
+                'costo_totale_materiale': round(costo_tot_materiale, 2),
+                'costo_totale_processo': round(costo_tot_processo, 2),
+                'costo_totale_manodopera': round(costo_tot_manodopera, 2),
                 'velocita_usata': round(ris['vel'], 2),
                 'avvisi_kb': ris['avvisi_kb'],
                 'items': items_tmp,
