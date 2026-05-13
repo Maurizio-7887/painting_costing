@@ -127,7 +127,7 @@ class OrdineOrdine(db.Model):
     origine         = db.Column(db.String(20), default='MANUALE')
     centro_lavoro   = db.Column(db.String(50), default='VERN-01')
     note            = db.Column(db.Text)
-    creato_il       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    creato_il       = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class Lotto(db.Model):
@@ -153,8 +153,8 @@ class Lotto(db.Model):
     costo_gancio_eur = db.Column(db.Float, default=0)
     sequenza_json   = db.Column(db.Text, default='[]')
     # Timbratura operaio
-    inizio          = db.Column(db.DateTime, nullable=True)
-    fine            = db.Column(db.DateTime, nullable=True)
+    inizio          = db.Column(db.DateTime(timezone=True), nullable=True)
+    fine            = db.Column(db.DateTime(timezone=True), nullable=True)
     # Termico
     Q_R_kJ = db.Column(db.Float, default=0)
     Q_a_kJ = db.Column(db.Float, default=0)
@@ -163,8 +163,8 @@ class Lotto(db.Model):
     P_R_kW = db.Column(db.Float, default=0)
     energia_kWh = db.Column(db.Float, default=0)
     costo_energia_eur = db.Column(db.Float, default=0)
-    creato_il = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    completato_at = db.Column(db.DateTime, nullable=True)
+    creato_il = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completato_at = db.Column(db.DateTime(timezone=True), nullable=True)
     items = db.relationship('LottoItem', backref='lotto', lazy=True, cascade='all,delete')
 
     @property
