@@ -432,7 +432,44 @@ def ottimizzatore():
                 item.costo_riga = abc['costo_totale'] * item.quantita
                 costo_tot += item.costo_riga
 
+            # ── SALVA LOTTO NEL DB ──
+            operatore = request.form.get('operatore','')
+            lotto_db = Lotto(
+                codice_lotto    = f"L{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                nome            = f"Lotto {datetime.now().strftime('%d/%m %H:%M')}",
+                data_produzione = date.today().isoformat(),
+                stato           = 'pianificato',
+                velocita_catena = vel_req,
+                operatore       = operatore,
+                costo_orario    = cfg.costo_orario_esercizio,
+                n_pezzi_totali  = sum(i.quantita for i in items_tmp),
+                saturazione_pct = ris['sat_pct'],
+                peso_totale_kg  = round(ris['peso_tot'], 1),
+                tempo_ciclo_min = ris['t_ciclo'],
+                costo_totale    = round(costo_tot, 2),
+                costo_totale_eur= round(costo_tot, 2),
+            )
+            db.session.add(lotto_db)
+            db.session.flush()  # ottieni lotto_db.id
+
+            for item in items_tmp:
+                li = LottoItem(
+                    lotto_id              = lotto_db.id,
+                    prodotto_id           = item.prodotto_id,
+                    quantita              = item.quantita,
+                    zona_assegnata        = item.zona_assegnata,
+                    n_ganci_occupati      = item.n_ganci_occupati,
+                    costo_materiale_unitario  = item.costo_materiale_unitario,
+                    costo_processo_unitario   = item.costo_processo_unitario,
+                    costo_manodopera_unitario = item.costo_manodopera_unitario,
+                    costo_unitario_totale     = item.costo_unitario_totale,
+                    costo_riga                = item.costo_riga,
+                )
+                db.session.add(li)
+            db.session.commit()
+
             result = {
+                'lotto_id': lotto_db.id,
                 'zone': ris['zone'],
                 'n_pezzi_totali': sum(i.quantita for i in items_tmp),
                 'saturazione_pct': ris['sat_pct'],
@@ -444,7 +481,14 @@ def ottimizzatore():
                 'items': items_tmp,
             }
 
-    return render_template('ottimizzatore.html', config=cfg, prodotti=prodotti, result=result)
+    # Ri-popola form con i dati inviati (mantiene selezione dopo POST)
+    selezione = list(zip(
+        request.form.getlist('codice'),
+        request.form.getlist('quantita')
+    )) if request.method == 'POST' else []
+
+    return render_template('ottimizzatore.html', config=cfg, prodotti=prodotti,
+                           result=result, selezione=selezione)
 
 
 # ══════════════════════════════════════════════════════════════════
