@@ -62,6 +62,12 @@
       </a>
     </li>
 
+    <li>
+      <a href="{{ url_for('piano_carico') }}" class="{% if 'piano' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-layout-three-columns text-info"></i> Piano di Carico
+      </a>
+    </li>
+
     <li class="nav-section mt-3">GESTIONE</li>
     <li>
       <a href="{{ url_for('prodotti') }}" class="{% if 'prodott' in request.endpoint %}active{% endif %}">

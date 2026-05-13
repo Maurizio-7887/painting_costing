@@ -1,1206 +1,388 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ENOROSSI — Piano di Carico Intelligente</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% extends "base.html" %}
+{% block title %}Piano di Carico – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-layout-three-columns me-2"></i>Masterwork · Smart Loading Plan{% endblock %}
+
+{% block content %}
 <style>
-/* ═══════════════════════════════════════════════════
-   ENOROSSI SMART LOADING PLAN
-   Industrial / Technical aesthetic
-   Dark green + yellow + stark white
-═══════════════════════════════════════════════════ */
-:root {
-  --g:    #1b6b2a;
-  --gl:   #25a33e;
-  --gd:   #0d3814;
-  --y:    #f5c200;
-  --yd:   #c49900;
-  --r:    #e03030;
-  --o:    #e07020;
-  --b:    #2060b0;
-  --bg:   #060a07;
-  --s1:   #0d1410;
-  --s2:   #141e15;
-  --s3:   #1c2a1e;
-  --bd:   #2a3d2c;
-  --t1:   #e8f2e9;
-  --t2:   #8fa890;
-  --t3:   #4a604c;
-  --mono: 'DM Mono', monospace;
-  --sans: 'DM Sans', sans-serif;
-  --disp: 'Bebas Neue', sans-serif;
-}
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; }
-body { font-family: var(--sans); background: var(--bg); color: var(--t1); min-height: 100vh; overflow-x: hidden; }
-
-/* ── HEADER ── */
-.hdr {
-  background: var(--gd);
-  border-bottom: 2px solid var(--g);
-  padding: 0 28px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  box-shadow: 0 4px 24px rgba(0,0,0,.6);
-}
-.hdr-brand { font-family: var(--disp); font-size: 26px; letter-spacing: 2px; color: var(--y); line-height: 1; }
-.hdr-sub { font-size: 10px; color: var(--t3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
-.hdr-badge { display: flex; gap: 8px; align-items: center; }
-.badge {
-  padding: 4px 12px;
-  border-radius: 3px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
-.badge-g { background: rgba(27,107,42,.3); color: var(--gl); border: 1px solid rgba(27,107,42,.5); }
-.badge-y { background: rgba(245,194,0,.15); color: var(--y); border: 1px solid rgba(245,194,0,.3); }
-
-/* ── LAYOUT ── */
-.app { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 52px); }
-.sidebar { background: var(--s1); border-right: 1px solid var(--bd); overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
-.main { overflow-y: auto; background: var(--bg); padding: 18px; }
-
-/* ── SECTION HEADERS ── */
-.sec {
-  font-family: var(--disp);
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--t3);
-  text-transform: uppercase;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--bd);
-  margin-bottom: 10px;
-}
-
-/* ── FAMIGLIA CARD ── */
-.fam-card {
-  background: var(--s2);
-  border: 1px solid var(--bd);
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  transition: border-color .15s, background .15s;
-  position: relative;
-}
-.fam-card:hover { border-color: var(--gl); background: var(--s3); }
-.fam-card.active { border-color: var(--y); background: rgba(245,194,0,.06); }
-.fam-card .fc-name {
-  font-family: var(--disp);
-  font-size: 15px;
-  letter-spacing: 1px;
-  color: var(--t1);
-  margin-bottom: 2px;
-}
-.fam-card.active .fc-name { color: var(--y); }
-.fam-card .fc-info { font-size: 10px; color: var(--t3); font-family: var(--mono); }
-.fam-card .fc-rule {
-  margin-top: 8px;
-  padding: 6px 8px;
-  background: rgba(0,0,0,.3);
-  border-left: 2px solid var(--g);
-  font-size: 10px;
-  color: var(--t2);
-  font-family: var(--mono);
-}
-.fam-card.active .fc-rule { border-left-color: var(--y); }
-
-/* ── KPI STRIP ── */
-.kpi-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 16px; }
-.kpi-box {
-  background: var(--s2);
-  border: 1px solid var(--bd);
-  border-radius: 6px;
-  padding: 12px 14px;
-  border-top: 2px solid var(--g);
-}
-.kpi-box.warn { border-top-color: var(--o); }
-.kpi-box.hot  { border-top-color: var(--r); }
-.kpi-box.blu  { border-top-color: var(--b); }
-.kpi-v { font-family: var(--disp); font-size: 28px; letter-spacing: 1px; color: var(--y); line-height: 1; }
-.kpi-l { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: .8px; margin-top: 3px; }
-
-/* ── CANVAS CATENA ── */
-.chain-wrap {
-  background: var(--s1);
-  border: 1px solid var(--bd);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 16px;
-  position: relative;
-}
-.chain-wrap canvas { display: block; width: 100%; }
-.chain-legend {
-  display: flex;
-  gap: 16px;
-  padding: 8px 16px;
-  background: rgba(0,0,0,.3);
-  border-top: 1px solid var(--bd);
-  flex-wrap: wrap;
-}
-.leg-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--t3); }
-.leg-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-
-/* ── DISTINTA CARICO ── */
-.distinta {
-  background: var(--s1);
-  border: 1px solid var(--bd);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 16px;
-}
-.dist-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  background: rgba(0,0,0,.3);
-  border-bottom: 1px solid var(--bd);
-}
-.dist-title { font-family: var(--disp); font-size: 13px; letter-spacing: 1px; color: var(--gl); }
-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-th {
-  padding: 8px 12px;
-  text-align: left;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: .8px;
-  color: var(--t3);
-  border-bottom: 1px solid var(--bd);
-  background: rgba(0,0,0,.2);
-}
-td { padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,.03); }
-tr:hover td { background: rgba(255,255,255,.02); }
-.cod { font-family: var(--mono); color: var(--y); font-weight: 500; }
-.tipo-gancio {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 500;
-}
-.tg-s { background: rgba(27,107,42,.25); color: #5be075; border: 1px solid rgba(27,107,42,.4); }
-.tg-m { background: rgba(245,194,0,.15); color: var(--y); border: 1px solid rgba(245,194,0,.3); }
-.tg-l { background: rgba(224,112,32,.15); color: #f0a040; border: 1px solid rgba(224,112,32,.3); }
-.tg-xl { background: rgba(224,48,48,.15); color: #f06060; border: 1px solid rgba(224,48,48,.3); }
-.tg-r { background: rgba(32,96,176,.2); color: #60a0f0; border: 1px solid rgba(32,96,176,.4); }
-
-/* ── SCHEMA VISIVO GANCIO ── */
-.schema-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
-.schema-card {
-  background: var(--s2);
-  border: 1px solid var(--bd);
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color .2s;
-}
-.schema-card:hover { border-color: var(--gl); }
-.sc-head {
-  padding: 8px 12px;
-  background: rgba(0,0,0,.3);
-  border-bottom: 1px solid var(--bd);
-  font-family: var(--disp);
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--y);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.sc-body { padding: 10px; }
-.sc-svg { display: block; width: 100%; }
-
-/* ── STAMPA ── */
-.btn-print {
-  padding: 8px 18px;
-  background: var(--g);
-  border: none;
-  border-radius: 5px;
-  color: #fff;
-  font-family: var(--disp);
-  font-size: 14px;
-  letter-spacing: 1px;
-  cursor: pointer;
-  transition: background .2s;
-}
-.btn-print:hover { background: var(--gl); }
-.btn-ghost {
-  padding: 7px 14px;
-  background: transparent;
-  border: 1px solid var(--bd);
-  border-radius: 5px;
-  color: var(--t3);
-  font-family: var(--mono);
-  font-size: 10px;
-  cursor: pointer;
-  transition: all .2s;
-}
-.btn-ghost:hover { border-color: var(--gl); color: var(--gl); }
-
-/* ── ALERT ── */
-.alert {
-  padding: 8px 12px;
-  border-radius: 5px;
-  font-size: 11px;
-  margin-bottom: 7px;
-  display: flex;
-  gap: 6px;
-  font-family: var(--mono);
-}
-.al-warn { background: rgba(224,112,32,.1); border-left: 3px solid var(--o); color: #f0a040; }
-.al-ok   { background: rgba(27,107,42,.12); border-left: 3px solid var(--gl); color: #5be075; }
-.al-hot  { background: rgba(224,48,48,.1);  border-left: 3px solid var(--r);  color: #f06060; }
-.al-info { background: rgba(32,96,176,.1);  border-left: 3px solid var(--b);  color: #60a0f0; }
-
-/* ── PBAR ── */
-.pbar { height: 4px; background: rgba(255,255,255,.06); border-radius: 2px; overflow: hidden; margin-top: 4px; }
-.pf { height: 100%; border-radius: 2px; transition: width .5s; }
-
-/* ── SEZIONE ISTRUZIONI OPERAIO ── */
-.istr-box {
-  background: var(--gd);
-  border: 2px solid var(--g);
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-.istr-title { font-family: var(--disp); font-size: 18px; letter-spacing: 2px; color: var(--y); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
-.step-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(27,107,42,.3);
-}
-.step-row:last-child { border: none; }
-.step-num {
-  width: 28px;
-  height: 28px;
-  background: var(--g);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--disp);
-  font-size: 14px;
-  color: #fff;
-  flex-shrink: 0;
-}
-.step-txt { font-size: 13px; color: var(--t2); line-height: 1.5; }
-.step-txt strong { color: var(--y); font-weight: 600; }
-.step-tag {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 3px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  background: rgba(245,194,0,.15);
-  color: var(--y);
-  border: 1px solid rgba(245,194,0,.25);
-  margin-left: 4px;
-}
-
-/* ── PRINT ── */
-@media print {
-  .sidebar, .hdr-badge, .btn-print, .btn-ghost { display: none !important; }
-  .app { grid-template-columns: 1fr; }
-  body { background: #fff; color: #000; }
-  .chain-wrap, .distinta, .schema-card { border: 1px solid #ccc; }
-  .kpi-box { background: #f5f5f5; }
-}
+.hook-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.hook-card{background:#070f08;border:2px solid rgba(28,110,46,.2);border-radius:10px;padding:14px 10px;cursor:pointer;transition:all .18s;text-align:center}
+.hook-card:hover{border-color:#2d9c47;transform:translateY(-2px)}
+.hook-card.sel{border-color:#f5c518;background:rgba(245,197,24,.05)}
+.hook-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:#f5c518;letter-spacing:.5px}
+.hook-desc{font-size:10px;color:#6b8a6e;margin-top:3px;line-height:1.3}
+.hook-rule{font-size:10px;color:#2d9c47;margin-top:5px;font-weight:600}
+.kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px}
+.kpi-box{background:#070f08;border-radius:7px;padding:10px 14px;border-left:3px solid #1c6e2e}
+.kpi-box.y{border-left-color:#f5c518}.kpi-box.r{border-left-color:#e74c3c}.kpi-box.b{border-left-color:#2980b9}.kpi-box.o{border-left-color:#e67e22}
+.kpi-val{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#f5c518;line-height:1}
+.kpi-lbl{font-size:9px;color:#6b8a6e;text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.aste-wrap{overflow-x:auto;background:#030806;border-radius:10px;border:1px solid rgba(28,110,46,.2);padding:14px;margin-bottom:16px}
+.chain-container{position:relative;padding-bottom:24px;min-width:max-content}
+.chain-rail{position:absolute;top:28px;left:0;right:0;height:5px;background:linear-gradient(90deg,#0d3814,#1c6e2e 15%,#25a33e 50%,#1c6e2e 85%,#0d3814);border-radius:3px;z-index:0}
+.chain-dashes{position:absolute;top:28px;left:0;right:0;height:5px;background:repeating-linear-gradient(90deg,transparent,transparent 14px,rgba(0,0,0,.4) 14px,rgba(0,0,0,.4) 20px);z-index:1}
+.slots-row{display:flex;align-items:flex-start;position:relative;z-index:2}
+.slot{display:flex;flex-direction:column;align-items:center;width:48px;flex-shrink:0;position:relative}
+.slot-num{font-size:7px;color:rgba(255,255,255,.15);font-family:'Barlow Condensed',sans-serif;height:14px;line-height:14px}
+.slot-rod{width:3px;height:16px;background:#1c6e2e;border-radius:2px;margin:0 auto}
+.slot-hook{width:8px;height:8px;border:2px solid #1c6e2e;border-bottom:none;border-radius:4px 4px 0 0;margin:0 auto}
+.slot-body{width:40px;min-height:44px;border-radius:5px;margin-top:1px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:7px;font-family:'Barlow Condensed',sans-serif;font-weight:700;padding:3px 2px;text-align:center;line-height:1.2;transition:all .2s;position:relative;cursor:pointer}
+.slot-body.empty{background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.07);color:rgba(255,255,255,.1);font-size:8px}
+.slot-body.t1{background:rgba(28,110,46,.55);border:1px solid #25a33e;color:#fff}
+.slot-body.t2{background:rgba(245,197,24,.3);border:1px solid #f5c518;color:#fff}
+.slot-body.t3{background:rgba(41,128,185,.45);border:1px solid #3498db;color:#fff}
+.slot-body.t4{background:rgba(224,48,48,.45);border:1px solid #e74c3c;color:#fff}
+.slot-body.curva{box-shadow:0 0 0 2px rgba(230,126,34,.7)}
+.slot-qty{font-size:9px;color:#f5c518;font-weight:900}
+.slot-kg{font-size:7px;color:rgba(255,255,255,.45)}
+.slot-zona{position:absolute;bottom:-18px;left:0;font-size:7px;color:rgba(255,255,255,.15);font-family:'Barlow Condensed',sans-serif;border-left:1px dashed rgba(255,255,255,.1);padding-left:2px;height:18px}
+.slot-tooltip{display:none;position:fixed;z-index:999;background:#0d1a0e;border:1px solid #f5c518;border-radius:8px;padding:10px 14px;font-size:11px;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.6);pointer-events:none}
+.slot-tooltip.show{display:block}
+.tipo-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;font-family:'Barlow Condensed',sans-serif}
+.tb-1{background:rgba(28,110,46,.25);color:#4cd964;border:1px solid rgba(28,110,46,.4)}
+.tb-2{background:rgba(245,197,24,.15);color:#f5c518;border:1px solid rgba(245,197,24,.3)}
+.tb-3{background:rgba(41,128,185,.2);color:#5dade2;border:1px solid rgba(41,128,185,.3)}
+.tb-4{background:rgba(224,48,48,.2);color:#e74c3c;border:1px solid rgba(224,48,48,.3)}
+#planSvg{width:100%;border-radius:8px;background:#030806;border:1px solid rgba(28,110,46,.2)}
+@keyframes chainFlow{from{stroke-dashoffset:0}to{stroke-dashoffset:-60}}
+.chain-anim{animation:chainFlow 3s linear infinite}
+.istr-step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(28,110,46,.15);align-items:flex-start}
+.istr-step:last-child{border:none}
+.istr-num{width:26px;height:26px;background:#1c6e2e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:#fff;flex-shrink:0}
+.istr-txt{font-size:12px;color:#a0b8a2;line-height:1.5}
+.istr-txt strong{color:#f5c518}
+.istr-tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;background:rgba(245,197,24,.12);color:#f5c518;border:1px solid rgba(245,197,24,.2);margin:0 2px}
+@media(max-width:768px){.hook-grid{grid-template-columns:repeat(2,1fr)}.kpi-strip{grid-template-columns:repeat(2,1fr)}}
 </style>
-</head>
-<body>
 
-<header class="hdr">
-  <div>
-    <div class="hdr-brand">ENOROSSI</div>
-    <div class="hdr-sub">Smart Loading Plan · Linea Verniciatura 170m · 425 ganci</div>
-  </div>
-  <div class="hdr-badge">
-    <span class="badge badge-g">⊙ Nesting 3D attivo</span>
-    <span class="badge badge-y" id="hdr-date"></span>
-    <button class="btn-print" onclick="window.print()">🖨 Stampa Piano</button>
-  </div>
-</header>
+<div class="mt-3">
 
-<div class="app">
-
-  <!-- ═══ SIDEBAR: FAMIGLIE + REGOLE AGGANCIO ═══ -->
-  <div class="sidebar">
-    <div>
-      <div class="sec">Famiglie Prodotto</div>
-      <div id="famList"></div>
-    </div>
-
-    <div>
-      <div class="sec">Parametri Carico</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:10px">
-          <div style="font-size:9px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Distanza min. tra pezzi</div>
-          <input type="range" id="distMin" min="5" max="30" value="10" style="width:100%" oninput="aggiornaDist(this.value)">
-          <div style="font-family:var(--mono);font-size:12px;color:var(--y);margin-top:4px"><span id="distVal">10</span> cm</div>
-        </div>
-        <div style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:10px">
-          <div style="font-size:9px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Velocità catena</div>
-          <select id="velCat" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--t1);padding:5px 8px;border-radius:4px;font-size:12px" onchange="ricalcola()">
-            <option value="2.0">2.0 m/min — Rapida (piccoli)</option>
-            <option value="1.5" selected>1.5 m/min — Standard</option>
-            <option value="1.0">1.0 m/min — Lenta (spessi)</option>
-            <option value="0.7">0.7 m/min — Molto lenta (XL)</option>
+<!-- SELEZIONE LOTTO -->
+<div class="row g-3 mb-3">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-check me-2"></i>Seleziona Lotto da Caricare</span>
+        <a href="{{ url_for('ottimizzatore') }}" class="btn btn-enorossi btn-sm"><i class="bi bi-plus-circle me-1"></i>Nuovo Lotto</a>
+      </div>
+      <div class="card-body py-2">
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          <select id="selLotto" class="form-select form-select-sm" style="max-width:340px" onchange="caricaLotto()">
+            <option value="">— Seleziona un lotto —</option>
+            {% for l in lotti_attivi %}
+            <option value="{{ l.id }}" {% if l.id == lotto_sel %}selected{% endif %}>
+              Lotto #{{ l.id }} · {{ l.nome }} · {{ l.n_pezzi_totali }} pz · {{ l.stato }}
+            </option>
+            {% endfor %}
           </select>
+          <button class="btn btn-enorossi btn-sm" onclick="ottimizzaEMostra()"><i class="bi bi-lightning me-1"></i>Ottimizza e Genera Piano</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Stampa</button>
+          <button class="btn btn-outline-success btn-sm" onclick="esportaCSV()"><i class="bi bi-download me-1"></i>CSV</button>
         </div>
       </div>
-    </div>
-
-    <div id="famDetail" style="display:none">
-      <div class="sec">Regola Aggancio Attiva</div>
-      <div id="famDetailContent"></div>
     </div>
   </div>
-
-  <!-- ═══ MAIN ═══ -->
-  <div class="main">
-
-    <!-- KPI -->
-    <div class="kpi-strip">
-      <div class="kpi-box">
-        <div class="kpi-v" id="kpi-ganci">—</div>
-        <div class="kpi-l">Ganci occupati / 425</div>
-      </div>
-      <div class="kpi-box warn">
-        <div class="kpi-v" id="kpi-sat">—</div>
-        <div class="kpi-l">Saturazione tunnel</div>
-      </div>
-      <div class="kpi-box hot">
-        <div class="kpi-v" id="kpi-peso">—</div>
-        <div class="kpi-l">Peso totale kg</div>
-      </div>
-      <div class="kpi-box blu">
-        <div class="kpi-v" id="kpi-ciclo">—</div>
-        <div class="kpi-l">Ciclo min (170m)</div>
-      </div>
-    </div>
-
-    <!-- AVVISI -->
-    <div id="avvisiBox"></div>
-
-    <!-- VISUALIZZAZIONE CATENA GANCIO×GANCIO -->
-    <div class="chain-wrap">
-      <div style="padding:10px 16px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
-        <div style="font-family:var(--disp);font-size:13px;letter-spacing:1px;color:var(--gl)">
-          VISUALIZZAZIONE LINEA — GANCIO × GANCIO (425 posizioni)
-        </div>
-        <div style="font-size:10px;color:var(--t3);font-family:var(--mono)">Scorri → per vedere tutta la catena</div>
-      </div>
-      <div style="overflow-x:auto">
-        <canvas id="chainCanvas" height="160"></canvas>
-      </div>
-      <div class="chain-legend">
-        <div class="leg-item"><div class="leg-sq" style="background:#1b6b2a"></div>Pezzo singolo</div>
-        <div class="leg-item"><div class="leg-sq" style="background:#25a33e"></div>Pezzo su gancio multiplo</div>
-        <div class="leg-item"><div class="leg-sq" style="background:#f5c200"></div>Grappolo (flange/piccoli)</div>
-        <div class="leg-item"><div class="leg-sq" style="background:#e07020"></div>Pezzo pesante (&gt;50kg)</div>
-        <div class="leg-item"><div class="leg-sq" style="background:#e03030"></div>Supera limite zona</div>
-        <div class="leg-item"><div class="leg-sq" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)"></div>Gancio vuoto</div>
-      </div>
-    </div>
-
-    <!-- SCHEMA VISIVO TIPI DI GANCIO -->
-    <div class="sec" style="margin-bottom:12px">Schema Tipi di Gancio — Libreria Aggancio</div>
-    <div class="schema-grid" id="schemaGrid"></div>
-
-    <!-- ISTRUZIONI OPERAIO -->
-    <div class="istr-box" id="istrBox" style="display:none">
-      <div class="istr-title">📋 Istruzioni Carico per l'Operaio</div>
-      <div id="istrContent"></div>
-    </div>
-
-    <!-- DISTINTA DI CARICO -->
-    <div class="distinta">
-      <div class="dist-header">
-        <div class="dist-title">DISTINTA DI CARICO — SEQUENZA GANCI</div>
-        <div style="display:flex;gap:6px">
-          <button class="btn-ghost" onclick="esportaCSV()">↓ CSV</button>
-          <button class="btn-print" onclick="window.print()">🖨 Stampa</button>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-speedometer2 me-2"></i>Velocità Catena</div>
+      <div class="card-body py-2 d-flex align-items-center gap-3">
+        <select id="selVel" class="form-select form-select-sm" onchange="aggiornaVel()">
+          <option value="2.0">2.0 m/min — Rapida</option>
+          <option value="1.5" selected>1.5 m/min — Standard</option>
+          <option value="1.0">1.0 m/min — Lenta</option>
+          <option value="0.7">0.7 m/min — XL</option>
+        </select>
+        <div class="text-nowrap">
+          <div class="fw-bold" style="color:#f5c518;font-family:'Barlow Condensed'" id="cicloLabel">113 min</div>
+          <div style="font-size:9px;color:#6b8a6e">ciclo 170m</div>
         </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Codice Pezzo</th>
-            <th>Descrizione</th>
-            <th>Famiglia</th>
-            <th>Qty / Gancio</th>
-            <th>Tipo Gancio</th>
-            <th>Ganci Totali</th>
-            <th>Peso totale</th>
-            <th>Sup. m²</th>
-            <th>Note operative</th>
-          </tr>
-        </thead>
-        <tbody id="distintatbody"></tbody>
-      </table>
     </div>
-
   </div>
 </div>
 
+<!-- 4 TIPI DI GANCIO -->
+<div class="section-title"><i class="bi bi-grid-3x2-gap"></i>Libreria Ganci Masterwork — 4 Tipi Standard</div>
+<div class="hook-grid">
+  <div class="hook-card sel" id="hcard-1" onclick="selHook(1)">
+    <svg width="80" height="65" viewBox="0 0 80 65" style="display:block;margin:0 auto 8px">
+      <line x1="40" y1="5" x2="40" y2="20" stroke="#25a33e" stroke-width="3"/>
+      <path d="M34,20 Q28,30 34,36 Q40,42 46,36 Q52,30 46,20" fill="none" stroke="#25a33e" stroke-width="2.5"/>
+      <rect x="8" y="42" width="64" height="14" rx="3" fill="rgba(28,110,46,.5)" stroke="#25a33e" stroke-width="1.5"/>
+      <text x="40" y="53" text-anchor="middle" fill="white" font-size="8" font-family="Arial" font-weight="bold">BARRA</text>
+      <path d="M16,40 Q10,32 16,24" fill="none" stroke="#f5c518" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <polygon points="14,24 20,22 16,28" fill="#f5c518"/>
+      <text x="5" y="63" fill="#f5c518" font-size="7" font-family="Arial">↺ ROT.</text>
+    </svg>
+    <div class="hook-name">TYPE 1 — Singolo C</div>
+    <div class="hook-desc">Rotazione attiva · 1 pz/gancio</div>
+    <div class="hook-rule">Barre falcianti lunghe</div>
+    <span class="badge bg-success text-white mt-1" style="font-size:9px">Trinciatrici · Falciatrici</span>
+  </div>
+  <div class="hook-card" id="hcard-2" onclick="selHook(2)">
+    <svg width="80" height="65" viewBox="0 0 80 65" style="display:block;margin:0 auto 8px">
+      <line x1="26" y1="5" x2="26" y2="16" stroke="#f5c518" stroke-width="2.5"/>
+      <line x1="54" y1="5" x2="54" y2="16" stroke="#f5c518" stroke-width="2.5"/>
+      <path d="M21,16 Q15,24 21,30 Q26,35 32,30 Q37,24 32,16" fill="none" stroke="#f5c518" stroke-width="2"/>
+      <path d="M49,16 Q43,24 49,30 Q54,35 60,30 Q65,24 60,16" fill="none" stroke="#f5c518" stroke-width="2"/>
+      <line x1="26" y1="20" x2="54" y2="20" stroke="#f5c518" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <text x="40" y="18" text-anchor="middle" fill="#f5c518" font-size="6" font-family="Arial">SYNC</text>
+      <rect x="8" y="36" width="64" height="18" rx="3" fill="rgba(245,197,24,.25)" stroke="#f5c518" stroke-width="1.5"/>
+      <text x="40" y="48" text-anchor="middle" fill="white" font-size="8" font-family="Arial" font-weight="bold">ORIZZONTALE</text>
+    </svg>
+    <div class="hook-name">TYPE 2 — Doppio Sync</div>
+    <div class="hook-desc">Carico orizzontale sincronizzato</div>
+    <div class="hook-rule">1 pz / 2 ganci</div>
+    <span class="badge text-white mt-1" style="font-size:9px;background:#c9a000">Strutture · ENODUO</span>
+  </div>
+  <div class="hook-card" id="hcard-3" onclick="selHook(3)">
+    <svg width="80" height="65" viewBox="0 0 80 65" style="display:block;margin:0 auto 8px">
+      <line x1="40" y1="5" x2="40" y2="14" stroke="#3498db" stroke-width="3"/>
+      <line x1="10" y1="14" x2="70" y2="14" stroke="#3498db" stroke-width="2.5"/>
+      <line x1="16" y1="14" x2="16" y2="28" stroke="#3498db" stroke-width="2"/>
+      <line x1="28" y1="14" x2="28" y2="28" stroke="#3498db" stroke-width="2"/>
+      <line x1="40" y1="14" x2="40" y2="28" stroke="#3498db" stroke-width="2"/>
+      <line x1="52" y1="14" x2="52" y2="28" stroke="#3498db" stroke-width="2"/>
+      <line x1="64" y1="14" x2="64" y2="28" stroke="#3498db" stroke-width="2"/>
+      <rect x="10" y="28" width="12" height="12" rx="2" fill="rgba(41,128,185,.5)" stroke="#3498db" stroke-width="1"/>
+      <rect x="22" y="28" width="12" height="12" rx="2" fill="rgba(41,128,185,.5)" stroke="#3498db" stroke-width="1"/>
+      <rect x="34" y="28" width="12" height="12" rx="2" fill="rgba(41,128,185,.5)" stroke="#3498db" stroke-width="1"/>
+      <rect x="46" y="28" width="12" height="12" rx="2" fill="rgba(41,128,185,.5)" stroke="#3498db" stroke-width="1"/>
+      <rect x="58" y="28" width="12" height="12" rx="2" fill="rgba(41,128,185,.5)" stroke="#3498db" stroke-width="1"/>
+      <text x="40" y="54" text-anchor="middle" fill="#5dade2" font-size="8" font-family="Arial" font-weight="bold">6-8 PZ/GANCIO</text>
+    </svg>
+    <div class="hook-name">TYPE 3 — Rastrelliera</div>
+    <div class="hook-desc">Multi-pla a pettine · alta densità</div>
+    <div class="hook-rule">6-8 pz / gancio</div>
+    <span class="badge text-white mt-1" style="font-size:9px;background:#2471a3">Carter · Staffaggi · Bulk</span>
+  </div>
+  <div class="hook-card" id="hcard-4" onclick="selHook(4)">
+    <svg width="80" height="65" viewBox="0 0 80 65" style="display:block;margin:0 auto 8px">
+      <line x1="40" y1="5" x2="40" y2="13" stroke="#e74c3c" stroke-width="3"/>
+      <line x1="14" y1="13" x2="66" y2="13" stroke="#e74c3c" stroke-width="3"/>
+      <line x1="14" y1="13" x2="14" y2="22" stroke="#e74c3c" stroke-width="2.5"/>
+      <line x1="40" y1="13" x2="40" y2="22" stroke="#e74c3c" stroke-width="2.5"/>
+      <line x1="66" y1="13" x2="66" y2="22" stroke="#e74c3c" stroke-width="2.5"/>
+      <path d="M11,22 Q6,28 11,33 Q14,37 18,33 Q22,28 18,22" fill="none" stroke="#e74c3c" stroke-width="2"/>
+      <path d="M37,22 Q32,28 37,33 Q40,37 44,33 Q48,28 44,22" fill="none" stroke="#e74c3c" stroke-width="2"/>
+      <path d="M63,22 Q58,28 63,33 Q66,37 70,33 Q74,28 70,22" fill="none" stroke="#e74c3c" stroke-width="2"/>
+      <rect x="8" y="36" width="64" height="18" rx="4" fill="rgba(224,48,48,.3)" stroke="#e74c3c" stroke-width="2"/>
+      <text x="40" y="48" text-anchor="middle" fill="white" font-size="8" font-family="Arial" font-weight="bold">ASSIEME XL</text>
+      <text x="40" y="61" text-anchor="middle" fill="#e74c3c" font-size="7" font-family="Arial">⚠ MAX 580kg</text>
+    </svg>
+    <div class="hook-name">TYPE 4 — Bilancino Heavy</div>
+    <div class="hook-desc">Carico singolo isolato · grandi assiemi</div>
+    <div class="hook-rule">1 pz · sicurezza 2.4m</div>
+    <span class="badge text-white mt-1" style="font-size:9px;background:#c0392b">Rotopresse · Vendemmiatrici</span>
+  </div>
+</div>
+
+<!-- KPI -->
+<div class="kpi-strip">
+  <div class="kpi-box y"><div class="kpi-val" id="kGanci">—</div><div class="kpi-lbl">Ganci / 425</div></div>
+  <div class="kpi-box">  <div class="kpi-val" id="kSat">—</div><div class="kpi-lbl">Saturazione</div></div>
+  <div class="kpi-box o"><div class="kpi-val" id="kPeso">—</div><div class="kpi-lbl">Peso tot. kg</div></div>
+  <div class="kpi-box b"><div class="kpi-val" id="kCiclo">113'</div><div class="kpi-lbl">Ciclo min</div></div>
+  <div class="kpi-box r"><div class="kpi-val" id="kTerm">—</div><div class="kpi-lbl">€ Termico</div></div>
+</div>
+
+<div id="avvisiBox" class="mb-3"></div>
+
+<!-- ASTA GANCIO×GANCIO -->
+<div class="aste-wrap">
+  <div class="section-title" style="margin-bottom:10px">
+    <i class="bi bi-list-ol"></i> Asta Carico — 425 ganci · ogni blocco = 1 posizione (40cm)
+    <span class="ms-auto text-muted" style="font-size:10px">← Scorri per tutta la catena · Click per dettaglio</span>
+  </div>
+  <div class="chain-container" id="chainContainer">
+    <div class="chain-rail"></div>
+    <div class="chain-dashes"></div>
+    <div class="slots-row" id="slotsRow"></div>
+  </div>
+</div>
+<div class="slot-tooltip" id="slotTooltip"></div>
+
+<!-- PLANIMETRIA -->
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-map me-2"></i>Planimetria Impianto — Distribuzione Zone in Tempo Reale</div>
+  <div class="card-body p-2">
+    <svg id="planSvg" viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r=".5" fill="rgba(255,255,255,.04)"/></pattern>
+        <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><polygon points="0,0 0,6 6,3" fill="#f5c518" opacity=".8"/></marker>
+      </defs>
+      <rect width="960" height="480" fill="url(#grid)"/>
+      <rect x="190" y="60" width="530" height="120" fill="rgba(28,110,46,.07)" stroke="rgba(28,110,46,.4)" stroke-width="1.5" rx="4"/>
+      <line x1="190" y1="120" x2="720" y2="120" stroke="rgba(28,110,46,.15)" stroke-width="1" stroke-dasharray="5,4"/>
+      <text x="455" y="97" text-anchor="middle" fill="rgba(28,110,46,.7)" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">Zona Verniciatura</text>
+      <text x="455" y="111" text-anchor="middle" fill="rgba(28,110,46,.4)" font-family="Barlow Condensed,sans-serif" font-size="8">← ← APPLICAZIONE VERNICE</text>
+      <rect x="720" y="60" width="90" height="270" fill="rgba(231,76,60,.07)" stroke="rgba(231,76,60,.4)" stroke-width="1.5" rx="4"/>
+      <text x="765" y="180" text-anchor="middle" fill="rgba(231,76,60,.8)" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="700" transform="rotate(-90,765,180)">FORNO 200°C</text>
+      <path d="M 100,225 L 360,225 L 360,315 L 270,315 L 270,400 L 100,400 Z" fill="rgba(41,128,185,.05)" stroke="rgba(41,128,185,.3)" stroke-width="1.5"/>
+      <text x="210" y="268" text-anchor="middle" fill="rgba(41,128,185,.6)" font-family="Barlow Condensed,sans-serif" font-size="9" font-weight="700">CABINA VERN. n°3</text>
+      <rect x="40" y="418" width="160" height="55" fill="rgba(41,128,185,.05)" stroke="rgba(41,128,185,.3)" stroke-width="1.5" rx="3"/>
+      <text x="120" y="450" text-anchor="middle" fill="rgba(41,128,185,.6)" font-family="Barlow Condensed,sans-serif" font-size="9">CABINA VERN. n°2</text>
+      <rect x="590" y="278" width="70" height="32" fill="rgba(120,120,120,.05)" stroke="rgba(120,120,120,.2)" stroke-width="1" rx="2"/>
+      <text x="625" y="298" text-anchor="middle" fill="rgba(150,150,150,.4)" font-family="Barlow Condensed,sans-serif" font-size="8">generatore</text>
+      <path d="M 65,75 L 835,75 Q 865,75 865,105 L 865,320 Q 865,348 835,348 L 320,348 Q 295,348 295,320 L 295,200 L 720,200 Q 750,200 750,170 L 750,95 Q 750,65 720,65 L 190,65"
+        fill="none" stroke="rgba(28,110,46,.1)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 65,75 L 835,75 Q 865,75 865,105 L 865,320 Q 865,348 835,348 L 320,348 Q 295,348 295,320 L 295,200 L 720,200 Q 750,200 750,170 L 750,95 Q 750,65 720,65 L 190,65"
+        fill="none" stroke="#1c6e2e" stroke-width="4" stroke-dasharray="18,12" class="chain-anim"
+        stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+      <path d="M 190,120 L 720,120 Q 800,120 800,200 L 800,400 Q 800,450 750,450 L 310,450 Q 75,450 75,400 L 75,225 Q 75,170 130,170 L 190,170"
+        fill="none" stroke="#0d3814" stroke-width="3" stroke-dasharray="14,10" class="chain-anim"
+        stroke-linecap="round" stroke-linejoin="round" opacity=".6" style="animation-direction:reverse"/>
+      <line x1="400" y1="75" x2="450" y2="75" stroke="#f5c518" stroke-width="1.5" marker-end="url(#arr)" opacity=".8"/>
+      <line x1="865" y1="210" x2="865" y2="255" stroke="#f5c518" stroke-width="1.5" marker-end="url(#arr)" opacity=".7"/>
+      <line x1="560" y1="348" x2="510" y2="348" stroke="#f5c518" stroke-width="1.5" marker-end="url(#arr)" opacity=".7"/>
+      <circle cx="865" cy="75"  r="15" fill="rgba(230,126,34,.12)" stroke="#e67e22" stroke-width="1.5" filter="url(#glow)"/><text x="865" y="79" text-anchor="middle" fill="#e67e22" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E4</text>
+      <circle cx="865" cy="210" r="15" fill="rgba(230,126,34,.12)" stroke="#e67e22" stroke-width="1.5" filter="url(#glow)"/><text x="865" y="214" text-anchor="middle" fill="#e67e22" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E5</text>
+      <circle cx="865" cy="320" r="15" fill="rgba(230,126,34,.12)" stroke="#e67e22" stroke-width="1.5" filter="url(#glow)"/><text x="865" y="324" text-anchor="middle" fill="#e67e22" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E1</text>
+      <circle cx="295" cy="348" r="15" fill="rgba(230,126,34,.12)" stroke="#e67e22" stroke-width="1.5" filter="url(#glow)"/><text x="295" y="352" text-anchor="middle" fill="#e67e22" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E2</text>
+      <circle cx="455" cy="108" r="17" fill="rgba(41,128,185,.15)" stroke="#2980b9" stroke-width="1.5" filter="url(#glow)"/><text x="455" y="112" text-anchor="middle" fill="#5dade2" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E3</text>
+      <circle cx="42"  cy="315" r="15" fill="rgba(230,126,34,.12)" stroke="#e67e22" stroke-width="1.5" filter="url(#glow)"/><text x="42"  y="319" text-anchor="middle" fill="#e67e22" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E6</text>
+      <circle cx="75"  cy="450" r="15" fill="rgba(230,126,34,.12)" stroke="#e67e22" stroke-width="1.5" filter="url(#glow)"/><text x="75"  y="454" text-anchor="middle" fill="#e67e22" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="900">E7</text>
+      <circle cx="65" cy="75" r="13" fill="#1c6e2e" filter="url(#glow)" opacity=".9"/>
+      <text x="65" y="62" text-anchor="middle" fill="#2d9c47" font-family="Barlow Condensed,sans-serif" font-size="9" font-weight="700">CARICO</text>
+      <text x="455" y="63" text-anchor="middle" fill="rgba(231,76,60,.5)" font-family="Barlow Condensed,sans-serif" font-size="9">→ PRERISCALDO</text>
+      <text x="882" y="200" fill="rgba(231,76,60,.7)" font-family="Barlow Condensed,sans-serif" font-size="9" transform="rotate(90,882,200)">↓ FORNO</text>
+      <text x="565" y="364" text-anchor="middle" fill="rgba(28,110,46,.4)" font-family="Barlow Condensed,sans-serif" font-size="9">← RAFFREDDAMENTO</text>
+      <g id="zoneGroupPlan"></g>
+      <rect x="10" y="462" width="940" height="16" fill="rgba(0,0,0,.3)" rx="3"/>
+      <g transform="translate(20,467)">
+        <rect width="9" height="9" fill="rgba(28,110,46,.6)" rx="1"/><text x="13" y="8" fill="rgba(255,255,255,.4)" font-family="Barlow,sans-serif" font-size="8">Type 1</text>
+        <rect x="70" width="9" height="9" fill="rgba(245,197,24,.5)" rx="1"/><text x="83" y="8" fill="rgba(255,255,255,.4)" font-family="Barlow,sans-serif" font-size="8">Type 2</text>
+        <rect x="140" width="9" height="9" fill="rgba(41,128,185,.6)" rx="1"/><text x="153" y="8" fill="rgba(255,255,255,.4)" font-family="Barlow,sans-serif" font-size="8">Type 3 Rastrelliera</text>
+        <rect x="270" width="9" height="9" fill="rgba(224,48,48,.6)" rx="1"/><text x="283" y="8" fill="rgba(255,255,255,.4)" font-family="Barlow,sans-serif" font-size="8">Type 4 Bilancino</text>
+        <rect x="390" width="9" height="9" fill="rgba(230,126,34,.6)" rx="1"/><text x="403" y="8" fill="rgba(255,255,255,.4)" font-family="Barlow,sans-serif" font-size="8">Curva (vincolo)</text>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<!-- DISTINTA -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table me-2"></i>Distinta di Carico — per Tipo Gancio e Materiale</span>
+    <button class="btn btn-outline-success btn-sm" onclick="esportaCSV()"><i class="bi bi-download me-1"></i>Export CSV</button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr>
+          <th>#</th><th>Codice</th><th>Descrizione</th><th>Famiglia</th>
+          <th>Tipo Gancio</th><th class="text-center">Pz/Gancio</th>
+          <th class="text-center">Ganci tot.</th><th class="text-end">Peso tot. kg</th>
+          <th class="text-end">Sup. m²</th><th>Sicurezza Passo</th><th>Note Operative</th>
+        </tr></thead>
+        <tbody id="distintatbody">
+          <tr><td colspan="11" class="text-center text-muted py-4">Seleziona un lotto e clicca "Ottimizza e Genera Piano"</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ISTRUZIONI OPERAIO -->
+<div class="card mb-4" id="istrCard" style="display:none">
+  <div class="card-header" style="background:var(--en-green);color:#fff">
+    <i class="bi bi-person-check me-2"></i>Istruzioni Carico per l'Operaio — <span id="istrLottoNome"></span>
+  </div>
+  <div class="card-body" id="istrBody"></div>
+</div>
+
+</div>
+
+<script id="LOTTO_DATA" type="application/json">{{ lotto_json | safe }}</script>
+{% endblock %}
+
+{% block scripts %}
 <script>
-// ═══════════════════════════════════════════════════════
-// LIBRERIA AGGANCIO — regole per famiglia
-// Basata sull'immagine tecnica del piano di carico reale
-// ═══════════════════════════════════════════════════════
-const LIBRERIA_AGGANCIO = {
-  'Trinciatrici': {
-    tipo: 'SINGOLO-ORIZZONTALE',
-    label: 'Gancio singolo — orizzontale con rotazione attiva',
-    desc: 'Barre falcianti appese orizzontalmente. Rotazione attiva per verniciatura uniforme su tutti i lati. Una barra per gancio.',
-    pezzi_gancio: 1,
-    ganci_passo: 3,   // occupa 3 posizioni gancio (120cm)
-    colore: '#1b6b2a',
-    tipo_badge: 'tg-l',
-    symbol: 'H',
-    note: 'Appendi orizzontalmente. Assicura rotazione. Max 1 pezzo/gancio.',
-    img_type: 'bar_h',
-  },
-  'Falciatrici': {
-    tipo: 'SINGOLO-VERTICALE',
-    label: 'Gancio singolo — verticale con rotazione attiva',
-    desc: 'Barre falcianti appese verticalmente. Verificare baricentro prima dell\'aggancio. Rotazione per uniformità.',
-    pezzi_gancio: 1,
-    ganci_passo: 2,
-    colore: '#25a33e',
-    tipo_badge: 'tg-m',
-    symbol: 'V',
-    note: 'Appendi verticalmente. Controlla baricentro. Rotazione consigliata.',
-    img_type: 'bar_v',
-  },
-  'Rotopresse': {
-    tipo: 'MULTIPLO-STRUTTURALE',
-    label: 'Gancio multiplo strutturale — telaio grande',
-    desc: 'Telai grandi e pesanti. Usare gancio a traversa. Minimo 4 punti di aggancio. Verificare peso prima del carico.',
-    pezzi_gancio: 1,
-    ganci_passo: 6,
-    colore: '#e03030',
-    tipo_badge: 'tg-xl',
-    symbol: 'XL',
-    note: '⚠️ PESANTE. 4 punti aggancio obbligatori. Solo zone 3-14.',
-    img_type: 'frame_xl',
-  },
-  'Vendemmiatrici': {
-    tipo: 'MULTIPLO-XL',
-    label: 'Gancio multiplo XL — traversa rinforzata',
-    desc: 'Strutture molto grandi. Traversa rinforzata. Solo zone centrali 4-13. Velocità catena max 0.7 m/min.',
-    pezzi_gancio: 1,
-    ganci_passo: 6,
-    colore: '#e03030',
-    tipo_badge: 'tg-xl',
-    symbol: 'XL',
-    note: '⚠️ PESANTISSIMO. Zone 4-13. Velocità 0.7 m/min. Traversa rinforzata.',
-    img_type: 'frame_xl',
-  },
-  'ENODUO': {
-    tipo: 'MULTIPLO-STRUTTURALE',
-    label: 'Gancio multiplo — telaio ENODUO',
-    desc: 'Telai ENODUO. Aggancio in 3 punti. Zone centrali.',
-    pezzi_gancio: 1,
-    ganci_passo: 5,
-    colore: '#e07020',
-    tipo_badge: 'tg-l',
-    symbol: 'ST',
-    note: '3 punti aggancio. Zone 3-14.',
-    img_type: 'frame_m',
-  },
-  'Carter': {
-    tipo: 'SINGOLO-BULK',
-    label: 'Gancio singolo bulk — carter',
-    desc: 'Carter e coperchi medi. Un pezzo per gancio standard. Verificare che i fori di drenaggio siano in basso.',
-    pezzi_gancio: 1,
-    ganci_passo: 1,
-    colore: '#25a33e',
-    tipo_badge: 'tg-m',
-    symbol: 'BK',
-    note: 'Fori drenaggio in basso. 1 pezzo/gancio.',
-    img_type: 'carter',
-  },
-  'Coperchi': {
-    tipo: 'GRAPPOLO',
-    label: 'Gancio a grappolo — fino a 4 pezzi',
-    desc: 'Pezzi piccoli in grappolo. Max 4 coperchi per gancio. Distribuire peso uniformemente. Separazione min 5cm.',
-    pezzi_gancio: 4,
-    ganci_passo: 1,
-    colore: '#f5c200',
-    tipo_badge: 'tg-s',
-    symbol: 'GR',
-    note: 'Max 4 pz/gancio. Peso uniforme. Sep. 5cm min.',
-    img_type: 'cluster',
-  },
-  'Staffaggi': {
-    tipo: 'RASTRELLIERA',
-    label: 'Rastrelliera — fino a 6-8 pezzi',
-    desc: 'Staffaggi piccoli su rastrelliera. 6-8 pezzi per gancio. Separare pezzi uguali per evitare zone d\'ombra.',
-    pezzi_gancio: 8,
-    ganci_passo: 1,
-    colore: '#f5c200',
-    tipo_badge: 'tg-s',
-    symbol: 'RAS',
-    note: 'Max 8 pz/gancio. Separare per no zone ombra.',
-    img_type: 'rack',
-  },
-  'Bracci': {
-    tipo: 'SINGOLO-VERTICALE',
-    label: 'Gancio singolo verticale — bracci',
-    desc: 'Bracci telescopici verticali. 1-2 pezzi per gancio. Aggancio al foro superiore.',
-    pezzi_gancio: 2,
-    ganci_passo: 1,
-    colore: '#25a33e',
-    tipo_badge: 'tg-m',
-    symbol: 'BRC',
-    note: 'Aggancio al foro sup. Max 2/gancio.',
-    img_type: 'arm',
-  },
-  'Strutture': {
-    tipo: 'SINGOLO-ORIZZONTALE',
-    label: 'Gancio singolo orizzontale — traverse',
-    desc: 'Traverse e montanti orizzontali. 1 pezzo per gancio. Due punti di supporto per traverse >1m.',
-    pezzi_gancio: 1,
-    ganci_passo: 2,
-    colore: '#1b6b2a',
-    tipo_badge: 'tg-m',
-    symbol: 'TR',
-    note: '2 punti supporto se >1m. 1 pezzo/gancio.',
-    img_type: 'bar_h',
-  },
-  'Traino': {
-    tipo: 'SINGOLO-VERTICALE',
-    label: 'Gancio singolo — barre traino',
-    desc: 'Barre di traino verticali. 1 pezzo per gancio. Aggancio al foro di testa.',
-    pezzi_gancio: 1,
-    ganci_passo: 1,
-    colore: '#1b6b2a',
-    tipo_badge: 'tg-m',
-    symbol: 'BTR',
-    note: 'Verticale. Foro di testa.',
-    img_type: 'bar_v',
-  },
-  'Carrello': {
-    tipo: 'GRAPPOLO',
-    label: 'Grappolo — ruote e assali',
-    desc: 'Ruote e mozzi su gancio a rastrelliera rotonda. Max 6 flange per gancio.',
-    pezzi_gancio: 6,
-    ganci_passo: 1,
-    colore: '#f5c200',
-    tipo_badge: 'tg-s',
-    symbol: 'FL',
-    note: 'Max 6 flange/gancio. Rastrelliera rotonda.',
-    img_type: 'cluster',
-  },
-  'Speciali': {
-    tipo: 'CUSTOM',
-    label: 'Aggancio custom — verificare con capo',
-    desc: 'Pezzi speciali. Verificare regola con capo produzione prima del carico.',
-    pezzi_gancio: 1,
-    ganci_passo: 2,
-    colore: '#2060b0',
-    tipo_badge: 'tg-r',
-    symbol: 'CUS',
-    note: '⚠️ Verificare con Elia prima del carico.',
-    img_type: 'frame_m',
-  },
+const HOOK_TYPES = {
+  1:{name:"Singolo C + Rotazione",cls:"t1",pxg:1,gPasso:3,color:"#25a33e",famiglie:["Trinciatrici","Falciatrici","Traino","Strutture"],note:"Appendi orizzontalmente. Attiva rotazione. 1 pz/gancio.",passo_m:2.4},
+  2:{name:"Doppio Sincronizzato",cls:"t2",pxg:1,gPasso:2,color:"#f5c518",famiglie:["ENODUO","Strutture","Bracci"],note:"2 punti aggancio sincronizzati. Bilanciamento obbligatorio.",passo_m:1.6},
+  3:{name:"Rastrelliera Multipla",cls:"t3",pxg:6,gPasso:1,color:"#3498db",famiglie:["Carter","Coperchi","Staffaggi","Carrello"],note:"Alta densità. Max 6-8 pz/gancio. Sep. min 5cm.",passo_m:0.8},
+  4:{name:"Bilancino Heavy",cls:"t4",pxg:1,gPasso:6,color:"#e74c3c",famiglie:["Rotopresse","Vendemmiatrici"],note:"⚠ PESANTE. Zone 3-14. Velocità max 0.7 m/min.",passo_m:2.4}
 };
+var ZONA_POS=[{z:1,x:150,y:75},{z:2,x:280,y:75},{z:3,x:400,y:75},{z:4,x:570,y:75},{z:5,x:865,y:75},{z:6,x:865,y:155},{z:7,x:865,y:210},{z:8,x:865,y:265},{z:9,x:865,y:320},{z:10,x:730,y:348},{z:11,x:575,y:348},{z:12,x:420,y:348},{z:13,x:295,y:320},{z:14,x:295,y:255},{z:15,x:295,y:200},{z:16,x:140,y:258},{z:17,x:75,y:450}];
+var ZONE_CURVA=[1,5,9,13,17];
+var PIANO=[],LOTTO=null,hookSel=1;
 
-// ═══════════════════════════════════════════════════════
-// PRODOTTI — catalogo completo (58 pezzi)
-// ═══════════════════════════════════════════════════════
-const PRODOTTI = [
-  {cod:'FALC-TF160',nome:'Trincia TF160',fam:'Trinciatrici',l:1650,w:900,h:650,kg:95,sup:1.85,ganci:3,vel:1.0},
-  {cod:'FALC-TF220',nome:'Trincia TF220',fam:'Trinciatrici',l:2250,w:950,h:680,kg:135,sup:2.40,ganci:4,vel:1.0},
-  {cod:'FALC-TF280',nome:'Trincia TF280',fam:'Trinciatrici',l:2850,w:980,h:700,kg:185,sup:3.20,ganci:6,vel:1.0},
-  {cod:'FALC-TF320',nome:'Trincia TF320',fam:'Trinciatrici',l:3250,w:1000,h:720,kg:220,sup:3.80,ganci:6,vel:0.7},
-  {cod:'FALC-CF280',nome:'Coperchio TF280',fam:'Trinciatrici',l:2800,w:920,h:120,kg:42,sup:1.20,ganci:4,vel:1.5},
-  {cod:'FALC-LT280',nome:'Laterale TF280',fam:'Trinciatrici',l:680,w:580,h:420,kg:28,sup:0.85,ganci:2,vel:1.5},
-  {cod:'FALC-FN200',nome:'Falciatrice FN200',fam:'Falciatrici',l:2050,w:420,h:380,kg:68,sup:1.45,ganci:3,vel:1.0},
-  {cod:'FALC-FN250',nome:'Falciatrice FN250',fam:'Falciatrici',l:2550,w:440,h:400,kg:82,sup:1.75,ganci:4,vel:1.0},
-  {cod:'FALC-FN300',nome:'Falciatrice FN300',fam:'Falciatrici',l:3050,w:460,h:420,kg:98,sup:2.10,ganci:4,vel:1.0},
-  {cod:'PRES-RB80', nome:'Rotopresse RB80', fam:'Rotopresse',l:1800,w:1600,h:1400,kg:245,sup:3.80,ganci:6,vel:0.7},
-  {cod:'PRES-RB100',nome:'Rotopresse RB100',fam:'Rotopresse',l:2000,w:1800,h:1600,kg:310,sup:4.50,ganci:6,vel:0.7},
-  {cod:'PRES-RB120',nome:'Rotopresse RB120',fam:'Rotopresse',l:2200,w:1900,h:1700,kg:380,sup:5.20,ganci:6,vel:0.7},
-  {cod:'PRES-SP100',nome:'Sponda RB100',fam:'Rotopresse',l:1800,w:280,h:1600,kg:65,sup:1.60,ganci:3,vel:1.0},
-  {cod:'VEND-VN400',nome:'Vend. VN400 Telaio',fam:'Vendemmiatrici',l:3800,w:1400,h:1800,kg:420,sup:6.80,ganci:6,vel:0.7},
-  {cod:'VEND-VN500',nome:'Vend. VN500 Telaio',fam:'Vendemmiatrici',l:4800,w:1600,h:2100,kg:580,sup:9.20,ganci:6,vel:0.7},
-  {cod:'VEND-BR400',nome:'Braccio pickUp VN400',fam:'Vendemmiatrici',l:2200,w:480,h:380,kg:85,sup:1.95,ganci:3,vel:1.0},
-  {cod:'ENOD-780',  nome:'ENODUO 780 Telaio',fam:'ENODUO',l:3200,w:1200,h:1400,kg:280,sup:4.80,ganci:6,vel:0.7},
-  {cod:'ENOD-960',  nome:'ENODUO 960 Telaio',fam:'ENODUO',l:3800,w:1400,h:1600,kg:350,sup:5.90,ganci:6,vel:0.7},
-  {cod:'BTRN-80',   nome:'Barra Traino 80',fam:'Traino',l:850,w:180,h:120,kg:18,sup:0.28,ganci:1,vel:1.5},
-  {cod:'BTRN-120',  nome:'Barra Traino 120',fam:'Traino',l:1250,w:220,h:140,kg:28,sup:0.38,ganci:2,vel:1.5},
-  {cod:'BTRN-150',  nome:'Barra Traino 150',fam:'Traino',l:1550,w:250,h:160,kg:38,sup:0.48,ganci:2,vel:1.5},
-  {cod:'CART-LAT-S',nome:'Carter Laterale S',fam:'Carter',l:480,w:380,h:220,kg:7.5,sup:0.38,ganci:1,vel:1.5},
-  {cod:'CART-LAT-M',nome:'Carter Laterale M',fam:'Carter',l:680,w:520,h:280,kg:12,sup:0.58,ganci:2,vel:1.5},
-  {cod:'CART-LAT-L',nome:'Carter Laterale L',fam:'Carter',l:920,w:680,h:340,kg:18,sup:0.82,ganci:2,vel:1.5},
-  {cod:'CART-SUP',  nome:'Carter Superiore',fam:'Carter',l:2200,w:880,h:120,kg:32,sup:1.05,ganci:3,vel:1.5},
-  {cod:'COPR-VAL-S',nome:'Coperchio Valvola S',fam:'Coperchi',l:280,w:220,h:60,kg:1.1,sup:0.12,ganci:1,vel:1.5},
-  {cod:'COPR-VAL-M',nome:'Coperchio Valvola M',fam:'Coperchi',l:420,w:320,h:80,kg:2.2,sup:0.22,ganci:1,vel:1.5},
-  {cod:'COPR-RID',  nome:'Coperchio Riduttore',fam:'Coperchi',l:380,w:280,h:120,kg:3.8,sup:0.28,ganci:1,vel:1.5},
-  {cod:'BRACC-TL-S',nome:'Braccio Telescopico S',fam:'Bracci',l:680,w:130,h:120,kg:3.2,sup:0.20,ganci:1,vel:1.5},
-  {cod:'BRACC-TL-M',nome:'Braccio Telescopico M',fam:'Bracci',l:980,w:150,h:140,kg:5.8,sup:0.32,ganci:2,vel:1.5},
-  {cod:'BRACC-TL-L',nome:'Braccio Telescopico L',fam:'Bracci',l:1480,w:180,h:160,kg:9.5,sup:0.48,ganci:2,vel:1.5},
-  {cod:'TRAV-ANT',  nome:'Traversa Anteriore',fam:'Strutture',l:1800,w:100,h:80,kg:14,sup:0.32,ganci:2,vel:1.5},
-  {cod:'MONT-LAT',  nome:'Montante Laterale',fam:'Strutture',l:820,w:80,h:920,kg:12,sup:0.35,ganci:2,vel:1.5},
-  {cod:'STAF-UNI-S',nome:'Staffa Universale S',fam:'Staffaggi',l:250,w:200,h:80,kg:0.8,sup:0.06,ganci:1,vel:2.0},
-  {cod:'STAF-UNI-M',nome:'Staffa Universale M',fam:'Staffaggi',l:380,w:280,h:100,kg:1.4,sup:0.10,ganci:1,vel:2.0},
-  {cod:'PIAS-AGG-S',nome:'Piastra Aggancio S',fam:'Staffaggi',l:180,w:140,h:20,kg:0.6,sup:0.05,ganci:1,vel:2.0},
-  {cod:'PIAS-AGG-M',nome:'Piastra Aggancio M',fam:'Staffaggi',l:280,w:200,h:25,kg:1.1,sup:0.08,ganci:1,vel:2.0},
-  {cod:'ROTA-STD',  nome:'Ruota Standard',fam:'Carrello',l:220,w:220,h:180,kg:8.5,sup:0.25,ganci:1,vel:1.5},
-  {cod:'ROTA-LRG',  nome:'Ruota Larga',fam:'Carrello',l:280,w:280,h:220,kg:14,sup:0.38,ganci:1,vel:1.5},
-  {cod:'ASSE-STD',  nome:'Assale Standard',fam:'Carrello',l:1650,w:80,h:80,kg:28,sup:0.42,ganci:2,vel:1.5},
-];
+function tipoPerFam(fam){for(var t in HOOK_TYPES)if(HOOK_TYPES[t].famiglie.includes(fam))return parseInt(t);return 3;}
+function selHook(n){hookSel=n;[1,2,3,4].forEach(function(i){document.getElementById("hcard-"+i).classList.toggle("sel",i===n);});}
+function aggiornaVel(){var v=parseFloat(document.getElementById("selVel").value);var c=Math.round(170/v);document.getElementById("cicloLabel").textContent=c+" min";document.getElementById("kCiclo").textContent=c+"'";}
+function caricaLotto(){var id=document.getElementById("selLotto").value;if(id)window.location.href="/piano_carico?lotto_id="+id;}
+function ottimizzaEMostra(){if(!LOTTO||!LOTTO.items||!LOTTO.items.length){var id=document.getElementById("selLotto").value;if(!id){alert("Seleziona prima un lotto.");return;}window.location.href="/piano_carico?lotto_id="+id+"&genera=1";return;}generaPiano();}
 
-// ═══════════════════════════════════════════════════════
-// LOTTO DEMO (pre-caricato per la demo di giovedì)
-// ═══════════════════════════════════════════════════════
-const LOTTO_DEMO = [
-  {cod:'FALC-TF280', qty:2},
-  {cod:'FALC-CF280', qty:2},
-  {cod:'FALC-LT280', qty:4},
-  {cod:'CART-LAT-M', qty:6},
-  {cod:'COPR-VAL-S', qty:12},
-  {cod:'COPR-VAL-M', qty:8},
-  {cod:'STAF-UNI-S', qty:20},
-  {cod:'STAF-UNI-M', qty:10},
-  {cod:'BRACC-TL-M', qty:4},
-  {cod:'ROTA-STD',   qty:6},
-];
-
-// ═══════════════════════════════════════════════════════
-// STATO
-// ═══════════════════════════════════════════════════════
-var PIANO = [];   // [{posizione, pezzo, tipo_gancio, n_pezzi_gancio, colore, warning}]
-var famAttiva = null;
-
-// ═══════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════
-document.getElementById('hdr-date').textContent = new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
-
-// Render famiglie sidebar
-var famList = document.getElementById('famList');
-var famiglie = Object.keys(LIBRERIA_AGGANCIO);
-famiglie.forEach(function(fam) {
-  var reg = LIBRERIA_AGGANCIO[fam];
-  var prodFam = PRODOTTI.filter(function(p){ return p.fam===fam; });
-  var div = document.createElement('div');
-  div.className = 'fam-card';
-  div.id = 'fam-'+fam;
-  div.innerHTML =
-    '<div class="fc-name">'+fam.toUpperCase()+'</div>' +
-    '<div class="fc-info">'+prodFam.length+' prodotti · '+reg.tipo+'</div>' +
-    '<div class="fc-rule">'+reg.label+'</div>';
-  div.addEventListener('click', function(){
-    document.querySelectorAll('.fam-card').forEach(function(c){ c.classList.remove('active'); });
-    div.classList.add('active');
-    famAttiva = fam;
-    mostraDettaglioFam(fam);
-  });
-  famList.appendChild(div);
-});
-
-// Render schema ganci
-renderSchemaGanci();
-
-// Calcola piano con lotto demo
-calcolaPiano(LOTTO_DEMO);
-
-// ═══════════════════════════════════════════════════════
-// CALCOLO PIANO DI CARICO
-// ═══════════════════════════════════════════════════════
-function calcolaPiano(lottoItems) {
-  PIANO = [];
-  var pos = 1;    // posizione gancio corrente (1-425)
-  var avvisi = [];
-  var DIST_MIN_GANCI = Math.ceil(parseFloat(document.getElementById('distMin').value||10) / 40); // dist cm -> n ganci (40cm/gancio)
-  var vel = parseFloat(document.getElementById('velCat').value||1.5);
-
-  // Espandi lotto per famiglia e ordina: prima grandi, poi bulk, poi piccoli
-  var pezziEspansi = [];
-  lottoItems.forEach(function(item) {
-    var p = PRODOTTI.find(function(x){ return x.cod===item.cod; });
-    if(!p) return;
-    var reg = LIBRERIA_AGGANCIO[p.fam] || LIBRERIA_AGGANCIO['Speciali'];
-    var pezziPerGancio = reg.pezzi_gancio;
-    var ganciPasso = reg.ganci_passo;
-    // Quanti ganci servono
-    var nGrappoli = Math.ceil(item.qty / pezziPerGancio);
-    pezziEspansi.push({p:p, reg:reg, qty:item.qty, nGrappoli:nGrappoli, ganciPasso:ganciPasso});
-  });
-
-  // Ordina: XL prima, poi grandi, poi medi, poi piccoli (ottimizza distribuzione peso)
-  pezziEspansi.sort(function(a,b){ return b.p.kg - a.p.kg; });
-
-  var ganciUsati = 0;
-  var pesoTot = 0;
-
-  pezziEspansi.forEach(function(item) {
-    var p = item.p;
-    var reg = item.reg;
-
-    // Verifica spazio catena
-    if(pos + item.ganciPasso > 425) {
-      avvisi.push({tipo:'hot', msg:'⚠️ '+p.cod+': catena piena, impossibile allocare '+item.qty+' pz'});
-      return;
-    }
-
-    // Avvisi peso
-    if(p.kg > 100) {
-      avvisi.push({tipo:'warn', msg:'🔥 '+p.cod+' ('+p.kg+'kg) — verificare portata gancio prima del carico'});
-    }
-
-    // Aggiungi al piano
-    var pezziPerGancio = reg.pezzi_gancio;
-    var qtaRestante = item.qty;
-    var grappolo = 0;
-
-    while(qtaRestante > 0 && pos <= 425) {
-      var qtaQuestoGancio = Math.min(qtaRestante, pezziPerGancio);
-      var warning = null;
-      if(p.kg * qtaQuestoGancio > 80) warning = 'PESANTE';
-      if([1,5,9,13,17].includes(Math.ceil(pos/25))) warning = 'CURVA';
-
-      PIANO.push({
-        pos: pos,
-        cod: p.cod,
-        nome: p.nome,
-        fam: p.fam,
-        kg_gancio: p.kg * qtaQuestoGancio,
-        qty_gancio: qtaQuestoGancio,
-        ganci_passo: item.ganciPasso,
-        colore: reg.colore,
-        tipo: reg.tipo,
-        tipo_badge: reg.tipo_badge,
-        symbol: reg.symbol,
-        warning: warning,
-        pezzi_gancio: pezziPerGancio,
-        sup_m2: p.sup * qtaQuestoGancio,
-        note: reg.note,
-      });
-      ganciUsati += item.ganciPasso;
-      pesoTot += p.kg * qtaQuestoGancio;
-      qtaRestante -= qtaQuestoGancio;
-      pos += item.ganciPasso + DIST_MIN_GANCI; // distanza di sicurezza
-    }
-  });
-
-  // Avvisi finali
-  var sat = Math.round(ganciUsati/425*100);
-  if(sat < 30) avvisi.unshift({tipo:'info', msg:'💡 Saturazione bassa ('+sat+'%) — aggiungere altri pezzi per ottimizzare i costi'});
-  if(sat > 85) avvisi.unshift({tipo:'hot',  msg:'⚠️ Saturazione alta ('+sat+'%) — considerare due lotti'});
-  if(vel < 1.0) avvisi.push({tipo:'warn', msg:'🐢 Velocità lenta ('+vel+' m/min) — ciclo '+Math.round(170/vel)+' min'});
-
-  // Aggiorna KPI
-  document.getElementById('kpi-ganci').textContent = ganciUsati+'/425';
-  document.getElementById('kpi-sat').textContent   = sat+'%';
-  document.getElementById('kpi-peso').textContent  = Math.round(pesoTot)+'kg';
-  document.getElementById('kpi-ciclo').textContent = Math.round(170/vel)+"'";
-
-  // Render tutto
-  renderAvvisi(avvisi);
-  renderChainCanvas();
-  renderDistinta();
-  renderIstruzioni();
-}
-
-// ═══════════════════════════════════════════════════════
-// CANVAS CATENA — visualizzazione gancio×gancio
-// ═══════════════════════════════════════════════════════
-function renderChainCanvas() {
-  var canvas = document.getElementById('chainCanvas');
-  var CELL = 14;     // px per gancio
-  var H = 160;
-  var W = Math.max(425 * CELL + 40, 1200);
-  canvas.width = W;
-  canvas.height = H;
-  var ctx = canvas.getContext('2d');
-  ctx.clearRect(0,0,W,H);
-
-  // Sfondo
-  ctx.fillStyle = '#060a07';
-  ctx.fillRect(0,0,W,H);
-
-  // Linea catena
-  ctx.strokeStyle = '#1b6b2a';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([8,6]);
-  ctx.beginPath();
-  ctx.moveTo(20, 40);
-  ctx.lineTo(W-20, 40);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Mappa ganci occupati
-  var occupati = {};
-  PIANO.forEach(function(item) {
-    for(var i=0; i<item.ganci_passo; i++) {
-      occupati[item.pos + i] = item;
-    }
-  });
-
-  // Disegna i 425 ganci
-  for(var g=1; g<=425; g++) {
-    var x = 20 + (g-1)*CELL;
-    var item = occupati[g];
-
-    if(item && g === item.pos) {
-      // Gancio principale (primo del gruppo)
-      var col = item.colore;
-      if(item.warning === 'PESANTE') col = '#e03030';
-      if(item.warning === 'CURVA')   col = '#e07020';
-
-      // Corpo gancio
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.roundRect(x, 28, CELL*item.ganci_passo - 2, 50, 3);
-      ctx.fill();
-
-      // Testo simbolo
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 7px DM Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(item.symbol, x + (CELL*item.ganci_passo-2)/2, 56);
-
-      // Qty bubble
-      if(item.qty_gancio > 1) {
-        ctx.fillStyle = '#f5c200';
-        ctx.beginPath();
-        ctx.arc(x + (CELL*item.ganci_passo-2)/2, 28, 7, 0, Math.PI*2);
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.font = 'bold 7px DM Mono, monospace';
-        ctx.fillText('×'+item.qty_gancio, x + (CELL*item.ganci_passo-2)/2, 31);
+function generaPiano(){
+  if(!LOTTO||!LOTTO.items)return;
+  var vel=parseFloat(document.getElementById("selVel").value);
+  var pos=1,piano=[],gcTot=0,kgTot=0,ctTot=0,avvisi=[];
+  var items=LOTTO.items.slice().sort(function(a,b){return b.peso_kg-a.peso_kg;});
+  items.forEach(function(item){
+    var tipo=tipoPerFam(item.fam||item.famiglia||"");
+    var hook=HOOK_TYPES[tipo];
+    var qty=item.qty||1,nGr=Math.ceil(qty/hook.pxg);
+    if((item.peso_kg||0)>100)avvisi.push({t:"warn",m:"🔥 "+item.cod+" ("+item.peso_kg+"kg) — verificare portata"});
+    if(tipo===4&&vel>0.7)avvisi.push({t:"warn",m:"⚠️ "+item.cod+" richiede vel ≤ 0.7 m/min"});
+    for(var i=0;i<nGr;i++){
+      var qtaQui=Math.min(hook.pxg,qty-i*hook.pxg);
+      if(pos>425){avvisi.push({t:"err",m:"❌ "+item.cod+": catena piena"});break;}
+      var inCurva=ZONE_CURVA.includes(Math.ceil(pos/25));
+      var kgG=(item.peso_kg||0)*qtaQui;
+      var cT=kgG*0.49*180/3600*0.22*(1.5/Math.max(vel,0.5));
+      for(var g=0;g<hook.gPasso;g++){
+        if(pos+g<=425)piano[pos+g-1]={pos:pos+g,cod:item.cod,nome:item.nome||item.cod,fam:item.fam||item.famiglia||"",tipo:tipo,cls:"t"+tipo,qtaQui:g===0?qtaQui:null,kgGancio:g===0?kgG:0,gPasso:hook.gPasso,inCurva:inCurva,cTerm:g===0?cT:0};
       }
-
-      // Peso label
-      ctx.fillStyle = 'rgba(255,255,255,.5)';
-      ctx.font = '6px DM Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(item.kg_gancio.toFixed(0)+'k', x + (CELL*item.ganci_passo-2)/2, 88);
-
-      // Gancio hook shape
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x + (CELL*item.ganci_passo-2)/2, 22);
-      ctx.lineTo(x + (CELL*item.ganci_passo-2)/2, 28);
-      ctx.stroke();
-
-    } else if(!item) {
-      // Gancio vuoto
-      ctx.strokeStyle = 'rgba(255,255,255,.08)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x+CELL/2, 30);
-      ctx.lineTo(x+CELL/2, 72);
-      ctx.stroke();
-      // Hook
-      ctx.strokeStyle = 'rgba(255,255,255,.05)';
-      ctx.beginPath();
-      ctx.arc(x+CELL/2, 72, 4, 0, Math.PI);
-      ctx.stroke();
+      gcTot+=hook.gPasso;kgTot+=kgG;ctTot+=cT;pos+=hook.gPasso+1;
     }
-  }
-
-  // Zone marker ogni 25 ganci
-  for(var z=0; z<=17; z++) {
-    var xz = 20 + z*25*CELL;
-    ctx.strokeStyle = 'rgba(255,255,255,.08)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3,3]);
-    ctx.beginPath();
-    ctx.moveTo(xz, 0);
-    ctx.lineTo(xz, H);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    if(z < 17) {
-      ctx.fillStyle = 'rgba(255,255,255,.2)';
-      ctx.font = '8px DM Mono, monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText('Z'+(z+1), xz+2, 10);
-    }
-  }
-
-  // Scala numerica ogni 25 ganci
-  ctx.fillStyle = 'rgba(255,255,255,.2)';
-  ctx.font = '7px DM Mono, monospace';
-  ctx.textAlign = 'center';
-  for(var n=25; n<=425; n+=25) {
-    var xn = 20 + (n-1)*CELL;
-    ctx.fillText(n, xn, H-4);
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// DISTINTA DI CARICO
-// ═══════════════════════════════════════════════════════
-function renderDistinta() {
-  var tbody = document.getElementById('distintatbody');
-  if(!PIANO.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--t3);padding:20px">Nessun piano calcolato</td></tr>';
-    return;
-  }
-
-  // Raggruppa per codice
-  var gruppi = {};
-  PIANO.forEach(function(item) {
-    if(!gruppi[item.cod]) {
-      gruppi[item.cod] = {
-        cod:item.cod, nome:item.nome, fam:item.fam,
-        qty_tot:0, ganci_tot:0, kg_tot:0, sup_tot:0,
-        tipo:item.tipo, tipo_badge:item.tipo_badge,
-        pezzi_gancio:item.pezzi_gancio, note:item.note,
-        pos_inizio: item.pos,
-      };
-    }
-    gruppi[item.cod].qty_tot   += item.qty_gancio;
-    gruppi[item.cod].ganci_tot += item.ganci_passo;
-    gruppi[item.cod].kg_tot    += item.kg_gancio;
-    gruppi[item.cod].sup_tot   += item.sup_m2;
   });
-
-  var rows = Object.values(gruppi);
-  tbody.innerHTML = rows.map(function(r,i) {
-    return '<tr>' +
-      '<td style="color:var(--t3);font-family:var(--mono)">'+(i+1)+'</td>' +
-      '<td class="cod">'+r.cod+'</td>' +
-      '<td style="color:var(--t2);font-size:11px">'+r.nome+'</td>' +
-      '<td style="color:var(--t3);font-size:10px">'+r.fam+'</td>' +
-      '<td style="font-weight:700;color:var(--y);font-family:var(--mono)">'+r.pezzi_gancio+' pz/gancio</td>' +
-      '<td><span class="tipo-gancio '+r.tipo_badge+'">'+r.tipo+'</span></td>' +
-      '<td style="font-family:var(--mono);font-weight:700">'+r.ganci_tot+'</td>' +
-      '<td style="font-family:var(--mono)">'+r.kg_tot.toFixed(1)+' kg</td>' +
-      '<td style="font-family:var(--mono)">'+r.sup_tot.toFixed(2)+' m²</td>' +
-      '<td style="font-size:10px;color:var(--t3)">'+r.note+'</td>' +
-      '</tr>';
-  }).join('');
+  PIANO=piano;var sat=Math.round(gcTot/425*100);
+  document.getElementById("kGanci").textContent=gcTot+"/425";
+  document.getElementById("kSat").textContent=sat+"%";
+  document.getElementById("kPeso").textContent=Math.round(kgTot)+"kg";
+  document.getElementById("kTerm").textContent="€"+ctTot.toFixed(2);
+  if(sat<30)avvisi.unshift({t:"info",m:"💡 Saturazione bassa ("+sat+"%) — aggiungi pezzi"});
+  if(sat>85)avvisi.unshift({t:"warn",m:"⚠️ Saturazione alta ("+sat+"%) — considera due lotti"});
+  renderAvvisi(avvisi);renderSlots(piano);renderZonePlan(piano);renderDistinta(items);renderIstruzioni(items,vel);
 }
 
-// ═══════════════════════════════════════════════════════
-// ISTRUZIONI OPERAIO
-// ═══════════════════════════════════════════════════════
-function renderIstruzioni() {
-  var box = document.getElementById('istrBox');
-  box.style.display = 'block';
-  var vel = parseFloat(document.getElementById('velCat').value||1.5);
-  var ciclo = Math.round(170/vel);
-
-  // Raggruppa per tipo operazione
-  var gruppi = {};
-  PIANO.forEach(function(item) {
-    var fam = item.fam;
-    if(!gruppi[fam]) gruppi[fam] = {fam:fam, items:[], tipo:item.tipo, note:item.note};
-    var g = gruppi[fam];
-    var exists = g.items.find(function(x){return x.cod===item.cod;});
-    if(!exists) g.items.push({cod:item.cod, nome:item.nome, qty:item.qty_gancio, ganci:item.ganci_passo});
-    else exists.qty += item.qty_gancio;
-  });
-
-  var steps = [
-    {n:1, txt:'<strong>Verificare la distinta di carico</strong> con il capo fabbrica prima di iniziare. Velocità catena impostata: <span class="step-tag">'+vel+' m/min</span> — ciclo totale: <span class="step-tag">'+ciclo+' min</span>'},
-    {n:2, txt:'<strong>Preparare i ganci</strong> secondo la libreria di aggancio sopra. Ogni tipo di pezzo ha il suo gancio specifico.'},
-  ];
-
-  var stepN = 3;
-  Object.values(gruppi).forEach(function(g) {
-    var codici = g.items.map(function(i){ return '<span class="step-tag">'+i.cod+'</span>'; }).join(' ');
-    steps.push({n:stepN++, txt:'<strong>'+g.fam.toUpperCase()+'</strong> — '+codici+' → <span class="step-tag">'+g.tipo+'</span> — '+g.note});
-  });
-
-  steps.push({n:stepN, txt:'<strong>Avviare la catena</strong> quando tutti i ganci sono caricati. Segnare <span class="step-tag">INIZIO LAVORO</span> sul tablet operaio (<code>/operaio</code>). Al termine del ciclo premere <span class="step-tag">STOP</span>.'});
-
-  document.getElementById('istrContent').innerHTML = steps.map(function(s) {
-    return '<div class="step-row"><div class="step-num">'+s.n+'</div><div class="step-txt">'+s.txt+'</div></div>';
-  }).join('');
+function renderSlots(piano){
+  var row=document.getElementById("slotsRow"),html="";
+  for(var i=0;i<425;i++){
+    var g=piano[i],z=Math.ceil((i+1)/25),isZS=(i%25===0);
+    html+="<div class="slot"><div class="slot-num">"+(i+1)+"</div><div class="slot-rod"></div><div class="slot-hook"></div>";
+    if(g&&g.qtaQui!==null&&g.qtaQui!==undefined){
+      var w=g.gPasso>1?(40*g.gPasso-2):40,h=Math.max(44,44+(g.gPasso-1)*10),cc=g.inCurva?" curva":"";
+      html+="<div class="slot-body "+g.cls+cc+"" style="width:"+w+"px;height:"+h+"px" onmouseenter="showTip(event,"+i+")" onmouseleave="hideTip()">";
+      html+="<div style="font-size:7px;font-weight:700">"+g.cod.split("-").pop()+"</div>";
+      if(g.qtaQui>1)html+="<div class="slot-qty">×"+g.qtaQui+"</div>";
+      html+="<div class="slot-kg">"+g.kgGancio.toFixed(0)+"kg</div></div>";
+    }else if(!g){html+="<div class="slot-body empty">·</div>";}
+    if(isZS&&z<=17)html+="<div class="slot-zona">Z"+z+(ZONE_CURVA.includes(z)?"⚠":"")+"</div>";
+    html+="</div>";
+  }
+  row.innerHTML=html;
 }
 
-// ═══════════════════════════════════════════════════════
-// SCHEMA VISIVO TIPI DI GANCIO (SVG)
-// ═══════════════════════════════════════════════════════
-function renderSchemaGanci() {
-  var tipi = [
-    {id:'SINGOLO-ORIZZONTALE', label:'Gancio Orizzontale', sub:'Barre falcianti', col:'#1b6b2a', svg: drawBarH},
-    {id:'SINGOLO-VERTICALE',   label:'Gancio Verticale',   sub:'Bracci, traino',  col:'#25a33e', svg: drawBarV},
-    {id:'MULTIPLO-STRUTTURALE',label:'Gancio Strutturale', sub:'Telai grandi',    col:'#e03030', svg: drawFrameXL},
-    {id:'GRAPPOLO',            label:'Grappolo Multiplo',  sub:'Flange, coperchi',col:'#f5c200', svg: drawCluster},
-    {id:'RASTRELLIERA',        label:'Rastrelliera',       sub:'Staffaggi, placche',col:'#f5c200',svg: drawRack},
-    {id:'SINGOLO-BULK',        label:'Gancio Bulk',        sub:'Carter, coperchi medi',col:'#25a33e',svg: drawCarter},
-  ];
+function showTip(e,idx){var g=PIANO[idx];if(!g)return;var h=HOOK_TYPES[g.tipo];var tip=document.getElementById("slotTooltip");tip.innerHTML="<strong style="color:#f5c518">"+g.cod+"</strong><br>"+g.nome+"<br><span style="color:#6b8a6e">Tipo:</span> <span style="color:"+h.color+"">"+h.name+"</span><br><span style="color:#6b8a6e">Pz:</span> "+g.qtaQui+"<br><span style="color:#6b8a6e">Peso:</span> "+g.kgGancio.toFixed(1)+"kg<br><span style="color:#2d9c47;font-size:10px">"+h.note+"</span>";tip.style.left=(e.pageX+12)+"px";tip.style.top=(e.pageY-40)+"px";tip.classList.add("show");}
+function hideTip(){document.getElementById("slotTooltip").classList.remove("show");}
 
-  document.getElementById('schemaGrid').innerHTML = tipi.map(function(t) {
-    return '<div class="schema-card">' +
-      '<div class="sc-head">' +
-        '<span>'+t.label+'</span>' +
-        '<span style="font-size:10px;color:var(--t3);font-family:var(--mono)">'+t.sub+'</span>' +
-      '</div>' +
-      '<div class="sc-body">' +
-        '<svg class="sc-svg" viewBox="0 0 160 120" xmlns="http://www.w3.org/2000/svg" style="height:110px">' +
-          t.svg(t.col) +
-        '</svg>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+function renderZonePlan(piano){
+  var zc={};for(var i=0;i<425;i++){var z=Math.ceil((i+1)/25);if(!zc[z])zc[z]={g:0,kg:0};if(piano[i]&&piano[i].qtaQui){zc[z].g++;zc[z].kg+=(piano[i].kgGancio||0);}}
+  var html="";
+  ZONA_POS.forEach(function(zp){var c=zc[zp.z]||{g:0,kg:0};var sat=Math.round(c.g/25*100);var isCurva=ZONE_CURVA.includes(zp.z);var over=sat>80;var fill=c.g>0?(over?"rgba(230,126,34,.3)":"rgba(28,110,46,.3)"):"rgba(255,255,255,.03)";var stroke=isCurva?"rgba(230,126,34,.7)":(c.g>0?(over?"#e67e22":"#1c6e2e"):"rgba(255,255,255,.08)");html+="<circle cx=""+zp.x+"" cy=""+zp.y+"" r="16" fill=""+fill+"" stroke=""+stroke+"" stroke-width="1.5"/>";html+="<text x=""+zp.x+"" y=""+(zp.y-4)+"" text-anchor="middle" fill="rgba(255,255,255,.3)" font-family="Barlow Condensed,sans-serif" font-size="8">Z"+zp.z+"</text>";if(c.g>0)html+="<text x=""+zp.x+"" y=""+(zp.y+8)+"" text-anchor="middle" fill=""+(over?"#e67e22":"#2d9c47")+"" font-family="Barlow Condensed,sans-serif" font-size="10" font-weight="900">"+sat+"%</text>";if(isCurva)html+="<text x=""+zp.x+"" y=""+(zp.y+19)+"" text-anchor="middle" fill="rgba(230,126,34,.6)" font-family="Barlow Condensed,sans-serif" font-size="7">curva</text>";});
+  document.getElementById("zoneGroupPlan").innerHTML=html;
 }
 
-function drawBarH(col) {
-  return `
-    <line x1="80" y1="10" x2="80" y2="35" stroke="${col}" stroke-width="3"/>
-    <path d="M75,35 Q70,45 75,50 Q80,55 85,50 Q90,45 85,35" fill="none" stroke="${col}" stroke-width="2.5"/>
-    <rect x="20" y="55" width="120" height="18" rx="4" fill="${col}" opacity=".8"/>
-    <text x="80" y="68" text-anchor="middle" fill="white" font-size="9" font-family="DM Mono">ORIZZONTALE</text>
-    <line x1="40" y1="55" x2="40" y2="78" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
-    <line x1="80" y1="55" x2="80" y2="78" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
-    <line x1="120" y1="55" x2="120" y2="78" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
-    <text x="80" y="100" text-anchor="middle" fill="${col}" font-size="8" font-family="DM Mono">1 PZ / GANCIO</text>
-    <path d="M60,88 Q80,82 100,88" stroke="${col}" stroke-width="1.5" fill="none" stroke-dasharray="3,2"/>
-    <text x="80" y="115" text-anchor="middle" fill="rgba(255,255,255,.3)" font-size="7" font-family="DM Mono">Rotazione attiva ↺</text>`;
-}
+function renderDistinta(items){var tbody=document.getElementById("distintatbody");if(!items||!items.length){tbody.innerHTML="<tr><td colspan=11 class=text-center>Nessun dato</td></tr>";return;}tbody.innerHTML=items.map(function(item,i){var tipo=tipoPerFam(item.fam||item.famiglia||"");var h=HOOK_TYPES[tipo];var nG=Math.ceil((item.qty||1)/h.pxg)*h.gPasso;return "<tr><td class=text-muted>"+(i+1)+"</td><td><code class=text-success>"+item.cod+"</code></td><td>"+(item.nome||item.cod)+"</td><td><span class=badge-famiglia>"+(item.fam||item.famiglia||"")+"</span></td><td><span class="tipo-badge tb-"+tipo+"">TYPE "+tipo+" — "+h.name+"</span></td><td class=text-center>"+h.pxg+"</td><td class=text-center>"+nG+"</td><td class=text-end>"+((item.peso_kg||0)*(item.qty||1)).toFixed(1)+"</td><td class=text-end>"+((item.sup_m2||0)*(item.qty||1)).toFixed(2)+"</td><td><span class=badge style=background:#555>"+h.passo_m+"m</span></td><td style="font-size:10px;color:#6b8a6e">"+h.note+"</td></tr>";}).join("");}
 
-function drawBarV(col) {
-  return `
-    <line x1="80" y1="8" x2="80" y2="30" stroke="${col}" stroke-width="3"/>
-    <path d="M75,30 Q70,40 75,45 Q80,50 85,45 Q90,40 85,30" fill="none" stroke="${col}" stroke-width="2.5"/>
-    <rect x="72" y="50" width="16" height="55" rx="4" fill="${col}" opacity=".8"/>
-    <text x="80" y="82" text-anchor="middle" fill="white" font-size="7" font-family="DM Mono" transform="rotate(-90,80,82)">VERT.</text>
-    <circle cx="80" cy="50" r="5" fill="${col}"/>
-    <text x="80" y="118" text-anchor="middle" fill="${col}" font-size="8" font-family="DM Mono">1-2 PZ / GANCIO</text>`;
-}
+function renderIstruzioni(items,vel){var card=document.getElementById("istrCard");card.style.display="block";document.getElementById("istrLottoNome").textContent=LOTTO?LOTTO.nome:"";var ciclo=Math.round(170/vel);var gruppi={};items.forEach(function(item){var tipo=tipoPerFam(item.fam||item.famiglia||"");if(!gruppi[tipo])gruppi[tipo]=[];gruppi[tipo].push(item);});var steps=[{n:1,txt:"<strong>Verificare la distinta</strong> con il capo fabbrica. Velocità: <span class=istr-tag>"+vel+" m/min</span> · Ciclo: <span class=istr-tag>"+ciclo+" min</span>"},{n:2,txt:"<strong>Preparare i ganci</strong>: <span class=istr-tag style=background:rgba(28,110,46,.2)>TYPE 1 Verde</span> <span class=istr-tag>TYPE 2 Giallo</span> <span class=istr-tag style=background:rgba(41,128,185,.2)>TYPE 3 Blu</span> <span class=istr-tag style=background:rgba(224,48,48,.2)>TYPE 4 Rosso</span>"}];var sn=3;Object.entries(gruppi).forEach(function(e){var tipo=e[0],gr=e[1],h=HOOK_TYPES[tipo];var codici=gr.map(function(g){return"<span class=istr-tag>"+g.cod+"</span>";}).join(" ");steps.push({n:sn++,txt:"<strong>TYPE "+tipo+" — "+h.name+"</strong>: "+codici+"<br><span style="color:#6b8a6e;font-size:11px">"+h.note+"</span>"});});steps.push({n:sn,txt:"<strong>Avviare catena</strong>. Registrare <span class=istr-tag>INIZIO</span> su <a href=/operaio style=color:#f5c518>/operaio</a>"});document.getElementById("istrBody").innerHTML=steps.map(function(s){return"<div class=istr-step><div class=istr-num>"+s.n+"</div><div class=istr-txt>"+s.txt+"</div></div>";}).join("");}
 
-function drawFrameXL(col) {
-  return `
-    <line x1="80" y1="5" x2="80" y2="20" stroke="${col}" stroke-width="3"/>
-    <line x1="30" y1="20" x2="130" y2="20" stroke="${col}" stroke-width="3"/>
-    <line x1="40" y1="20" x2="40" y2="90" stroke="${col}" stroke-width="2.5"/>
-    <line x1="80" y1="20" x2="80" y2="90" stroke="${col}" stroke-width="2.5"/>
-    <line x1="120" y1="20" x2="120" y2="90" stroke="${col}" stroke-width="2.5"/>
-    <rect x="25" y="90" width="110" height="18" rx="3" fill="${col}" opacity=".6"/>
-    <text x="80" y="103" text-anchor="middle" fill="white" font-size="8" font-family="DM Mono">TELAIO GRANDE</text>
-    <text x="80" y="118" text-anchor="middle" fill="${col}" font-size="7" font-family="DM Mono">⚠ 4 PUNTI AGGANCIO</text>`;
-}
+function renderAvvisi(avvisi){var cl={ok:"alert-success",warn:"alert-warning",err:"alert-danger",info:"alert-info"};document.getElementById("avvisiBox").innerHTML=avvisi.map(function(a){return"<div class="alert "+( cl[a.t]||"alert-info")+" py-2 small">"+a.m+"</div>";}).join("");}
 
-function drawCluster(col) {
-  return `
-    <line x1="80" y1="5" x2="80" y2="25" stroke="${col}" stroke-width="3"/>
-    <path d="M75,25 Q70,35 75,40 Q80,45 85,40 Q90,35 85,25" fill="none" stroke="${col}" stroke-width="2.5"/>
-    <line x1="80" y1="45" x2="40" y2="60" stroke="${col}" stroke-width="1.5"/>
-    <line x1="80" y1="45" x2="60" y2="62" stroke="${col}" stroke-width="1.5"/>
-    <line x1="80" y1="45" x2="80" y2="62" stroke="${col}" stroke-width="1.5"/>
-    <line x1="80" y1="45" x2="100" y2="62" stroke="${col}" stroke-width="1.5"/>
-    <line x1="80" y1="45" x2="120" y2="60" stroke="${col}" stroke-width="1.5"/>
-    <circle cx="40" cy="68" r="8" fill="${col}" opacity=".7"/>
-    <circle cx="60" cy="70" r="8" fill="${col}" opacity=".7"/>
-    <circle cx="80" cy="70" r="8" fill="${col}" opacity=".7"/>
-    <circle cx="100" cy="70" r="8" fill="${col}" opacity=".7"/>
-    <circle cx="120" cy="68" r="8" fill="${col}" opacity=".7"/>
-    <text x="80" y="105" text-anchor="middle" fill="${col}" font-size="8" font-family="DM Mono">4-6 PZ / GANCIO</text>
-    <text x="80" y="118" text-anchor="middle" fill="rgba(255,255,255,.3)" font-size="7" font-family="DM Mono">Dist. min 5cm</text>`;
-}
+function esportaCSV(){if(!LOTTO||!LOTTO.items){alert("Genera prima il piano.");return;}var h="N,Codice,Descrizione,Famiglia,Tipo Gancio,Pz/Gancio,Ganci Tot,Peso kg,Sup m2,Passo m,Note\n";var r=LOTTO.items.map(function(item,i){var tipo=tipoPerFam(item.fam||item.famiglia||"");var hk=HOOK_TYPES[tipo];var nG=Math.ceil((item.qty||1)/hk.pxg)*hk.gPasso;return(i+1)+",,"+item.cod+",,"+( item.nome||item.cod)+",,"+( item.fam||"")+",,TYPE "+tipo+" "+hk.name+",,"+hk.pxg+","+nG+","+( (item.peso_kg||0)*(item.qty||1)).toFixed(1)+","+( (item.sup_m2||0)*(item.qty||1)).toFixed(2)+","+hk.passo_m+","+hk.note;}).join("\n");var blob=new Blob([h+r],{type:"text/csv"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="piano_carico.csv";a.click();}
 
-function drawRack(col) {
-  return `
-    <line x1="80" y1="5" x2="80" y2="20" stroke="${col}" stroke-width="3"/>
-    <line x1="20" y1="20" x2="140" y2="20" stroke="${col}" stroke-width="3"/>
-    <line x1="30" y1="20" x2="30" y2="85" stroke="${col}" stroke-width="1.5"/>
-    <line x1="50" y1="20" x2="50" y2="85" stroke="${col}" stroke-width="1.5"/>
-    <line x1="70" y1="20" x2="70" y2="85" stroke="${col}" stroke-width="1.5"/>
-    <line x1="90" y1="20" x2="90" y2="85" stroke="${col}" stroke-width="1.5"/>
-    <line x1="110" y1="20" x2="110" y2="85" stroke="${col}" stroke-width="1.5"/>
-    <line x1="130" y1="20" x2="130" y2="85" stroke="${col}" stroke-width="1.5"/>
-    <text x="80" y="100" text-anchor="middle" fill="${col}" font-size="8" font-family="DM Mono">6-8 PZ / GANCIO</text>
-    <text x="80" y="113" text-anchor="middle" fill="rgba(255,255,255,.3)" font-size="7" font-family="DM Mono">Rastrelliera staffaggi</text>`;
-}
-
-function drawCarter(col) {
-  return `
-    <line x1="80" y1="5" x2="80" y2="25" stroke="${col}" stroke-width="3"/>
-    <path d="M75,25 Q70,35 75,40 Q80,45 85,40 Q90,35 85,25" fill="none" stroke="${col}" stroke-width="2.5"/>
-    <path d="M45,50 Q45,45 50,45 L110,45 Q115,45 115,50 L115,90 Q115,95 110,95 L50,95 Q45,95 45,90 Z" fill="${col}" opacity=".4" stroke="${col}" stroke-width="1.5"/>
-    <line x1="80" y1="45" x2="80" y2="50" stroke="${col}" stroke-width="2"/>
-    <line x1="60" y1="95" x2="60" y2="108" stroke="${col}" stroke-width="1.5"/>
-    <line x1="100" y1="95" x2="100" y2="108" stroke="${col}" stroke-width="1.5"/>
-    <text x="80" y="73" text-anchor="middle" fill="white" font-size="8" font-family="DM Mono">CARTER</text>
-    <text x="80" y="118" text-anchor="middle" fill="${col}" font-size="7" font-family="DM Mono">Fori drenaggio ↓</text>`;
-}
-
-// ═══════════════════════════════════════════════════════
-// AVVISI
-// ═══════════════════════════════════════════════════════
-function renderAvvisi(avvisi) {
-  var cl = {ok:'al-ok', warn:'al-warn', hot:'al-hot', info:'al-info'};
-  document.getElementById('avvisiBox').innerHTML = avvisi.map(function(a){
-    return '<div class="alert '+(cl[a.tipo]||'al-info')+'">'+a.msg+'</div>';
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════════════
-// DETTAGLIO FAMIGLIA
-// ═══════════════════════════════════════════════════════
-function mostraDettaglioFam(fam) {
-  var reg = LIBRERIA_AGGANCIO[fam];
-  var detail = document.getElementById('famDetail');
-  detail.style.display = 'block';
-  document.getElementById('famDetailContent').innerHTML =
-    '<div style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:12px">' +
-    '<div style="font-family:var(--mono);font-size:10px;color:var(--y);font-weight:500;margin-bottom:6px">'+reg.tipo+'</div>' +
-    '<div style="font-size:12px;color:var(--t2);margin-bottom:8px">'+reg.desc+'</div>' +
-    '<div style="font-family:var(--mono);font-size:10px;color:var(--t3)">Pezzi/gancio: <span style="color:var(--y)">'+reg.pezzi_gancio+'</span></div>' +
-    '<div style="font-family:var(--mono);font-size:10px;color:var(--t3)">Ganci occupati: <span style="color:var(--y)">'+reg.ganci_passo+'</span></div>' +
-    '<div style="margin-top:8px;padding:6px 8px;background:rgba(0,0,0,.3);border-left:2px solid var(--y);font-size:10px;color:var(--y);font-family:var(--mono)">'+reg.note+'</div>' +
-    '</div>';
-}
-
-// ═══════════════════════════════════════════════════════
-// AGGIORNA CON PARAMETRI MODIFICATI
-// ═══════════════════════════════════════════════════════
-function aggiornaDist(val) {
-  document.getElementById('distVal').textContent = val;
-  calcolaPiano(LOTTO_DEMO);
-}
-function ricalcola() { calcolaPiano(LOTTO_DEMO); }
-
-// ═══════════════════════════════════════════════════════
-// EXPORT CSV
-// ═══════════════════════════════════════════════════════
-function esportaCSV() {
-  var header = 'N,Codice,Descrizione,Famiglia,Pz/Gancio,Tipo Gancio,Ganci Totali,Peso kg,Sup m2,Note\n';
-  var gruppi = {};
-  PIANO.forEach(function(item) {
-    if(!gruppi[item.cod]) gruppi[item.cod] = {cod:item.cod,nome:item.nome,fam:item.fam,qty:0,ganci:0,kg:0,sup:0,tipo:item.tipo,ppg:item.pezzi_gancio,note:item.note};
-    gruppi[item.cod].qty += item.qty_gancio;
-    gruppi[item.cod].ganci += item.ganci_passo;
-    gruppi[item.cod].kg += item.kg_gancio;
-    gruppi[item.cod].sup += item.sup_m2;
-  });
-  var rows = Object.values(gruppi).map(function(r,i){
-    return (i+1)+',"'+r.cod+'","'+r.nome+'","'+r.fam+'",'+r.ppg+',"'+r.tipo+'",'+r.ganci+','+r.kg.toFixed(1)+','+r.sup.toFixed(2)+',"'+r.note+'"';
-  }).join('\n');
-  var blob = new Blob([header+rows],{type:'text/csv'});
-  var a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='piano_carico_enorossi.csv'; a.click();
-}
+window.addEventListener("DOMContentLoaded",function(){aggiornaVel();var raw=document.getElementById("LOTTO_DATA").textContent.trim();if(raw&&raw!=="null"&&raw!=="{}"){try{LOTTO=JSON.parse(raw);if(LOTTO&&LOTTO.items)generaPiano();}catch(e){}}renderSlots([]);renderZonePlan([]);});
 </script>
-</body>
-</html>
+{% endblock %}
