@@ -242,7 +242,10 @@ with app.app_context():
     # Schema is managed exclusively by Flask-Migrate (`flask db upgrade`).
     # db.create_all() has been removed to prevent conflicts with migrations.
 
-    # Seed prodotti demo se vuoto (runs only after migrations have created the table)
+    # Seed prodotti demo once, only when the table is empty.
+    # Guarded by Prodotto.query.count() == 0 so it never re-runs after the
+    # first successful deploy.  A rollback is issued regardless to ensure the
+    # session is clean before the application starts serving requests.
     try:
         if Prodotto.query.count() == 0:
             _seed_prodotti = [
@@ -272,6 +275,8 @@ with app.app_context():
             db.session.commit()
     except Exception:
         # Table may not exist yet (before first migration); seed will run on next startup.
+        pass
+    finally:
         db.session.rollback()
 
 
