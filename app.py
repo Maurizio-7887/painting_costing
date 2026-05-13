@@ -127,7 +127,7 @@ class OrdineOrdine(db.Model):
     origine         = db.Column(db.String(20), default='MANUALE')
     centro_lavoro   = db.Column(db.String(50), default='VERN-01')
     note            = db.Column(db.Text)
-    creato_il       = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    creato_il       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Lotto(db.Model):
@@ -153,8 +153,8 @@ class Lotto(db.Model):
     costo_gancio_eur = db.Column(db.Float, default=0)
     sequenza_json   = db.Column(db.Text, default='[]')
     # Timbratura operaio
-    inizio          = db.Column(db.DateTime(timezone=True), nullable=True)
-    fine            = db.Column(db.DateTime(timezone=True), nullable=True)
+    inizio          = db.Column(db.DateTime, nullable=True)
+    fine            = db.Column(db.DateTime, nullable=True)
     # Termico
     Q_R_kJ = db.Column(db.Float, default=0)
     Q_a_kJ = db.Column(db.Float, default=0)
@@ -163,8 +163,8 @@ class Lotto(db.Model):
     P_R_kW = db.Column(db.Float, default=0)
     energia_kWh = db.Column(db.Float, default=0)
     costo_energia_eur = db.Column(db.Float, default=0)
-    creato_il = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    completato_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    creato_il = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    completato_at = db.Column(db.DateTime, nullable=True)
     items = db.relationship('LottoItem', backref='lotto', lazy=True, cascade='all,delete')
 
     @property
@@ -242,10 +242,7 @@ with app.app_context():
     # Schema is managed exclusively by Flask-Migrate (`flask db upgrade`).
     # db.create_all() has been removed to prevent conflicts with migrations.
 
-    # Seed prodotti demo once, only when the table is empty.
-    # Guarded by Prodotto.query.count() == 0 so it never re-runs after the
-    # first successful deploy.  A rollback is issued regardless to ensure the
-    # session is clean before the application starts serving requests.
+    # Seed prodotti demo se vuoto (runs only after migrations have created the table)
     try:
         if Prodotto.query.count() == 0:
             _seed_prodotti = [
@@ -275,36 +272,83 @@ with app.app_context():
             db.session.commit()
     except Exception:
         # Table may not exist yet (before first migration); seed will run on next startup.
-        pass
-    finally:
         db.session.rollback()
 
 
 # ── ABC COSTING ─────────────────────────────────────────────────
 
-def calcola_abc(prodotto: Prodotto, cfg: Configurazione) -> dict:
-    spessore_m = cfg.spessore_default_micron / 1_000_000
+def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
+                velocita_override: float = None,
+                saturazione_pct: float = 100.0) -> dict:
+    """
+    Formula fisica corretta per il costo unitario di verniciatura.
+
+    TEMPO IN CATENA (fisso per il pezzo, indipendente dal lotto):
+        t_occ_min = passo_gancio_m / (velocita m/min)
+        → il pezzo occupa fisicamente quello spazio sulla catena
+
+    COSTO ENERGIA (proporzionale al tempo):
+        c_energia = kW_impianto × (t_occ_min/60) × €/kWh
+
+    COSTO VERNICE (proporzionale alla superficie):
+        c_vernice = sup_m2 × spessore_m × densita_kg_m3 × €/kg / efficienza
+
+    COSTO MANODOPERA:
+        c_mdo = (€/h / 60) × (t_aggancio + t_sgancio)
+
+    EFFETTO SATURAZIONE:
+        I costi fissi impianto (ammortamento, riscaldamento a vuoto) si
+        ripartiscono su meno pezzi quando la catena è sotto-utilizzata.
+        Fattore = 100 / saturazione_pct  (es. 50% sat → costo ×2)
+        Applicato solo alla quota costi fissi (energia strutturale),
+        NON alla vernice (quella è variabile pura).
+    """
+    spessore_m    = cfg.spessore_default_micron / 1_000_000
     densita_kg_m3 = cfg.peso_specifico_vernice * 1000
-    c_vernice_kg = 8.50
-    sup = prodotto.superficie_m2 or 0
-    costo_mat = sup * spessore_m * densita_kg_m3 * c_vernice_kg / cfg.efficienza_applicazione
+    c_vernice_kg  = 8.50
+    sup           = prodotto.superficie_m2 or 0
+    passo_m       = prodotto.passo_gancio_m or 0.4
+    vel           = velocita_override or cfg.velocita_default or 1.5
+    sat           = max(saturazione_pct, 5.0)  # minimo 5% per evitare /0
 
-    passo_m = prodotto.passo_gancio_m or 0.4
-    vel = cfg.velocita_default
-    t_occ_min = (passo_m / (vel / 60)) / 60 if vel > 0 else 0
-    costo_proc = (cfg.costo_orario_esercizio / 60) * t_occ_min
+    # ── Tempo occupazione catena ──
+    t_occ_min = passo_m / vel          # minuti che il pezzo occupa la catena
+    t_occ_ore = t_occ_min / 60.0
 
-    comp = prodotto.complessita_aggancio or 1
-    t_agg = [cfg.tempo_aggancio_min, cfg.tempo_aggancio_medio_min, cfg.tempo_aggancio_complesso_min][min(comp-1,2)]
-    costo_mdo = (cfg.costo_manodopera_ora / 60) * t_agg * 2  # aggancio + sgancio
+    # ── Costo energia (kW × ore × €/kWh) ──
+    kw_impianto  = cfg.costo_orario_esercizio / max(cfg.costo_kwh or 0.22, 0.01)
+    c_energia    = kw_impianto * t_occ_ore * (cfg.costo_kwh or 0.22)
 
-    totale = costo_mat + costo_proc + costo_mdo
+    # ── Costo quota fissa impianto (ammortamento, riscaldamento struttura) ──
+    # Questa quota varia con la saturazione: meno pezzi = più costo/pezzo
+    costo_fisso_ora = max(cfg.costo_orario_esercizio - c_energia/t_occ_ore, 0) if t_occ_ore > 0 else 0
+    c_fisso = costo_fisso_ora * t_occ_ore * (100.0 / sat)
+
+    # ── Costo vernice (puro variabile, non dipende da saturazione) ──
+    c_vernice = sup * spessore_m * densita_kg_m3 * c_vernice_kg / cfg.efficienza_applicazione
+
+    # ── Costo manodopera ──
+    comp  = prodotto.complessita_aggancio or 1
+    t_agg = [cfg.tempo_aggancio_min,
+             cfg.tempo_aggancio_medio_min,
+             cfg.tempo_aggancio_complesso_min][min(comp-1, 2)]
+    c_mdo = (cfg.costo_manodopera_ora / 60.0) * t_agg * 2
+
+    # ── Totale ──
+    c_processo = round(c_energia + c_fisso, 4)
+    totale     = c_processo + c_vernice + c_mdo
+
     return {
-        'costo_processo': round(costo_proc, 4),
-        'costo_vernice': round(costo_mat, 4),
-        'costo_manodopera': round(costo_mdo, 4),
-        'costo_totale': round(totale, 4),
-        'costo_m2': round(totale / sup, 4) if sup > 0 else 0,
+        'costo_energia':     round(c_energia, 4),
+        'costo_fisso':       round(c_fisso, 4),
+        'costo_processo':    c_processo,
+        'costo_vernice':     round(c_vernice, 4),
+        'costo_manodopera':  round(c_mdo, 4),
+        'costo_totale':      round(totale, 4),
+        'costo_m2':          round(totale / sup, 4) if sup > 0 else 0,
+        't_occ_min':         round(t_occ_min, 3),
+        'saturazione_pct':   sat,
+        'vel_usata':         vel,
     }
 
 
@@ -558,79 +602,8 @@ def operaio_completa(lotto_id):
     lotto = Lotto.query.get_or_404(lotto_id)
     lotto.stato = 'completato'
     lotto.fine  = datetime.now(timezone.utc)
-    cfg = get_config()
-
-    # Durata reale dal timer START→STOP
-    durata_min = lotto.durata_min or lotto.tempo_ciclo_min or 0
-
-    # Recupera items con prodotto
-    items = LottoItem.query.filter_by(lotto_id=lotto_id).all()
-
-    # Superficie totale ponderata per ripartire i costi
-    sup_tot = sum(
-        (it.prodotto.superficie_m2 or 0) * it.quantita
-        for it in items if it.prodotto
-    )
-
-    costo_tot = 0.0
-    for it in items:
-        p = it.prodotto
-        if not p:
-            continue
-        sup_p = (p.superficie_m2 or 0) * it.quantita
-        quota = (sup_p / sup_tot) if sup_tot > 0 else (1.0 / max(len(items), 1))
-
-        # Costo processo = quota del tempo reale × costo orario impianto
-        t_pezzo_min = durata_min * quota
-        c_proc = (t_pezzo_min / 60.0) * (cfg.costo_orario_esercizio + cfg.costo_manodopera_ora)
-
-        # Costo vernice = superficie × spessore × densità × prezzo / efficienza
-        c_vern = (sup_p
-                  * (cfg.spessore_default_micron / 1_000_000)
-                  * (cfg.peso_specifico_vernice * 1000)
-                  * 8.50
-                  / cfg.efficienza_applicazione)
-
-        c_unit = (c_proc + c_vern) / max(it.quantita, 1)
-
-        it.costo_processo_unitario  = round(c_proc / max(it.quantita, 1), 4)
-        it.costo_materiale_unitario = round(c_vern / max(it.quantita, 1), 4)
-        it.costo_unitario_totale    = round(c_unit, 4)
-        it.costo_riga               = round(c_unit * it.quantita, 2)
-        it.tempo_unitario_min       = round(t_pezzo_min / max(it.quantita, 1), 3)
-        costo_tot += it.costo_riga
-
-        # Aggiorna standard prodotto con media mobile
-        n = p.n_campioni_standard or 0
-        p.costo_standard     = round((p.costo_standard * n + c_unit) / (n + 1), 4)
-        p.tempo_standard_min = round(
-            ((p.tempo_standard_min or 0) * n + it.tempo_unitario_min) / (n + 1), 3)
-        p.n_campioni_standard = n + 1
-
-        # Salva nel StoricoCosto
-        db.session.add(StoricoCosto(
-            prodotto_id      = p.id,
-            lotto_id         = lotto.id,
-            data             = date.today(),
-            quantita         = it.quantita,
-            costo_materiale  = it.costo_materiale_unitario,
-            costo_processo   = it.costo_processo_unitario,
-            costo_manodopera = 0,
-            costo_totale     = it.costo_unitario_totale,
-            tempo_min        = it.tempo_unitario_min,
-            velocita_catena  = lotto.velocita_catena or cfg.velocita_default,
-            costo_orario     = cfg.costo_orario_esercizio,
-        ))
-
-    lotto.costo_totale     = round(costo_tot, 2)
-    lotto.costo_totale_eur = round(costo_tot, 2)
     db.session.commit()
-
-    flash(
-        f'✅ Lotto completato! Durata reale: {durata_min} min · '
-        f'Costo totale: €{costo_tot:.2f}',
-        'success'
-    )
+    flash('Lotto completato!', 'success')
     return redirect(url_for('operaio'))
 
 
@@ -905,8 +878,18 @@ def storico():
 
     famiglie = [r[0] for r in db.session.query(Prodotto.famiglia).distinct().all() if r[0]]
 
+    # Lista prodotti per autocomplete ricerca
+    tutti_prodotti = Prodotto.query.order_by(Prodotto.codice).all()
+    prodotti_json = json.dumps([{
+        'codice': p.codice,
+        'nome': p.nome,
+        'famiglia': p.famiglia or '',
+        'costo_std': round(p.costo_standard, 4),
+    } for p in tutti_prodotti])
+
     return render_template('storico.html', report=report, kpi=kpi, filtro=filtro,
-                           famiglie=famiglie, trend_top5=json.dumps(trend_top5))
+                           famiglie=famiglie, trend_top5=json.dumps(trend_top5),
+                           prodotti_json=prodotti_json)
 
 
 @app.route('/storico/export')
@@ -932,12 +915,67 @@ def storico_export():
 @app.route('/storico/<codice>')
 def storico_codice(codice):
     prodotto = Prodotto.query.filter_by(codice=codice).first_or_404()
-    ultimi   = StoricoCosto.query.filter_by(prodotto_id=prodotto.id).order_by(StoricoCosto.data.desc()).limit(30).all()
-    by_day   = defaultdict(list)
-    for r in ultimi: by_day[r.data.isoformat()].append(r.costo_totale)
-    serie = [{'data': d, 'costo_medio': round(sum(v)/len(v),4)} for d,v in sorted(by_day.items())]
-    return render_template('storico_codice.html', prodotto=prodotto,
-                           ultimi=ultimi, serie=json.dumps(serie))
+    cfg      = get_config()
+    ultimi   = (StoricoCosto.query
+                .filter_by(prodotto_id=prodotto.id)
+                .order_by(StoricoCosto.data.desc())
+                .limit(30).all())
+
+    # Ricalcola costi ai prezzi ATTUALI per ogni passaggio storico
+    # I dati fisici (velocita, saturazione) sono quelli reali del lotto
+    righe_ricalcolate = []
+    for r in ultimi:
+        lotto_ref = Lotto.query.get(r.lotto_id) if r.lotto_id else None
+        vel_lotto = (lotto_ref.velocita_catena if lotto_ref else None)
+        sat_lotto = (lotto_ref.saturazione_pct if lotto_ref else 100.0)
+
+        abc_oggi = calcola_abc(prodotto, cfg,
+                               velocita_override=vel_lotto,
+                               saturazione_pct=sat_lotto or 100.0)
+        righe_ricalcolate.append({
+            'data':             r.data,
+            'lotto_id':         r.lotto_id,
+            'quantita':         r.quantita,
+            'vel_catena':       vel_lotto or cfg.velocita_default,
+            'saturazione_pct':  sat_lotto or 100.0,
+            # costi originali (come erano al momento della lavorazione)
+            'c_orig_totale':    r.costo_totale,
+            # costi ricalcolati ai prezzi odierni
+            'c_energia':        abc_oggi['costo_energia'],
+            'c_fisso':          abc_oggi['costo_fisso'],
+            'c_vernice':        abc_oggi['costo_vernice'],
+            'c_manodopera':     abc_oggi['costo_manodopera'],
+            'c_oggi_totale':    abc_oggi['costo_totale'],
+            't_occ_min':        abc_oggi['t_occ_min'],
+            'delta_pct': round(
+                (abc_oggi['costo_totale'] - r.costo_totale) / max(r.costo_totale, 0.0001) * 100, 1
+            ) if r.costo_totale else 0,
+        })
+
+    # Costo attuale standard (100% saturazione, velocità default)
+    abc_std = calcola_abc(prodotto, cfg)
+
+    # Serie temporale per grafico — costo ricalcolato oggi per ogni data
+    by_day = defaultdict(list)
+    for rr in righe_ricalcolate:
+        by_day[rr['data'].isoformat()].append(rr['c_oggi_totale'])
+    serie = [{'data': d, 'costo_medio': round(sum(v)/len(v), 4)}
+             for d, v in sorted(by_day.items())]
+
+    # Serie saturazione per grafico secondario
+    by_day_sat = defaultdict(list)
+    for rr in righe_ricalcolate:
+        by_day_sat[rr['data'].isoformat()].append(rr['saturazione_pct'])
+    serie_sat = [{'data': d, 'sat': round(sum(v)/len(v), 1)}
+                 for d, v in sorted(by_day_sat.items())]
+
+    return render_template('storico_codice.html',
+                           prodotto=prodotto,
+                           cfg=cfg,
+                           abc_std=abc_std,
+                           righe=righe_ricalcolate,
+                           serie=json.dumps(serie),
+                           serie_sat=json.dumps(serie_sat))
 
 
 # ══════════════════════════════════════════════════════════════════
