@@ -999,7 +999,44 @@ def configurazione():
 
 @app.route('/piano_carico')
 def piano_carico():
-    return render_template('piano_carico.html')
+    lotto_id  = request.args.get('lotto_id', type=int)
+    lotto_sel = lotto_id
+    lotto_json = 'null'
+
+    lotti_attivi = Lotto.query.filter(
+        Lotto.stato.in_(['attesa','pianificato','confermato','in_corso'])
+    ).order_by(Lotto.id.desc()).limit(20).all()
+
+    if lotto_id:
+        lotto = Lotto.query.get(lotto_id)
+        if lotto:
+            items = LottoItem.query.filter_by(lotto_id=lotto_id).all()
+            lotto_data = {
+                'id':    lotto.id,
+                'nome':  lotto.nome or f"Lotto #{lotto.id}",
+                'stato': lotto.stato,
+                'items': []
+            }
+            for it in items:
+                p = it.prodotto
+                if p:
+                    lotto_data['items'].append({
+                        'cod':      p.codice,
+                        'nome':     p.nome,
+                        'fam':      p.famiglia or '',
+                        'famiglia': p.famiglia or '',
+                        'qty':      it.quantita,
+                        'peso_kg':  p.peso_kg or 0,
+                        'sup_m2':   p.superficie_m2 or 0,
+                        'ganci':    it.n_ganci_occupati or 1,
+                    })
+            import json as _json
+            lotto_json = _json.dumps(lotto_data)
+
+    return render_template('piano_carico.html',
+        lotti_attivi=lotti_attivi,
+        lotto_sel=lotto_sel,
+        lotto_json=lotto_json)
 
 
 # ══════════════════════════════════════════════════════════════════
