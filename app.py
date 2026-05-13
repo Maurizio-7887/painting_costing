@@ -553,8 +553,79 @@ def operaio_completa(lotto_id):
     lotto = Lotto.query.get_or_404(lotto_id)
     lotto.stato = 'completato'
     lotto.fine  = datetime.now(timezone.utc)
+    cfg = get_config()
+
+    # Durata reale dal timer START→STOP
+    durata_min = lotto.durata_min or lotto.tempo_ciclo_min or 0
+
+    # Recupera items con prodotto
+    items = LottoItem.query.filter_by(lotto_id=lotto_id).all()
+
+    # Superficie totale ponderata per ripartire i costi
+    sup_tot = sum(
+        (it.prodotto.superficie_m2 or 0) * it.quantita
+        for it in items if it.prodotto
+    )
+
+    costo_tot = 0.0
+    for it in items:
+        p = it.prodotto
+        if not p:
+            continue
+        sup_p = (p.superficie_m2 or 0) * it.quantita
+        quota = (sup_p / sup_tot) if sup_tot > 0 else (1.0 / max(len(items), 1))
+
+        # Costo processo = quota del tempo reale × costo orario impianto
+        t_pezzo_min = durata_min * quota
+        c_proc = (t_pezzo_min / 60.0) * (cfg.costo_orario_esercizio + cfg.costo_manodopera_ora)
+
+        # Costo vernice = superficie × spessore × densità × prezzo / efficienza
+        c_vern = (sup_p
+                  * (cfg.spessore_default_micron / 1_000_000)
+                  * (cfg.peso_specifico_vernice * 1000)
+                  * 8.50
+                  / cfg.efficienza_applicazione)
+
+        c_unit = (c_proc + c_vern) / max(it.quantita, 1)
+
+        it.costo_processo_unitario  = round(c_proc / max(it.quantita, 1), 4)
+        it.costo_materiale_unitario = round(c_vern / max(it.quantita, 1), 4)
+        it.costo_unitario_totale    = round(c_unit, 4)
+        it.costo_riga               = round(c_unit * it.quantita, 2)
+        it.tempo_unitario_min       = round(t_pezzo_min / max(it.quantita, 1), 3)
+        costo_tot += it.costo_riga
+
+        # Aggiorna standard prodotto con media mobile
+        n = p.n_campioni_standard or 0
+        p.costo_standard     = round((p.costo_standard * n + c_unit) / (n + 1), 4)
+        p.tempo_standard_min = round(
+            ((p.tempo_standard_min or 0) * n + it.tempo_unitario_min) / (n + 1), 3)
+        p.n_campioni_standard = n + 1
+
+        # Salva nel StoricoCosto
+        db.session.add(StoricoCosto(
+            prodotto_id      = p.id,
+            lotto_id         = lotto.id,
+            data             = date.today(),
+            quantita         = it.quantita,
+            costo_materiale  = it.costo_materiale_unitario,
+            costo_processo   = it.costo_processo_unitario,
+            costo_manodopera = 0,
+            costo_totale     = it.costo_unitario_totale,
+            tempo_min        = it.tempo_unitario_min,
+            velocita_catena  = lotto.velocita_catena or cfg.velocita_default,
+            costo_orario     = cfg.costo_orario_esercizio,
+        ))
+
+    lotto.costo_totale     = round(costo_tot, 2)
+    lotto.costo_totale_eur = round(costo_tot, 2)
     db.session.commit()
-    flash('Lotto completato!', 'success')
+
+    flash(
+        f'✅ Lotto completato! Durata reale: {durata_min} min · '
+        f'Costo totale: €{costo_tot:.2f}',
+        'success'
+    )
     return redirect(url_for('operaio'))
 
 
