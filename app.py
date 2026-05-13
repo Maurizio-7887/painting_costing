@@ -403,8 +403,8 @@ def ottimizzatore():
     result = None
 
     if request.method == 'POST':
-        codici  = request.form.getlist('codice')
-        qtys    = request.form.getlist('quantita')
+        codici  = request.form.getlist('codice[]')
+        qtys    = request.form.getlist('quantita[]')
         vel_req = float(request.form.get('velocita', cfg.velocita_default))
 
         # Crea lotto temporaneo per visualizzazione
@@ -450,7 +450,12 @@ def ottimizzatore():
                 costo_totale_eur= round(costo_tot, 2),
             )
             db.session.add(lotto_db)
-            db.session.flush()  # ottieni lotto_db.id
+            try:
+                db.session.flush()  # ottieni lotto_db.id
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Flush lotto fallito: {e}")
+                raise
 
             for item in items_tmp:
                 li = LottoItem(
@@ -466,7 +471,13 @@ def ottimizzatore():
                     costo_riga                = item.costo_riga,
                 )
                 db.session.add(li)
-            db.session.commit()
+            try:
+                db.session.commit()
+                app.logger.info(f"Lotto {lotto_db.id} salvato OK")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Commit lotto fallito: {e}")
+                raise
 
             result = {
                 'lotto_id': lotto_db.id,
@@ -483,8 +494,8 @@ def ottimizzatore():
 
     # Ri-popola form con i dati inviati (mantiene selezione dopo POST)
     selezione = list(zip(
-        request.form.getlist('codice'),
-        request.form.getlist('quantita')
+        request.form.getlist('codice[]'),
+        request.form.getlist('quantita[]')
     )) if request.method == 'POST' else []
 
     return render_template('ottimizzatore.html', config=cfg, prodotti=prodotti,
