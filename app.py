@@ -1271,6 +1271,70 @@ def initdb():
     return 'DB inizializzato OK!'
 
 # ── ENTRY POINT ─────────────────────────────────────────────────
+
+@app.route('/carico_guidato')
+def carico_guidato():
+    lotto_id = request.args.get('lotto_id', type=int)
+    lotto    = None
+    sequenza_json = 'null'
+    ciclo_min = 113
+
+    lotti_disponibili = Lotto.query.filter(
+        Lotto.stato.in_(['attesa','pianificato','confermato'])
+    ).order_by(Lotto.id.desc()).limit(20).all()
+
+    if lotto_id:
+        lotto = Lotto.query.get(lotto_id)
+        if lotto:
+            cfg   = get_config()
+            vel   = lotto.velocita_catena or cfg.velocita_default
+            ciclo_min = round(170 / max(vel, 0.1))
+            items = LottoItem.query.filter_by(lotto_id=lotto_id).all()
+
+            # Mappa famiglia → tipo gancio
+            HOOK_MAP = {
+                'Trinciatrici':1,'Falciatrici':1,'Traino':1,'Strutture':1,
+                'ENODUO':2,'Bracci':2,
+                'Carter':3,'Coperchi':3,'Staffaggi':3,'Carrello':3,
+                'Rotopresse':4,'Vendemmiatrici':4,
+            }
+
+            # Costruisce sequenza ottimizzata
+            # Ordine: prima Type 4 (pesanti), poi Type 1 (lunghi), poi Type 2, poi Type 3 (bulk)
+            # E raggruppa per colore per minimizzare cambi
+            seq_items = []
+            for it in items:
+                p = it.prodotto
+                if not p: continue
+                fam  = p.famiglia or ''
+                tipo = HOOK_MAP.get(fam, 3)
+                pxg  = {1:1,2:1,3:6,4:1}.get(tipo,1)
+                seq_items.append({
+                    'cod':   p.codice,
+                    'nome':  p.nome,
+                    'fam':   fam,
+                    'tipo':  tipo,
+                    'pxg':   pxg,
+                    'qty':   it.quantita,
+                    'kg':    p.peso_kg or 0,
+                    'sup':   p.superficie_m2 or 0,
+                    'l':     int(p.lunghezza_mm or 0),
+                    'w':     int(p.larghezza_mm or 0),
+                    'h':     int(p.altezza_mm   or 0),
+                    'ganci': it.n_ganci_occupati or 1,
+                    'colore': 'VERDE RAL 6005',
+                })
+            # Ordina: Type4 → Type1 → Type2 → Type3 (stesso colore insieme)
+            seq_items.sort(key=lambda x: (x['tipo'], -x['kg']))
+            sequenza_json = json.dumps(seq_items)
+
+    return render_template('carico_guidato.html',
+        lotto=lotto,
+        lotti_disponibili=lotti_disponibili,
+        sequenza=seq_items if lotto else [],
+        sequenza_json=sequenza_json,
+        ciclo_min=ciclo_min if lotto else 113)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
