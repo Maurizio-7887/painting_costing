@@ -215,7 +215,7 @@
 
       <!-- Zone da 3m (10 zone) -->
       {% for zona in result.zone %}
-      {% set x_start = 80 + (zona.numero - 1) * 74 %}
+      {% set x_start = 80 + (zona.zona - 1) * 74 %}
       {% set sat_pct = zona.saturazione_pct / 100 %}
       {% if zona.e_curva %}
         {% set fill_col = '#e53935' %}
@@ -233,7 +233,7 @@
 
       <!-- Numero zona -->
       <text x="{{ x_start + 37 }}" y="58" fill="white" font-size="10"
-            text-anchor="middle" font-family="Arial" font-weight="bold">Z{{ zona.numero }}</text>
+            text-anchor="middle" font-family="Arial" font-weight="bold">Z{{ zona.zona }}</text>
 
       <!-- Saturazione zona -->
       <text x="{{ x_start + 37 }}" y="72" fill="#f5c518" font-size="9"
@@ -279,7 +279,7 @@
         <tbody>
         {% for zona in result.zone %}
         <tr class="{{ 'table-danger' if zona.e_curva else '' }}">
-          <td><strong>Z{{ zona.numero }}</strong></td>
+          <td><strong>Z{{ zona.zona }}</strong></td>
           <td>
             {% if zona.e_curva %}
               <span class="badge bg-danger">🔄 Curva</span>
