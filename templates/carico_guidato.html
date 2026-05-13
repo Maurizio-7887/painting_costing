@@ -1,0 +1,738 @@
+{% extends "base.html" %}
+{% block title %}Carico Guidato – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-hand-index-thumb me-2"></i>Carico Guidato · Digital Twin Operativo{% endblock %}
+
+{% block content %}
+<style>
+/* ═══════ CARICO GUIDATO — tablet-first ═══════ */
+.cg-wrap { max-width: 900px; margin: 0 auto; padding: 10px 0; }
+
+/* HEADER STATO */
+.cg-header {
+  background: #070f08;
+  border: 1px solid rgba(28,110,46,.25);
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+.cg-progress-wrap { flex: 1; }
+.cg-progress-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f5c518;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+.cg-progress-bar {
+  height: 8px;
+  background: rgba(255,255,255,.07);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cg-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1c6e2e, #25a33e);
+  border-radius: 4px;
+  transition: width .5s ease;
+}
+.cg-vel {
+  text-align: right;
+  min-width: 80px;
+}
+.cg-vel-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #f5c518;
+  line-height: 1;
+}
+.cg-vel-lbl { font-size: 9px; color: #6b8a6e; text-transform: uppercase; }
+
+/* CARD PEZZO PRINCIPALE */
+.cg-main {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.cg-piece-card {
+  background: #070f08;
+  border: 2px solid rgba(28,110,46,.3);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.cg-piece-header {
+  background: linear-gradient(135deg, #0d2010, #071208);
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(28,110,46,.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cg-piece-cod {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  color: #f5c518;
+  letter-spacing: 1px;
+}
+.cg-piece-nome { font-size: 12px; color: #6b8a6e; margin-top: 2px; }
+.cg-piece-body { padding: 16px; display: flex; flex-direction: column; align-items: center; }
+
+/* SVG 3D PEZZO */
+.piece-3d-wrap {
+  width: 100%;
+  background: radial-gradient(ellipse at center, #0a1f0c 0%, #030806 70%);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 14px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.piece-3d-wrap::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 10%; right: 10%; height: 20px;
+  background: radial-gradient(ellipse, rgba(28,110,46,.3) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.piece-svg { display: block; max-width: 100%; max-height: 200px; }
+
+/* INFO DIMENSIONI */
+.dim-row {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.dim-box {
+  background: rgba(0,0,0,.4);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+}
+.dim-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  color: #e8f0dc;
+  line-height: 1;
+}
+.dim-lbl { font-size: 9px; color: #6b8a6e; text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+
+/* SCHEMA APPESO */
+.cg-hook-card {
+  background: #070f08;
+  border: 2px solid rgba(28,110,46,.25);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.cg-hook-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(28,110,46,.15);
+  background: rgba(0,0,0,.3);
+}
+.cg-hook-tipo {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .5px;
+}
+.cg-hook-body { flex: 1; padding: 14px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.hook-schema-svg { display: block; width: 100%; max-height: 180px; }
+
+/* ISTRUZIONI OPERATIVE */
+.istr-list { width: 100%; margin-top: 10px; }
+.istr-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: 12px;
+  color: #a0b8a2;
+}
+.istr-item:last-child { border: none; }
+.istr-item .ic {
+  width: 22px; height: 22px;
+  background: #1c6e2e;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #fff; flex-shrink: 0;
+  font-weight: 700; font-family: 'Barlow Condensed', sans-serif;
+}
+.istr-item strong { color: #f5c518; }
+.istr-warn { background: rgba(230,126,34,.08); border-left: 3px solid #e67e22; border-radius: 5px; padding: 6px 10px; font-size: 11px; color: #f0a040; margin-top: 8px; width: 100%; }
+
+/* BARRA NAVIGAZIONE PEZZI */
+.cg-nav {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.btn-cg-prev, .btn-cg-next, .btn-cg-done {
+  padding: 16px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-cg-prev  { background: rgba(255,255,255,.06); color: #6b8a6e; border: 1px solid rgba(255,255,255,.1); }
+.btn-cg-prev:hover  { background: rgba(255,255,255,.1); color: #e8f0dc; }
+.btn-cg-done  {
+  background: linear-gradient(135deg, #1c6e2e, #25a33e);
+  color: #fff;
+  box-shadow: 0 6px 24px rgba(28,110,46,.4);
+  font-size: 22px;
+}
+.btn-cg-done:hover  { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(28,110,46,.5); }
+.btn-cg-done:active { transform: scale(.98); }
+.btn-cg-next  { background: rgba(245,197,24,.12); color: #f5c518; border: 1px solid rgba(245,197,24,.25); }
+.btn-cg-next:hover  { background: rgba(245,197,24,.2); }
+
+/* MINI LISTA SEQUENZA */
+.cg-sequence {
+  background: #070f08;
+  border: 1px solid rgba(28,110,46,.2);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.cg-seq-header {
+  padding: 10px 16px;
+  background: rgba(0,0,0,.3);
+  border-bottom: 1px solid rgba(28,110,46,.15);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: #6b8a6e;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.seq-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+  cursor: pointer;
+  transition: background .15s;
+  font-size: 12px;
+}
+.seq-item:last-child { border: none; }
+.seq-item:hover { background: rgba(28,110,46,.06); }
+.seq-item.active { background: rgba(245,197,24,.06); border-left: 3px solid #f5c518; }
+.seq-item.done { opacity: .4; }
+.seq-item.done .seq-num { background: #1c6e2e; }
+.seq-num {
+  width: 28px; height: 28px; flex-shrink: 0;
+  background: rgba(255,255,255,.08);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700; color: #e8f0dc;
+}
+.seq-item.active .seq-num { background: #f5c518; color: #000; }
+.seq-cod { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; color: #f5c518; min-width: 100px; }
+.seq-info { color: #6b8a6e; font-size: 11px; flex: 1; }
+.seq-tipo { font-size: 10px; padding: 2px 7px; border-radius: 3px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; }
+.st1 { background: rgba(28,110,46,.25); color: #4cd964; }
+.st2 { background: rgba(245,197,24,.15); color: #f5c518; }
+.st3 { background: rgba(41,128,185,.2); color: #5dade2; }
+.st4 { background: rgba(224,48,48,.2); color: #e74c3c; }
+
+/* COMPLETATO */
+.cg-completato {
+  display: none;
+  text-align: center;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, #0d2010, #070f08);
+  border: 2px solid #1c6e2e;
+  border-radius: 14px;
+}
+.cg-completato .big-check { font-size: 5rem; color: #25a33e; margin-bottom: 16px; }
+.cg-completato h2 { font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 900; color: #f5c518; margin-bottom: 8px; }
+
+@media(max-width: 768px) {
+  .cg-main { grid-template-columns: 1fr; }
+  .cg-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+</style>
+
+<div class="cg-wrap mt-2">
+
+<!-- SELEZIONE LOTTO (se non già selezionato) -->
+{% if not lotto %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-list-check me-2"></i>Seleziona Lotto da Caricare</div>
+  <div class="card-body">
+    <div class="d-flex gap-3 align-items-center flex-wrap">
+      <select id="selLotto" class="form-select" style="max-width:380px">
+        <option value="">— Seleziona un lotto pianificato —</option>
+        {% for l in lotti_disponibili %}
+        <option value="{{ l.id }}">Lotto #{{ l.id }} · {{ l.nome }} · {{ l.n_pezzi_totali }} pz · {{ l.stato }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-enorossi" onclick="window.location.href='/carico_guidato?lotto_id='+document.getElementById('selLotto').value">
+        <i class="bi bi-play-circle me-2"></i>Avvia Carico Guidato
+      </button>
+      <a href="{{ url_for('ottimizzatore') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-plus-circle me-1"></i>Nuovo Lotto
+      </a>
+    </div>
+    {% if not lotti_disponibili %}
+    <div class="alert alert-warning mt-3 py-2 small">
+      Nessun lotto pianificato. <a href="{{ url_for('ottimizzatore') }}">Crea un lotto dall'ottimizzatore</a>.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+
+<!-- ─── HEADER PROGRESSO ─── -->
+<div class="cg-header">
+  <div class="cg-progress-wrap">
+    <div class="cg-progress-label">
+      <span><i class="bi bi-collection me-1"></i>{{ lotto.nome }} — Carico Guidato</span>
+      <span id="progressLabel">Pezzo 1 di {{ sequenza|length }}</span>
+    </div>
+    <div class="cg-progress-bar">
+      <div class="cg-progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+  </div>
+  <div class="cg-vel">
+    <div class="cg-vel-val">{{ "%.1f"|format(lotto.velocita_catena) }} m/m</div>
+    <div class="cg-vel-lbl">Velocità catena</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-family:'Barlow Condensed';font-size:20px;font-weight:900;color:#2d9c47">{{ ciclo_min }}\'</div>
+    <div style="font-size:9px;color:#6b8a6e;text-transform:uppercase">ciclo 170m</div>
+  </div>
+</div>
+
+<!-- ─── PEZZO CORRENTE + SCHEMA APPESO ─── -->
+<div class="cg-main" id="mainArea">
+
+  <!-- PEZZO PRINCIPALE -->
+  <div class="cg-piece-card" id="pieceCard">
+    <div class="cg-piece-header">
+      <div>
+        <div class="cg-piece-cod" id="pieceCod">—</div>
+        <div class="cg-piece-nome" id="pieceNome">—</div>
+      </div>
+      <div style="text-align:right">
+        <div id="pieceColore" style="font-size:11px;padding:3px 10px;border-radius:3px;background:rgba(28,110,46,.2);color:#2d9c47;font-family:'Barlow Condensed';font-weight:700"></div>
+        <div id="pieceQty" style="font-size:10px;color:#6b8a6e;margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="cg-piece-body">
+      <!-- SVG 3D del pezzo (generato dinamicamente) -->
+      <div class="piece-3d-wrap">
+        <svg id="piece3dSvg" class="piece-svg" viewBox="0 0 280 180" xmlns="http://www.w3.org/2000/svg">
+          <text x="140" y="100" text-anchor="middle" fill="rgba(255,255,255,.15)" font-family="Barlow Condensed,sans-serif" font-size="14">Seleziona lotto</text>
+        </svg>
+      </div>
+      <!-- Dimensioni -->
+      <div class="dim-row">
+        <div class="dim-box"><div class="dim-val" id="dimL">—</div><div class="dim-lbl">Lunghezza mm</div></div>
+        <div class="dim-box"><div class="dim-val" id="dimW">—</div><div class="dim-lbl">Larghezza mm</div></div>
+        <div class="dim-box"><div class="dim-val" id="dimH">—</div><div class="dim-lbl">Altezza mm</div></div>
+      </div>
+      <div class="dim-row">
+        <div class="dim-box"><div class="dim-val" id="dimKg">—</div><div class="dim-lbl">Peso kg</div></div>
+        <div class="dim-box"><div class="dim-val" id="dimSup">—</div><div class="dim-lbl">Sup. m²</div></div>
+        <div class="dim-box"><div class="dim-val" id="dimGanci">—</div><div class="dim-lbl">Ganci</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHEMA APPESO -->
+  <div class="cg-hook-card">
+    <div class="cg-hook-header">
+      <div class="cg-hook-tipo" id="hookTipo">—</div>
+      <div style="font-size:10px;color:#6b8a6e;margin-top:2px" id="hookFam">—</div>
+    </div>
+    <div class="cg-hook-body">
+      <svg id="hookSchemaSvg" class="hook-schema-svg" viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg">
+        <text x="110" y="100" text-anchor="middle" fill="rgba(255,255,255,.15)" font-family="Barlow Condensed,sans-serif" font-size="12">Schema appeso</text>
+      </svg>
+      <div class="istr-list" id="istrList"></div>
+      <div id="warnBox"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── NAVIGAZIONE ─── -->
+<div class="cg-nav">
+  <button class="btn-cg-prev" id="btnPrev" onclick="navPrev()">
+    <i class="bi bi-arrow-left"></i> Prec.
+  </button>
+  <button class="btn-cg-done" id="btnDone" onclick="navDone()">
+    <i class="bi bi-check-lg"></i> CARICATO ✓
+  </button>
+  <button class="btn-cg-next" id="btnNext" onclick="navNext()">
+    Succ. <i class="bi bi-arrow-right"></i>
+  </button>
+</div>
+
+<!-- ─── SEQUENZA COMPLETA ─── -->
+<div class="cg-sequence">
+  <div class="cg-seq-header">
+    <span><i class="bi bi-list-ol me-2"></i>Sequenza di Carico Ottimizzata</span>
+    <span id="seqCounter" style="color:#f5c518"></span>
+  </div>
+  <div id="seqList"></div>
+</div>
+
+<!-- COMPLETATO -->
+<div class="cg-completato" id="completatoBox">
+  <div class="big-check"><i class="bi bi-check-circle-fill"></i></div>
+  <h2>CARICO COMPLETATO!</h2>
+  <p style="color:#6b8a6e;margin-bottom:20px">Tutti i {{ sequenza|length }} pezzi sono stati caricati sulla catena.</p>
+  <div class="d-flex gap-3 justify-content-center flex-wrap">
+    <a href="{{ url_for('operaio') }}" class="btn btn-enorossi btn-lg">
+      <i class="bi bi-play-circle me-2"></i>Avvia Catena — Vista Operaio
+    </a>
+    <a href="{{ url_for('piano_carico') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-map me-1"></i>Torna al Piano
+    </a>
+  </div>
+</div>
+
+{% endif %}
+</div>
+
+<!-- Dati sequenza iniettati da Flask -->
+<script id="SEQ_DATA" type="application/json">{{ sequenza_json | safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+{% if lotto %}
+<script>
+// ═══════════════════════════════════════════════════════
+// HOOK TYPES — 4 tipi Masterwork
+// ═══════════════════════════════════════════════════════
+var HOOK = {
+  1: { nome:"TYPE 1 — Gancio Singolo C + Rotazione", col:"#25a33e",
+       istr:["Orienta il pezzo <strong>orizzontalmente</strong>","Attiva il meccanismo di <strong>rotazione</strong>","Aggancia al punto superiore centrale","Verifica che il pezzo sia bilanciato"],
+       warn:"Rotazione attiva obbligatoria per verniciatura uniforme" },
+  2: { nome:"TYPE 2 — Doppio Sincronizzato", col:"#f5c518",
+       istr:["Usa <strong>2 ganci</strong> sincronizzati","Posiziona il pezzo in orizzontale","Verifica sincronizzazione prima di avanzare","Peso massimo 200kg per coppia"],
+       warn:"" },
+  3: { nome:"TYPE 3 — Rastrelliera Multipla", col:"#3498db",
+       istr:["Carica <strong>fino a 6-8 pezzi</strong> per gancio","Mantieni separazione minima <strong>5cm</strong> tra pezzi","Distribuisci il peso uniformemente","Verifica che i fori di drenaggio siano in basso"],
+       warn:"Distanza minima tra pezzi: 5cm per verniciatura completa" },
+  4: { nome:"TYPE 4 — Bilancino Heavy", col:"#e74c3c",
+       istr:["Usa <strong>3 punti di aggancio</strong> obbligatori","Verifica portata: <strong>max 580kg</strong>","Solo zone 3-14 del tunnel","Velocità catena MAX: <strong>0.7 m/min</strong>"],
+       warn:"⚠ PEZZO PESANTE — Verificare portata con capo fabbrica" },
+};
+
+// ═══════════════════════════════════════════════════════
+// SEQUENZA — iniettata da Flask
+// ═══════════════════════════════════════════════════════
+var SEQ = JSON.parse(document.getElementById('SEQ_DATA').textContent || '[]');
+var IDX = 0;         // indice corrente
+var DONE = [];       // indici completati
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', function() {
+  if(SEQ.length) { renderSeqList(); goTo(0); }
+});
+
+// ═══════════════════════════════════════════════════════
+// NAVIGAZIONE
+// ═══════════════════════════════════════════════════════
+function navDone() {
+  if(!DONE.includes(IDX)) DONE.push(IDX);
+  // Aggiorna classe nella lista
+  var el = document.getElementById('seq-'+IDX);
+  if(el) el.classList.add('done');
+  // Avanza al prossimo non completato
+  var next = IDX + 1;
+  while(next < SEQ.length && DONE.includes(next)) next++;
+  if(next >= SEQ.length) { mostraCompletato(); return; }
+  goTo(next);
+}
+function navNext() {
+  if(IDX < SEQ.length-1) goTo(IDX+1);
+}
+function navPrev() {
+  if(IDX > 0) goTo(IDX-1);
+}
+
+function goTo(idx) {
+  IDX = idx;
+  var item = SEQ[idx];
+  if(!item) return;
+  var hook = HOOK[item.tipo] || HOOK[3];
+
+  // Progress
+  var pct = Math.round((DONE.length / SEQ.length) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = 'Pezzo ' + (idx+1) + ' di ' + SEQ.length + ' · ' + DONE.length + ' caricati';
+  document.getElementById('seqCounter').textContent = DONE.length + '/' + SEQ.length + ' completati';
+
+  // Info pezzo
+  document.getElementById('pieceCod').textContent = item.cod;
+  document.getElementById('pieceNome').textContent = item.nome;
+  document.getElementById('pieceColore').textContent = item.colore || 'VERDE RAL 6005';
+  document.getElementById('pieceQty').textContent = '× ' + (item.qty||1) + ' pezzi · ' + (item.pxg||1) + ' pz/gancio';
+  document.getElementById('dimL').textContent = item.l || '—';
+  document.getElementById('dimW').textContent = item.w || '—';
+  document.getElementById('dimH').textContent = item.h || '—';
+  document.getElementById('dimKg').textContent = item.kg || '—';
+  document.getElementById('dimSup').textContent = item.sup ? item.sup.toFixed(2) : '—';
+  document.getElementById('dimGanci').textContent = (item.ganci || 1) + 'G';
+
+  // Hook info
+  document.getElementById('hookTipo').textContent = hook.nome;
+  document.getElementById('hookTipo').style.color = hook.col;
+  document.getElementById('hookFam').textContent = item.fam || '';
+
+  // Istruzioni
+  document.getElementById('istrList').innerHTML = hook.istr.map(function(txt, i) {
+    return '<div class="istr-item"><div class="ic">'+(i+1)+'</div><div>'+txt+'</div></div>';
+  }).join('');
+  document.getElementById('warnBox').innerHTML = hook.warn ?
+    '<div class="istr-warn"><i class="bi bi-exclamation-triangle me-1"></i>'+hook.warn+'</div>' : '';
+
+  // SVG 3D pezzo
+  renderPiece3D(item);
+
+  // SVG schema gancio
+  renderHookSchema(item.tipo, item, hook.col);
+
+  // Aggiorna lista sequenza
+  renderSeqList();
+
+  // Scroll in cima
+  window.scrollTo(0, 0);
+}
+
+// ═══════════════════════════════════════════════════════
+// SVG 3D PEZZO — isometrico semplificato
+// ═══════════════════════════════════════════════════════
+function renderPiece3D(item) {
+  var svg = document.getElementById('piece3dSvg');
+  var tipo = item.tipo || 3;
+  var col = (HOOK[tipo]||HOOK[3]).col;
+  var colA = col; // luce
+  var colB = shadeColor(col, -30); // ombra
+  var colC = shadeColor(col, -50); // lato
+
+  // Normalizza dimensioni per il viewport 280×180
+  var l = Math.max(item.l||1000, 1), w = Math.max(item.w||500, 1), h = Math.max(item.h||400, 1);
+  var maxDim = Math.max(l, w, h);
+  var scale = 160 / maxDim;
+  var sl = l * scale, sw = w * scale * 0.5, sh = h * scale * 0.6;
+  // Centra
+  var cx = 140, cy = 90;
+
+  var svgContent = '';
+
+  if(tipo === 1 || tipo === 2) {
+    // BARRA LUNGA — vista orizzontale isometrica
+    var bw = Math.min(sl, 220), bh = 28, bd = 16;
+    var bx = cx - bw/2, by = cy - bh/2;
+    // Top face
+    svgContent += '<polygon points="'+bx+','+(by-bd/2)+' '+(bx+bw)+','+(by-bd/2)+' '+(bx+bw+bd)+','+(by)+' '+(bx+bd)+','+(by)+'" fill="'+colA+'" opacity=".85"/>';
+    // Front face
+    svgContent += '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="'+colB+'" opacity=".85"/>';
+    // Side face
+    svgContent += '<polygon points="'+(bx+bw)+','+(by-bd/2)+' '+(bx+bw+bd)+','+(by)+' '+(bx+bw+bd)+','+(by+bh)+' '+(bx+bw)+','+(by+bh)+'" fill="'+colC+'" opacity=".85"/>';
+    // Striature denti (trincia)
+    if(item.fam && (item.fam.includes('Trincia') || item.fam.includes('Falcia'))) {
+      for(var i=0;i<8;i++) {
+        var tx = bx + 15 + i*(bw-30)/7;
+        svgContent += '<polygon points="'+tx+','+(by+bh)+' '+(tx+8)+','+(by+bh)+' '+(tx+8)+','+(by+bh+12)+' '+tx+','+(by+bh+12)+'" fill="'+shadeColor(col,-20)+'" opacity=".7"/>';
+      }
+    }
+    // Gancio
+    svgContent += '<line x1="'+cx+'" y1="20" x2="'+cx+'" y2="'+(by-bd/2)+'" stroke="'+col+'" stroke-width="3"/>';
+    svgContent += '<path d="M'+(cx-6)+',20 Q'+(cx-10)+',12 '+(cx)+',8 Q'+(cx+10)+',12 '+(cx+6)+',20" fill="none" stroke="'+col+'" stroke-width="2.5"/>';
+    // Freccia rotazione
+    if(tipo===1) {
+      svgContent += '<path d="M'+(bx-20)+','+(by)+' Q'+(bx-28)+','+(by-20)+' '+(bx-10)+','+(by-28)+'" fill="none" stroke="#f5c518" stroke-width="2" stroke-dasharray="4,2"/>';
+      svgContent += '<polygon points="'+(bx-8)+','+(by-32)+' '+(bx-3)+','+(by-24)+' '+(bx-14)+','+(by-26)+'" fill="#f5c518"/>';
+      svgContent += '<text x="'+(bx-35)+'" y="'+(by-5)+'" fill="#f5c518" font-size="9" font-family="Barlow Condensed,sans-serif">↺ ROT.</text>';
+    }
+  } else if(tipo === 4) {
+    // GRANDE ASSIEME — box isometrico grande
+    var bw=sl*0.7, bh=sh*0.8, bd=sw*0.5;
+    bw=Math.min(bw,180); bh=Math.min(bh,70); bd=Math.min(bd,50);
+    var bx=cx-bw/2, by=cy-bh/2+10;
+    // Top
+    svgContent += '<polygon points="'+(bx)+','+(by-bd/2)+' '+(bx+bw)+','+(by-bd/2)+' '+(bx+bw+bd)+','+(by)+' '+(bx+bd)+','+(by)+'" fill="'+colA+'" opacity=".8"/>';
+    // Front
+    svgContent += '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="'+colB+'" opacity=".85"/>';
+    // Side
+    svgContent += '<polygon points="'+(bx+bw)+','+(by-bd/2)+' '+(bx+bw+bd)+','+(by)+' '+(bx+bw+bd)+','+(by+bh)+' '+(bx+bw)+','+(by+bh)+'" fill="'+colC+'" opacity=".85"/>';
+    // 3 ganci bilancino
+    var gap=bw/3;
+    [bx+gap*0.5, bx+gap*1.5, bx+gap*2.5].forEach(function(gx) {
+      svgContent += '<line x1="'+gx+'" y1="15" x2="'+gx+'" y2="'+(by-bd/2)+'" stroke="'+col+'" stroke-width="2.5"/>';
+      svgContent += '<path d="M'+(gx-5)+',15 Q'+(gx-8)+',8 '+gx+',5 Q'+(gx+8)+',8 '+(gx+5)+',15" fill="none" stroke="'+col+'" stroke-width="2"/>';
+    });
+    // Linea bilancino
+    svgContent += '<line x1="'+(bx+gap*0.5)+'" y1="15" x2="'+(bx+gap*2.5)+'" y2="15" stroke="'+col+'" stroke-width="2.5"/>';
+    // Warning peso
+    svgContent += '<text x="'+cx+'" y="'+(by+bh+20)+'" text-anchor="middle" fill="#e74c3c" font-size="10" font-family="Barlow Condensed,sans-serif" font-weight="700">⚠ '+(item.kg||'?')+'kg</text>';
+  } else {
+    // TIPO 3 — pezzi bulk su rastrelliera
+    var ry = cy - 20;
+    // Barra rastrelliera
+    svgContent += '<line x1="40" y1="'+ry+'" x2="240" y2="'+ry+'" stroke="'+col+'" stroke-width="4"/>';
+    svgContent += '<line x1="140" y1="18" x2="140" y2="'+ry+'" stroke="'+col+'" stroke-width="3"/>';
+    svgContent += '<path d="M134,18 Q130,10 140,6 Q150,10 146,18" fill="none" stroke="'+col+'" stroke-width="2.5"/>';
+    // 5-6 pezzi appesi
+    var nPx = Math.min(item.pxg||4, 6);
+    var spacing = 180 / (nPx+1);
+    for(var i=0;i<nPx;i++) {
+      var px = 50 + spacing*(i+1);
+      var ph = 25 + Math.random()*10;
+      svgContent += '<line x1="'+px+'" y1="'+ry+'" x2="'+px+'" y2="'+(ry+10)+'" stroke="'+col+'" stroke-width="1.5"/>';
+      svgContent += '<rect x="'+(px-15)+'" y="'+(ry+10)+'" width="30" height="'+ph+'" rx="3" fill="'+colB+'" stroke="'+col+'" stroke-width="1"/>';
+    }
+    svgContent += '<text x="140" y="'+(ry+55)+'" text-anchor="middle" fill="'+col+'" font-size="9" font-family="Barlow Condensed,sans-serif" font-weight="700">'+nPx+' PZ / GANCIO</text>';
+  }
+
+  // Ombra sul "pavimento"
+  svgContent += '<ellipse cx="'+cx+'" cy="168" rx="70" ry="8" fill="rgba(0,0,0,.3)"/>';
+
+  svg.innerHTML = svgContent;
+}
+
+// ═══════════════════════════════════════════════════════
+// SVG SCHEMA GANCIO — istruzione visiva
+// ═══════════════════════════════════════════════════════
+function renderHookSchema(tipo, item, col) {
+  var svg = document.getElementById('hookSchemaSvg');
+  var h = '';
+
+  if(tipo===1) {
+    h = '<line x1="110" y1="15" x2="110" y2="40" stroke="'+col+'" stroke-width="3"/>';
+    h += '<path d="M104,40 Q96,52 104,60 Q110,68 116,60 Q124,52 116,40" fill="none" stroke="'+col+'" stroke-width="2.5"/>';
+    h += '<rect x="30" y="70" width="160" height="30" rx="5" fill="'+shadeColor(col,-20)+'" stroke="'+col+'" stroke-width="2" opacity=".85"/>';
+    h += '<text x="110" y="90" text-anchor="middle" fill="white" font-size="10" font-family="Barlow Condensed,sans-serif" font-weight="700">PEZZO ORIZZONTALE</text>';
+    h += '<path d="M30,68 Q18,50 30,32" fill="none" stroke="#f5c518" stroke-width="2" stroke-dasharray="5,3"/>';
+    h += '<polygon points="28,32 36,30 30,38" fill="#f5c518"/>';
+    h += '<text x="14" y="55" fill="#f5c518" font-size="9" font-family="Barlow Condensed">↺</text>';
+    h += '<text x="110" y="118" text-anchor="middle" fill="'+col+'" font-size="9" font-family="Barlow Condensed,sans-serif">PUNTO AGGANCIO SUPERIORE</text>';
+    // Frecce orientamento
+    h += '<line x1="10" y1="85" x2="26" y2="85" stroke="rgba(255,255,255,.3)" stroke-width="1.5" marker-end="url(#arrSch)"/>';
+    h += '<line x1="210" y1="85" x2="194" y2="85" stroke="rgba(255,255,255,.3)" stroke-width="1.5" marker-end="url(#arrSch)"/>';
+    h += '<text x="3" y="97" fill="rgba(255,255,255,.3)" font-size="8" font-family="Barlow Condensed">←</text>';
+    h += '<text x="195" y="97" fill="rgba(255,255,255,.3)" font-size="8" font-family="Barlow Condensed">→</text>';
+  } else if(tipo===2) {
+    h = '<line x1="70" y1="15" x2="70" y2="35" stroke="'+col+'" stroke-width="2.5"/>';
+    h += '<line x1="150" y1="15" x2="150" y2="35" stroke="'+col+'" stroke-width="2.5"/>';
+    h += '<path d="M64,35 Q56,46 64,54 Q70,62 76,54 Q84,46 76,35" fill="none" stroke="'+col+'" stroke-width="2"/>';
+    h += '<path d="M144,35 Q136,46 144,54 Q150,62 156,54 Q164,46 156,35" fill="none" stroke="'+col+'" stroke-width="2"/>';
+    h += '<line x1="70" y1="42" x2="150" y2="42" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="4,3"/>';
+    h += '<text x="110" y="40" text-anchor="middle" fill="'+col+'" font-size="8" font-family="Barlow Condensed">SYNC</text>';
+    h += '<rect x="20" y="66" width="180" height="40" rx="5" fill="'+shadeColor(col,-20)+'" stroke="'+col+'" stroke-width="2" opacity=".85"/>';
+    h += '<text x="110" y="91" text-anchor="middle" fill="white" font-size="10" font-family="Barlow Condensed,sans-serif" font-weight="700">PEZZO STRUTTURALE</text>';
+    h += '<text x="110" y="130" text-anchor="middle" fill="'+col+'" font-size="9" font-family="Barlow Condensed">2 GANCI SINCRONIZZATI OBBLIGATORI</text>';
+  } else if(tipo===3) {
+    h = '<line x1="110" y1="12" x2="110" y2="32" stroke="'+col+'" stroke-width="3"/>';
+    h += '<line x1="30" y1="32" x2="190" y2="32" stroke="'+col+'" stroke-width="3"/>';
+    var nPx = Math.min(item.pxg||5, 6);
+    var sp = 150/(nPx+1);
+    for(var i=0;i<nPx;i++) {
+      var px=40+sp*(i+1);
+      h += '<line x1="'+px+'" y1="32" x2="'+px+'" y2="52" stroke="'+col+'" stroke-width="2"/>';
+      h += '<rect x="'+(px-14)+'" y="52" width="28" height="36" rx="3" fill="'+shadeColor(col,-25)+'" stroke="'+col+'" stroke-width="1.5" opacity=".85"/>';
+      h += '<text x="'+px+'" y="74" text-anchor="middle" fill="white" font-size="7" font-family="Barlow Condensed" font-weight="700">'+(i+1)+'</text>';
+    }
+    h += '<text x="110" y="108" text-anchor="middle" fill="'+col+'" font-size="9" font-family="Barlow Condensed">SEP. MIN 5cm ←→</text>';
+    h += '<line x1="40" y1="100" x2="55" y2="100" stroke="rgba(255,255,255,.3)" stroke-width="1"/>';
+    h += '<line x1="65" y1="100" x2="80" y2="100" stroke="rgba(255,255,255,.3)" stroke-width="1"/>';
+    h += '<text x="110" y="130" text-anchor="middle" fill="'+col+'" font-size="9" font-family="Barlow Condensed,sans-serif" font-weight="700">'+nPx+' PZ / GANCIO — ALTA DENSITÀ</text>';
+  } else {
+    h = '<line x1="110" y1="12" x2="110" y2="22" stroke="'+col+'" stroke-width="3"/>';
+    h += '<line x1="40" y1="22" x2="180" y2="22" stroke="'+col+'" stroke-width="3"/>';
+    [55,110,165].forEach(function(gx) {
+      h += '<line x1="'+gx+'" y1="22" x2="'+gx+'" y2="40" stroke="'+col+'" stroke-width="2.5"/>';
+      h += '<path d="M'+(gx-6)+',40 Q'+(gx-10)+',50 '+(gx-6)+',56 Q'+gx+',62 '+(gx+6)+',56 Q'+(gx+10)+',50 '+(gx+6)+',40" fill="none" stroke="'+col+'" stroke-width="2"/>';
+    });
+    h += '<rect x="20" y="65" width="180" height="55" rx="5" fill="'+shadeColor(col,-20)+'" stroke="'+col+'" stroke-width="2" opacity=".8"/>';
+    h += '<text x="110" y="97" text-anchor="middle" fill="white" font-size="10" font-family="Barlow Condensed,sans-serif" font-weight="700">GRANDE ASSIEME</text>';
+    h += '<text x="110" y="140" text-anchor="middle" fill="#e74c3c" font-size="9" font-family="Barlow Condensed,sans-serif" font-weight="700">⚠ 3 PUNTI AGGANCIO OBBLIGATORI</text>';
+    h += '<text x="110" y="155" text-anchor="middle" fill="'+col+'" font-size="9" font-family="Barlow Condensed">MAX '+(item.kg||580)+'kg · BILANCINO RINFORZATO</text>';
+  }
+
+  h = '<defs><marker id="arrSch" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><polygon points="0,0 0,5 5,2.5" fill="rgba(255,255,255,.3)"/></marker></defs>' + h;
+  svg.innerHTML = h;
+}
+
+// ═══════════════════════════════════════════════════════
+// LISTA SEQUENZA
+// ═══════════════════════════════════════════════════════
+function renderSeqList() {
+  var list = document.getElementById('seqList');
+  list.innerHTML = SEQ.map(function(item, i) {
+    var isDone = DONE.includes(i);
+    var isActive = i === IDX;
+    var hook = HOOK[item.tipo]||HOOK[3];
+    return '<div class="seq-item'+(isDone?' done':'')+(isActive?' active':'')+'" id="seq-'+i+'" onclick="goTo('+i+')">'+
+      '<div class="seq-num">'+(isDone?'<i class="bi bi-check" style="font-size:12px"></i>':(i+1))+'</div>'+
+      '<div class="seq-cod">'+item.cod+'</div>'+
+      '<div class="seq-info">'+item.fam+' · ×'+(item.qty||1)+' · '+(item.kg||0)+'kg</div>'+
+      '<span class="seq-tipo st'+item.tipo+'">TYPE '+item.tipo+'</span>'+
+      '</div>';
+  }).join('');
+  // Scroll al corrente
+  var el = document.getElementById('seq-'+IDX);
+  if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ═══════════════════════════════════════════════════════
+// COMPLETATO
+// ═══════════════════════════════════════════════════════
+function mostraCompletato() {
+  document.getElementById('mainArea').style.display='none';
+  document.getElementById('completatoBox').style.display='block';
+  document.querySelector('.cg-nav').style.display='none';
+  document.getElementById('progressFill').style.width='100%';
+  document.getElementById('progressLabel').textContent='Carico completato! Tutti i '+SEQ.length+' pezzi caricati.';
+}
+
+// ═══════════════════════════════════════════════════════
+// UTILITY — schiarisci/scurisci colore HEX
+// ═══════════════════════════════════════════════════════
+function shadeColor(col, pct) {
+  var R=parseInt(col.slice(1,3),16),G=parseInt(col.slice(3,5),16),B=parseInt(col.slice(5,7),16);
+  R=Math.min(255,Math.max(0,R+pct));G=Math.min(255,Math.max(0,G+pct));B=Math.min(255,Math.max(0,B+pct));
+  return '#'+[R,G,B].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
+}
+</script>
+{% endif %}
+{% endblock %}

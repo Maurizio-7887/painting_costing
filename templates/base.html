@@ -67,6 +67,11 @@
         <i class="bi bi-layout-three-columns text-info"></i> Piano di Carico
       </a>
     </li>
+    <li>
+      <a href="{{ url_for('carico_guidato') }}" class="{% if 'carico_guidato' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-hand-index-thumb text-warning"></i> Carico Guidato
+      </a>
+    </li>
 
     <li class="nav-section mt-3">GESTIONE</li>
     <li>
