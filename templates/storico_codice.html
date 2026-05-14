@@ -3,14 +3,63 @@
 {% block page_title %}<i class="bi bi-graph-up me-2"></i>{{ prodotto.codice }} — Storico e Costo Attuale{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center gap-3 mb-4 mt-3">
+<div class="d-flex align-items-center gap-3 mb-3 mt-3 flex-wrap">
   <a href="{{ url_for('storico') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left"></i> Storico
   </a>
-  <div>
+  <div class="flex-grow-1">
     <div class="fw-bold fs-5">{{ prodotto.codice }}</div>
     <div class="text-muted small">{{ prodotto.nome }}
       · <span class="badge bg-light text-dark border">{{ prodotto.famiglia }}</span>
+      · {{ righe|length }} passaggi nel periodo
+    </div>
+  </div>
+</div>
+
+<!-- FILTRO PERIODO -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <div class="btn-group btn-group-sm">
+          {% for a in filtro.anni_disponibili %}
+          <a href="{{ url_for('storico_codice', codice=prodotto.codice, anno=a) }}"
+             class="btn {% if filtro.anno==a %}btn-success{% else %}btn-outline-success{% endif %}">
+            {{ a }}
+          </a>
+          {% endfor %}
+          <a href="{{ url_for('storico_codice', codice=prodotto.codice) }}"
+             class="btn {% if not filtro.anno %}btn-success{% else %}btn-outline-secondary{% endif %}">
+            Tutto
+          </a>
+        </div>
+      </div>
+      <div class="col-auto">
+        <form method="GET" class="d-flex gap-2 align-items-end">
+          <div>
+            <label class="form-label small mb-0">Dal</label>
+            <input type="date" name="inizio" value="{{ filtro.inizio }}"
+                   class="form-control form-control-sm" style="width:140px">
+          </div>
+          <div>
+            <label class="form-label small mb-0">Al</label>
+            <input type="date" name="fine" value="{{ filtro.fine }}"
+                   class="form-control form-control-sm" style="width:140px">
+          </div>
+          <button type="submit" class="btn btn-success btn-sm">Filtra</button>
+        </form>
+      </div>
+      {% if righe %}
+      <div class="col-auto ms-auto">
+        <div class="text-muted small">
+          <strong class="text-success">{{ righe|length }}</strong> lavorazioni ·
+          Totale pezzi: <strong>{{ righe|sum(attribute='quantita') }}</strong> ·
+          Costo medio: <strong class="text-success">
+            €{{ "%.4f"|format(righe|sum(attribute='c_oggi_totale') / righe|length) }}
+          </strong>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>

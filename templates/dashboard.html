@@ -165,7 +165,7 @@
             <td>{{ (l.sequenza_json or '[]') | tojson | length }}</td>
             <td>{{ '%.1f' % (l.peso_totale_kg or 0) }} kg</td>
             <td class="fw-bold">€ {{ '%.2f' % (l.costo_totale_eur or 0) }}</td>
-            <td><small>{{ l.creato_il[:16] }}</small></td>
+            <td><small>{{ l.creato_il.strftime("%d/%m %H:%M") if l.creato_il else "—" }}</small></td>
             <td><span class="badge bg-success">{{ l.stato }}</span></td>
           </tr>
           {% endfor %}
