@@ -471,19 +471,17 @@ def ottimizzatore():
 
         # Crea lotto temporaneo per visualizzazione
         items_tmp = []
-        for cod, qty in zip(codici, qtys):
-            p = Prodotto.query.filter_by(codice=cod).first()
-            if not p: continue
-            item = LottoItem(prodotto_id=p.id, quantita=int(qty or 1))
-            item.prodotto = p
-            items_tmp.append(item)
+        with db.session.no_autoflush:
+            for cod, qty in zip(codici, qtys):
+                p = Prodotto.query.filter_by(codice=cod).first()
+                if not p: continue
+                item = LottoItem(prodotto_id=p.id, quantita=int(qty or 1))
+                item.prodotto = p
+                items_tmp.append(item)
 
         if items_tmp:
             cfg_tmp = get_config()
             cfg_tmp.velocita_default = vel_req
-            # Fallback se costo_centro_orario non esiste nel DB
-            if not hasattr(cfg_tmp, 'costo_centro_orario') or cfg_tmp.costo_centro_orario is None:
-                cfg_tmp.costo_centro_orario = 350.0
             ris = ottimizza_lotto_db(items_tmp, cfg_tmp)
 
             # Calcola costi ABC
@@ -526,25 +524,35 @@ def ottimizzatore():
                 costo_totale_eur= round(costo_tot, 2),
             )
             db.session.add(lotto_db)
-            db.session.flush()  # ottieni lotto_db.id
+            try:
+                db.session.flush()  # ottieni lotto_db.id
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Flush lotto fallito: {e}")
+                raise
 
             for item in items_tmp:
                 li = LottoItem(
                     lotto_id              = lotto_db.id,
                     prodotto_id           = item.prodotto_id,
                     quantita              = item.quantita,
-                    zona_assegnata        = getattr(item, 'zona_assegnata', 1),
-                    n_ganci_occupati      = getattr(item, 'n_ganci_occupati', 1),
-                    costo_materiale_unitario  = getattr(item, 'costo_materiale_unitario', 0),
-                    costo_processo_unitario   = getattr(item, 'costo_processo_unitario', 0),
-                    costo_manodopera_unitario = getattr(item, 'costo_manodopera_unitario', 0),
-                    costo_termico_unitario    = getattr(item, 'costo_termico_unitario', 0),
-                    costo_unitario_totale     = getattr(item, 'costo_unitario_totale', 0),
-                    costo_riga                = getattr(item, 'costo_riga', 0),
+                    zona_assegnata        = item.zona_assegnata,
+                    n_ganci_occupati      = item.n_ganci_occupati,
+                    costo_materiale_unitario  = item.costo_materiale_unitario,
+                    costo_processo_unitario   = item.costo_processo_unitario,
+                    costo_manodopera_unitario = item.costo_manodopera_unitario,
+                    costo_termico_unitario    = item.costo_termico_unitario,
+                    costo_unitario_totale     = item.costo_unitario_totale,
+                    costo_riga                = item.costo_riga,
                 )
                 db.session.add(li)
-            db.session.commit()
-            app.logger.info(f"Lotto {lotto_db.id} salvato OK con {len(items_tmp)} items")
+            try:
+                db.session.commit()
+                app.logger.info(f"Lotto {lotto_db.id} salvato OK")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Commit lotto fallito: {e}")
+                raise
 
             result = {
                 'lotto_id': lotto_db.id,
@@ -581,11 +589,10 @@ def ottimizzatore():
 def operaio():
     oggi = date.today().isoformat()
     lotto_attivo = Lotto.query.filter_by(stato='in_corso').first()
-    # Mostra lotti pianificati/confermati/attesa — ultimi 20
-    # (non filtriamo per data perché Railway usa UTC e potrebbe non matchare)
     lotti = Lotto.query.filter(
-        Lotto.stato.in_(['confermato','pianificato','attesa'])
-    ).order_by(Lotto.id.desc()).limit(20).all()
+        Lotto.stato.in_(['confermato','pianificato']),
+        Lotto.data_produzione == oggi
+    ).order_by(Lotto.id.desc()).all()
     return render_template('operaio.html', lotto_attivo=lotto_attivo,
                            lotti=lotti, today=oggi)
 
@@ -967,10 +974,32 @@ def storico_export():
 def storico_codice(codice):
     prodotto = Prodotto.query.filter_by(codice=codice).first_or_404()
     cfg      = get_config()
-    ultimi   = (StoricoCosto.query
-                .filter_by(prodotto_id=prodotto.id)
-                .order_by(StoricoCosto.data.desc())
-                .limit(30).all())
+
+    # Filtro periodo — default: tutto l'anno corrente + anno precedente
+    oggi    = date.today()
+    default_inizio = date(oggi.year - 1, 1, 1)  # 1 gennaio anno scorso
+    default_fine   = oggi
+
+    d_inizio = date.fromisoformat(
+        request.args.get('inizio', default_inizio.isoformat()))
+    d_fine   = date.fromisoformat(
+        request.args.get('fine', default_fine.isoformat()))
+    anno_sel = request.args.get('anno', '')
+
+    # Scorciatoie anno
+    if anno_sel == str(oggi.year):
+        d_inizio = date(oggi.year, 1, 1); d_fine = oggi
+    elif anno_sel == str(oggi.year - 1):
+        d_inizio = date(oggi.year-1, 1, 1); d_fine = date(oggi.year-1, 12, 31)
+    elif anno_sel == str(oggi.year - 2):
+        d_inizio = date(oggi.year-2, 1, 1); d_fine = date(oggi.year-2, 12, 31)
+
+    ultimi = (StoricoCosto.query
+              .filter_by(prodotto_id=prodotto.id)
+              .filter(StoricoCosto.data >= d_inizio,
+                      StoricoCosto.data <= d_fine)
+              .order_by(StoricoCosto.data.desc())
+              .limit(60).all())
 
     # Ricalcola costi ai prezzi ATTUALI per ogni passaggio storico
     # I dati fisici (velocita, saturazione) sono quelli reali del lotto
@@ -1020,11 +1049,18 @@ def storico_codice(codice):
     serie_sat = [{'data': d, 'sat': round(sum(v)/len(v), 1)}
                  for d, v in sorted(by_day_sat.items())]
 
+    filtro_cod = {
+        'inizio': d_inizio.isoformat(),
+        'fine':   d_fine.isoformat(),
+        'anno':   anno_sel,
+        'anni_disponibili': [str(oggi.year), str(oggi.year-1), str(oggi.year-2)],
+    }
     return render_template('storico_codice.html',
                            prodotto=prodotto,
                            cfg=cfg,
                            abc_std=abc_std,
                            righe=righe_ricalcolate,
+                           filtro=filtro_cod,
                            serie=json.dumps(serie),
                            serie_sat=json.dumps(serie_sat))
 
