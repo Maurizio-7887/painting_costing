@@ -471,13 +471,12 @@ def ottimizzatore():
 
         # Crea lotto temporaneo per visualizzazione
         items_tmp = []
-        with db.session.no_autoflush:
-            for cod, qty in zip(codici, qtys):
-                p = Prodotto.query.filter_by(codice=cod).first()
-                if not p: continue
-                item = LottoItem(prodotto_id=p.id, quantita=int(qty or 1))
-                item.prodotto = p
-                items_tmp.append(item)
+        for cod, qty in zip(codici, qtys):
+            p = Prodotto.query.filter_by(codice=cod).first()
+            if not p: continue
+            item = LottoItem(prodotto_id=p.id, quantita=int(qty or 1))
+            item.prodotto = p
+            items_tmp.append(item)
 
         if items_tmp:
             cfg_tmp = get_config()
@@ -623,8 +622,73 @@ def operaio_completa(lotto_id):
     lotto = Lotto.query.get_or_404(lotto_id)
     lotto.stato = 'completato'
     lotto.fine  = datetime.now(timezone.utc)
+    cfg = get_config()
+
+    # Durata reale START→STOP
+    durata_min = lotto.durata_min or lotto.tempo_ciclo_min or 0
+
+    # Superficie totale per ripartire i costi
+    items = LottoItem.query.filter_by(lotto_id=lotto_id).all()
+    sup_tot = sum(
+        (it.prodotto.superficie_m2 or 0) * it.quantita
+        for it in items if it.prodotto
+    )
+
+    costo_tot = 0.0
+    for it in items:
+        p = it.prodotto
+        if not p:
+            continue
+
+        # Ricalcola costi ABC con durata reale e saturazione reale
+        sat = lotto.saturazione_pct or 100.0
+        abc = calcola_abc(p, cfg,
+                          velocita_override=lotto.velocita_catena,
+                          saturazione_pct=sat)
+
+        it.costo_materiale_unitario  = abc['costo_vernice']
+        it.costo_processo_unitario   = abc['costo_processo']
+        it.costo_manodopera_unitario = abc['costo_manodopera']
+        it.costo_termico_unitario    = abc['costo_termico']
+        it.costo_unitario_totale     = abc['costo_totale']
+        it.costo_riga                = round(abc['costo_totale'] * it.quantita, 2)
+        it.tempo_unitario_min        = abc['t_occ_min']
+        costo_tot += it.costo_riga
+
+        # Aggiorna standard prodotto (media mobile)
+        n = p.n_campioni_standard or 0
+        p.costo_standard     = round((p.costo_standard * n + abc['costo_totale']) / (n + 1), 4)
+        p.tempo_standard_min = round(
+            ((p.tempo_standard_min or 0) * n + abc['t_occ_min']) / (n + 1), 3)
+        p.n_campioni_standard = n + 1
+
+        # Salva StoricoCosto
+        db.session.add(StoricoCosto(
+            prodotto_id      = p.id,
+            lotto_id         = lotto.id,
+            data             = date.today(),
+            quantita         = it.quantita,
+            costo_materiale  = abc['costo_vernice'],
+            costo_processo   = abc['costo_processo'],
+            costo_manodopera = abc['costo_manodopera'],
+            costo_termico    = abc['costo_termico'],
+            costo_totale     = abc['costo_totale'],
+            tempo_min        = abc['t_occ_min'],
+            velocita_catena  = lotto.velocita_catena or cfg.velocita_default,
+            costo_orario     = cfg.costo_orario_esercizio,
+            n_ganci          = it.n_ganci_occupati or 1,
+        ))
+
+    lotto.costo_totale     = round(costo_tot, 2)
+    lotto.costo_totale_eur = round(costo_tot, 2)
     db.session.commit()
-    flash('Lotto completato!', 'success')
+
+    flash(
+        f'✅ Completato! Durata: {int(durata_min)} min · '
+        f'Costo totale: €{costo_tot:.2f} · '
+        f'Storico aggiornato per {len(items)} codici',
+        'success'
+    )
     return redirect(url_for('operaio'))
 
 
@@ -974,32 +1038,10 @@ def storico_export():
 def storico_codice(codice):
     prodotto = Prodotto.query.filter_by(codice=codice).first_or_404()
     cfg      = get_config()
-
-    # Filtro periodo — default: tutto l'anno corrente + anno precedente
-    oggi    = date.today()
-    default_inizio = date(oggi.year - 1, 1, 1)  # 1 gennaio anno scorso
-    default_fine   = oggi
-
-    d_inizio = date.fromisoformat(
-        request.args.get('inizio', default_inizio.isoformat()))
-    d_fine   = date.fromisoformat(
-        request.args.get('fine', default_fine.isoformat()))
-    anno_sel = request.args.get('anno', '')
-
-    # Scorciatoie anno
-    if anno_sel == str(oggi.year):
-        d_inizio = date(oggi.year, 1, 1); d_fine = oggi
-    elif anno_sel == str(oggi.year - 1):
-        d_inizio = date(oggi.year-1, 1, 1); d_fine = date(oggi.year-1, 12, 31)
-    elif anno_sel == str(oggi.year - 2):
-        d_inizio = date(oggi.year-2, 1, 1); d_fine = date(oggi.year-2, 12, 31)
-
-    ultimi = (StoricoCosto.query
-              .filter_by(prodotto_id=prodotto.id)
-              .filter(StoricoCosto.data >= d_inizio,
-                      StoricoCosto.data <= d_fine)
-              .order_by(StoricoCosto.data.desc())
-              .limit(60).all())
+    ultimi   = (StoricoCosto.query
+                .filter_by(prodotto_id=prodotto.id)
+                .order_by(StoricoCosto.data.desc())
+                .limit(30).all())
 
     # Ricalcola costi ai prezzi ATTUALI per ogni passaggio storico
     # I dati fisici (velocita, saturazione) sono quelli reali del lotto
@@ -1049,18 +1091,11 @@ def storico_codice(codice):
     serie_sat = [{'data': d, 'sat': round(sum(v)/len(v), 1)}
                  for d, v in sorted(by_day_sat.items())]
 
-    filtro_cod = {
-        'inizio': d_inizio.isoformat(),
-        'fine':   d_fine.isoformat(),
-        'anno':   anno_sel,
-        'anni_disponibili': [str(oggi.year), str(oggi.year-1), str(oggi.year-2)],
-    }
     return render_template('storico_codice.html',
                            prodotto=prodotto,
                            cfg=cfg,
                            abc_std=abc_std,
                            righe=righe_ricalcolate,
-                           filtro=filtro_cod,
                            serie=json.dumps(serie),
                            serie_sat=json.dumps(serie_sat))
 
@@ -1599,6 +1634,73 @@ def carico_guidato():
         sequenza=seq_items if lotto else [],
         sequenza_json=sequenza_json,
         ciclo_min=ciclo_min if lotto else 113)
+
+
+@app.route('/fix_storico_lotti')
+def fix_storico_lotti():
+    """Recupera StoricoCosto per lotti completati che non ce l'hanno ancora."""
+    cfg = get_config()
+    lotti_completati = Lotto.query.filter_by(stato='completato').all()
+    recuperati = 0
+    pezzi_tot  = 0
+
+    for lotto in lotti_completati:
+        # Salta se ha già storico
+        if StoricoCosto.query.filter_by(lotto_id=lotto.id).first():
+            continue
+
+        items = LottoItem.query.filter_by(lotto_id=lotto.id).all()
+        if not items:
+            continue
+
+        sat = lotto.saturazione_pct or 100.0
+        for it in items:
+            p = it.prodotto
+            if not p:
+                continue
+            abc = calcola_abc(p, cfg,
+                              velocita_override=lotto.velocita_catena,
+                              saturazione_pct=sat)
+            it.costo_materiale_unitario  = abc['costo_vernice']
+            it.costo_processo_unitario   = abc['costo_processo']
+            it.costo_manodopera_unitario = abc['costo_manodopera']
+            it.costo_termico_unitario    = abc['costo_termico']
+            it.costo_unitario_totale     = abc['costo_totale']
+            it.costo_riga = round(abc['costo_totale'] * it.quantita, 2)
+            it.tempo_unitario_min = abc['t_occ_min']
+
+            # Aggiorna standard
+            n = p.n_campioni_standard or 0
+            p.costo_standard = round(
+                (p.costo_standard * n + abc['costo_totale']) / (n + 1), 4)
+            p.n_campioni_standard = n + 1
+
+            db.session.add(StoricoCosto(
+                prodotto_id      = p.id,
+                lotto_id         = lotto.id,
+                data             = lotto.completato_at.date() if lotto.completato_at else date.today(),
+                quantita         = it.quantita,
+                costo_materiale  = abc['costo_vernice'],
+                costo_processo   = abc['costo_processo'],
+                costo_manodopera = abc['costo_manodopera'],
+                costo_termico    = abc.get('costo_termico', 0),
+                costo_totale     = abc['costo_totale'],
+                tempo_min        = abc['t_occ_min'],
+                velocita_catena  = lotto.velocita_catena or cfg.velocita_default,
+                costo_orario     = cfg.costo_orario_esercizio,
+                n_ganci          = it.n_ganci_occupati or 1,
+            ))
+            pezzi_tot += it.quantita
+
+        # Aggiorna costo totale lotto
+        lotto.costo_totale = round(
+            sum(it.costo_riga for it in items), 2)
+        lotto.costo_totale_eur = lotto.costo_totale
+        recuperati += 1
+
+    db.session.commit()
+    return (f'✅ Recuperati {recuperati} lotti · {pezzi_tot} codici · '
+            f'Storico popolato. <a href="/storico">Vai allo storico</a>')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
