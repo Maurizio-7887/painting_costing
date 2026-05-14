@@ -279,7 +279,8 @@ with app.app_context():
 
 def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
                 velocita_override: float = None,
-                saturazione_pct: float = 100.0) -> dict:
+                saturazione_pct: float = 100.0,
+                n_pezzi_blocco: int = 1) -> dict:
     """
     Formula fisica corretta per il costo unitario di verniciatura.
 
@@ -296,6 +297,11 @@ def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
     COSTO MANODOPERA:
         c_mdo = (€/h / 60) × (t_aggancio + t_sgancio)
 
+    COSTO TERMICO (centro orario: manodopera + ammortamento + manutenzione):
+        c_termico = (costo_centro_orario / 60) × tempo_ciclo_min / n_pezzi_blocco
+        → ripartisce il costo del centro di lavoro (€350/h) sul numero
+          effettivo di pezzi nel blocco/lotto, tenendo conto della saturazione.
+
     EFFETTO SATURAZIONE:
         I costi fissi impianto (ammortamento, riscaldamento a vuoto) si
         ripartiscono su meno pezzi quando la catena è sotto-utilizzata.
@@ -310,6 +316,7 @@ def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
     passo_m       = prodotto.passo_gancio_m or 0.4
     vel           = velocita_override or cfg.velocita_default or 1.5
     sat           = max(saturazione_pct, 5.0)  # minimo 5% per evitare /0
+    n_pezzi       = max(n_pezzi_blocco, 1)     # minimo 1 per evitare /0
 
     # ── Tempo occupazione catena ──
     t_occ_min = passo_m / vel          # minuti che il pezzo occupa la catena
@@ -334,9 +341,14 @@ def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
              cfg.tempo_aggancio_complesso_min][min(comp-1, 2)]
     c_mdo = (cfg.costo_manodopera_ora / 60.0) * t_agg * 2
 
+    # ── Costo termico centro orario (€/h ÷ 60 × t_ciclo_min ÷ n_pezzi) ──
+    # Ripartisce il costo del centro di lavoro (manodopera + ammortamento +
+    # manutenzione) sul numero effettivo di pezzi nel blocco/lotto.
+    c_termico = (cfg.costo_centro_orario / 60.0) * t_occ_min / n_pezzi
+
     # ── Totale ──
     c_processo = round(c_energia + c_fisso, 4)
-    totale     = c_processo + c_vernice + c_mdo
+    totale     = c_processo + c_vernice + c_mdo + c_termico
 
     return {
         'costo_energia':     round(c_energia, 4),
@@ -344,6 +356,7 @@ def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
         'costo_processo':    c_processo,
         'costo_vernice':     round(c_vernice, 4),
         'costo_manodopera':  round(c_mdo, 4),
+        'costo_termico':     round(c_termico, 4),
         'costo_totale':      round(totale, 4),
         'costo_m2':          round(totale / sup, 4) if sup > 0 else 0,
         't_occ_min':         round(t_occ_min, 3),
@@ -475,17 +488,22 @@ def ottimizzatore():
             costo_tot_materiale = 0
             costo_tot_processo = 0
             costo_tot_manodopera = 0
+            costo_tot_termico = 0
+            n_pezzi_blocco = sum(i.quantita for i in items_tmp)
             for item in items_tmp:
-                abc = calcola_abc(item.prodotto, cfg)
+                abc = calcola_abc(item.prodotto, cfg,
+                                  n_pezzi_blocco=n_pezzi_blocco)
                 item.costo_materiale_unitario  = abc['costo_vernice']
                 item.costo_processo_unitario   = abc['costo_processo']
                 item.costo_manodopera_unitario = abc['costo_manodopera']
+                item.costo_termico_unitario    = abc['costo_termico']
                 item.costo_unitario_totale     = abc['costo_totale']
                 item.costo_riga = abc['costo_totale'] * item.quantita
                 costo_tot += item.costo_riga
                 costo_tot_materiale  += abc['costo_vernice']    * item.quantita
                 costo_tot_processo   += abc['costo_processo']   * item.quantita
                 costo_tot_manodopera += abc['costo_manodopera'] * item.quantita
+                costo_tot_termico    += abc['costo_termico']    * item.quantita
 
             # ── SALVA LOTTO NEL DB ──
             operatore = request.form.get('operatore','')
@@ -522,6 +540,7 @@ def ottimizzatore():
                     costo_materiale_unitario  = item.costo_materiale_unitario,
                     costo_processo_unitario   = item.costo_processo_unitario,
                     costo_manodopera_unitario = item.costo_manodopera_unitario,
+                    costo_termico_unitario    = item.costo_termico_unitario,
                     costo_unitario_totale     = item.costo_unitario_totale,
                     costo_riga                = item.costo_riga,
                 )
@@ -545,6 +564,7 @@ def ottimizzatore():
                 'costo_totale_materiale': round(costo_tot_materiale, 2),
                 'costo_totale_processo': round(costo_tot_processo, 2),
                 'costo_totale_manodopera': round(costo_tot_manodopera, 2),
+                'costo_totale_termico': round(costo_tot_termico, 2),
                 'velocita_usata': round(ris['vel'], 2),
                 'avvisi_kb': ris['avvisi_kb'],
                 'items': items_tmp,
@@ -636,12 +656,41 @@ def lotto_conferma(lotto_id):
 @app.route('/lotto/<int:lotto_id>/completa', methods=['POST'])
 def lotto_completa(lotto_id):
     lotto = Lotto.query.get_or_404(lotto_id)
+    cfg   = get_config()
     lotto.stato = 'completato'
     lotto.completato_at = datetime.now(timezone.utc)
     if not lotto.fine:
         lotto.fine = datetime.now(timezone.utc)
-    # Aggiorna standard prodotti
+
+    # ── Energia termica inserita manualmente al completamento ──
+    energia_kwh_raw = request.form.get('energia_kWh', '').strip()
+    costo_energia_unitario = 0.0
+    if energia_kwh_raw:
+        try:
+            energia_kwh = float(energia_kwh_raw)
+            if energia_kwh > 0:
+                lotto.energia_kWh = energia_kwh
+                lotto.costo_energia_eur = round(energia_kwh * cfg.costo_kwh, 4)
+                n_pezzi = max(lotto.n_pezzi_totali, 1)
+                costo_energia_unitario = round(
+                    (energia_kwh * cfg.costo_kwh) / n_pezzi, 4
+                )
+        except ValueError:
+            pass
+
+    # Aggiorna standard prodotti e salva storico
     for item in lotto.items:
+        # Aggiunge la quota energia termica al costo termico unitario già
+        # calcolato al momento della pianificazione (centro orario + vernice).
+        if costo_energia_unitario > 0:
+            item.costo_termico_unitario = round(
+                (item.costo_termico_unitario or 0.0) + costo_energia_unitario, 4
+            )
+            item.costo_unitario_totale = round(
+                (item.costo_unitario_totale or 0.0) + costo_energia_unitario, 4
+            )
+            item.costo_riga = round(item.costo_unitario_totale * item.quantita, 4)
+
         if item.prodotto and item.costo_unitario_totale > 0:
             p = item.prodotto
             n = p.n_campioni_standard
@@ -657,12 +706,20 @@ def lotto_completa(lotto_id):
                 costo_materiale=item.costo_materiale_unitario,
                 costo_processo=item.costo_processo_unitario,
                 costo_manodopera=item.costo_manodopera_unitario,
+                costo_termico=item.costo_termico_unitario,
                 costo_totale=item.costo_unitario_totale,
                 tempo_min=item.tempo_unitario_min,
                 velocita_catena=lotto.velocita_catena,
                 costo_orario=lotto.costo_orario,
             )
             db.session.add(sc)
+
+    # Aggiorna il costo totale del lotto
+    lotto.costo_totale = round(
+        sum(item.costo_riga for item in lotto.items), 2
+    )
+    lotto.costo_totale_eur = lotto.costo_totale
+
     db.session.commit()
     flash('Lotto completato e storico aggiornato.', 'success')
     return redirect(url_for('lotto_detail', lotto_id=lotto_id))
