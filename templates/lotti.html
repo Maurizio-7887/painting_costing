@@ -33,7 +33,7 @@
           <td class="text-end">{{ '%.1f'|format(l.lunghezza_usata_m or 0) }}m</td>
           <td class="text-end">{{ '%.1f'|format(l.tempo_ciclo_min or 0) }} min</td>
           <td class="text-end fw-bold text-success">€ {{ '%.2f'|format(l.costo_totale_eur or 0) }}</td>
-          <td><small>{{ l.creato_il[:16] }}</small></td>
+          <td><small>{{ l.creato_il.strftime('%Y-%m-%d %H:%M') if l.creato_il else '—' }}</small></td>
           <td><span class="badge bg-success">{{ l.stato }}</span></td>
           <td>
             <a href="{{ url_for('lotto_detail', lotto_id=l.id) }}"
