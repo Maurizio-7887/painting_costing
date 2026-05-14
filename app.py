@@ -481,6 +481,9 @@ def ottimizzatore():
         if items_tmp:
             cfg_tmp = get_config()
             cfg_tmp.velocita_default = vel_req
+            # Fallback se costo_centro_orario non esiste nel DB
+            if not hasattr(cfg_tmp, 'costo_centro_orario') or cfg_tmp.costo_centro_orario is None:
+                cfg_tmp.costo_centro_orario = 350.0
             ris = ottimizza_lotto_db(items_tmp, cfg_tmp)
 
             # Calcola costi ABC
@@ -523,35 +526,25 @@ def ottimizzatore():
                 costo_totale_eur= round(costo_tot, 2),
             )
             db.session.add(lotto_db)
-            try:
-                db.session.flush()  # ottieni lotto_db.id
-            except Exception as e:
-                db.session.rollback()
-                app.logger.error(f"Flush lotto fallito: {e}")
-                raise
+            db.session.flush()  # ottieni lotto_db.id
 
             for item in items_tmp:
                 li = LottoItem(
                     lotto_id              = lotto_db.id,
                     prodotto_id           = item.prodotto_id,
                     quantita              = item.quantita,
-                    zona_assegnata        = item.zona_assegnata,
-                    n_ganci_occupati      = item.n_ganci_occupati,
-                    costo_materiale_unitario  = item.costo_materiale_unitario,
-                    costo_processo_unitario   = item.costo_processo_unitario,
-                    costo_manodopera_unitario = item.costo_manodopera_unitario,
-                    costo_termico_unitario    = item.costo_termico_unitario,
-                    costo_unitario_totale     = item.costo_unitario_totale,
-                    costo_riga                = item.costo_riga,
+                    zona_assegnata        = getattr(item, 'zona_assegnata', 1),
+                    n_ganci_occupati      = getattr(item, 'n_ganci_occupati', 1),
+                    costo_materiale_unitario  = getattr(item, 'costo_materiale_unitario', 0),
+                    costo_processo_unitario   = getattr(item, 'costo_processo_unitario', 0),
+                    costo_manodopera_unitario = getattr(item, 'costo_manodopera_unitario', 0),
+                    costo_termico_unitario    = getattr(item, 'costo_termico_unitario', 0),
+                    costo_unitario_totale     = getattr(item, 'costo_unitario_totale', 0),
+                    costo_riga                = getattr(item, 'costo_riga', 0),
                 )
                 db.session.add(li)
-            try:
-                db.session.commit()
-                app.logger.info(f"Lotto {lotto_db.id} salvato OK")
-            except Exception as e:
-                db.session.rollback()
-                app.logger.error(f"Commit lotto fallito: {e}")
-                raise
+            db.session.commit()
+            app.logger.info(f"Lotto {lotto_db.id} salvato OK con {len(items_tmp)} items")
 
             result = {
                 'lotto_id': lotto_db.id,
@@ -588,10 +581,11 @@ def ottimizzatore():
 def operaio():
     oggi = date.today().isoformat()
     lotto_attivo = Lotto.query.filter_by(stato='in_corso').first()
+    # Mostra lotti pianificati/confermati/attesa — ultimi 20
+    # (non filtriamo per data perché Railway usa UTC e potrebbe non matchare)
     lotti = Lotto.query.filter(
-        Lotto.stato.in_(['confermato','pianificato']),
-        Lotto.data_produzione == oggi
-    ).order_by(Lotto.id.desc()).all()
+        Lotto.stato.in_(['confermato','pianificato','attesa'])
+    ).order_by(Lotto.id.desc()).limit(20).all()
     return render_template('operaio.html', lotto_attivo=lotto_attivo,
                            lotti=lotti, today=oggi)
 
