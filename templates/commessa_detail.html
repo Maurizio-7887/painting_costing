@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}{{ mac.nome_macchina }} – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-truck me-2 text-warning"></i>{{ mac.nome_macchina }}{% endblock %}
+
+{% block content %}
+<style>
+.slot-container{background:#111;border-radius:16px;padding:20px;overflow-x:auto;}
+.slot-track{display:flex;gap:8px;min-width:max-content;}
+.gancio-3d{width:90px;flex-shrink:0;border-radius:10px;border:2px solid;padding:8px 6px;min-height:140px;position:relative;display:flex;flex-direction:column;}
+.gancio-3d.occupato{border-color:#2d9c47;background:#0a1a0a;}
+.gancio-3d.libero{border-color:#333;background:#0d0d0d;}
+.g-header{text-align:center;margin-bottom:6px;}
+.g-num-lbl{font-size:.65rem;font-weight:700;color:#4CAF50;letter-spacing:.05em;}
+.g-pos-lbl{font-size:.55rem;color:#555;display:block;}
+.g-hook{width:2px;height:16px;background:#888;margin:0 auto 6px;position:relative;}
+.g-hook::before{content:'';position:absolute;top:-5px;left:-5px;width:12px;height:6px;border:2px solid #888;border-bottom:none;border-radius:3px 3px 0 0;}
+.pezzo-block{border-radius:6px;padding:4px 5px;margin-bottom:3px;font-size:.58rem;font-weight:700;line-height:1.3;word-break:break-all;}
+.pezzo-block.principale{background:#1c6e2e;color:#fff;border:1px solid #2d9c47;}
+.pezzo-block.secondario{background:#0a3a1a;color:#4caf50;border:1px solid #1c6e2e80;}
+.pezzo-block .peso-lbl{font-size:.52rem;font-weight:400;opacity:.7;display:block;}
+.g-footer{margin-top:auto;padding-top:4px;border-top:1px solid #222;text-align:center;font-size:.58rem;color:#555;}
+.g-footer.has-peso{color:#4caf50;}
+.kpi-s{background:#f8f9fa;border-radius:12px;padding:14px 16px;border-left:4px solid;}
+.kpi-s .num{font-size:1.7rem;font-weight:800;line-height:1;}
+.kpi-s .lbl{font-size:.68rem;color:#888;margin-top:2px;}
+.sat-bar-big{height:22px;border-radius:11px;background:#e0e0e0;overflow:hidden;}
+.sat-fill-big{height:100%;border-radius:11px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;font-size:.75rem;font-weight:700;color:#fff;}
+.comp-row-p{background:#f0faf2!important;}
+.comp-row-s{background:#fff!important;}
+.stato-btn{border-radius:20px;font-size:.78rem;font-weight:700;padding:5px 14px;}
+</style>
+
+<!-- Header commessa -->
+<div class="card border-0 shadow mb-3" style="border-left:5px solid {% if mac.priorita and mac.priorita|int<=2 %}#c62828{% elif mac.priorita and mac.priorita|int==3 %}#f9a825{% else %}#1c6e2e{% endif %}!important">
+  <div class="card-body py-3">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h5 class="fw-bold mb-1">{{ mac.nome_macchina }}</h5>
+        <div class="text-muted small">
+          Commessa: <strong>{{ mac.commessa }}</strong> &nbsp;|&nbsp;
+          Serie: <code>{{ mac.num_serie }}</code> &nbsp;|&nbsp;
+          Doc: <code>{{ mac.doc_num }}</code>
+        </div>
+        <div class="text-muted small mt-1">
+          <i class="bi bi-person me-1"></i><strong>{{ mac.cliente }}</strong> &nbsp;|&nbsp;
+          <i class="bi bi-palette me-1"></i>{{ mac.colore }} &nbsp;|&nbsp;
+          <i class="bi bi-calendar me-1"></i>Consegna: <strong>{{ mac.data_consegna }}</strong>
+        </div>
+      </div>
+      <div class="col-md-4 text-md-end mt-2 mt-md-0">
+        <div class="mb-2">
+          <span class="badge {% if mac.stato=='completato' %}bg-success{% elif mac.stato=='in_corso' %}bg-info{% else %}bg-warning text-dark{% endif %} fs-6">
+            {% if mac.stato=='completato' %}✓ Verniciata{% elif mac.stato=='in_corso' %}⚙ In corso{% else %}⏳ Da verniciare{% endif %}
+          </span>
+        </div>
+        <form method="POST" action="{{ url_for('commessa_stato', mac_id=mac.id) }}" class="d-flex gap-1 justify-content-md-end flex-wrap">
+          <button name="stato" value="da_verniciare" class="stato-btn btn btn-outline-secondary btn-sm">⏳ In attesa</button>
+          <button name="stato" value="in_corso" class="stato-btn btn btn-outline-info btn-sm">⚙ In corso</button>
+          <button name="stato" value="completato" class="stato-btn btn btn-outline-success btn-sm">✓ Completata</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if piano %}
+<!-- KPI -->
+<div class="row g-3 mb-3">
+  {% set sat = piano.sat_pct %}
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:{% if sat>=90 %}#1c6e2e{% elif sat>=70 %}#e8a020{% else %}#b71c1c{% endif %}">
+      <div class="num {% if sat>=90 %}text-success{% elif sat>=70 %}text-warning{% else %}text-danger{% endif %}">{{ sat }}%</div>
+      <div class="lbl">Saturazione slot</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:#1565c0">
+      <div class="num text-primary">{{ piano.ganci_usati }}/{{ piano.ganci_tot }}</div>
+      <div class="lbl">Ganci · {{ piano.lunghezza_m }}m</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:#2d9c47">
+      <div class="num text-success">{{ piano.pezzi_tot }}</div>
+      <div class="lbl">Pezzi nel slot</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:#6a1b9a">
+      <div class="num" style="color:#6a1b9a">{{ piano.peso_tot }} kg</div>
+      <div class="lbl">Peso totale</div>
+    </div>
+  </div>
+</div>
+
+<!-- Saturazione -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex justify-content-between mb-2">
+      <strong>Slot catena: {{ piano.lunghezza_m }}m occupati su {{ (piano.ganci_tot * 0.4)|round(1) }}m ({{ piano.ganci_tot }} ganci × 400mm)</strong>
+      <span class="badge {% if sat>=90 %}bg-success{% elif sat>=70 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">{{ sat }}%</span>
+    </div>
+    <div class="sat-bar-big">
+      <div class="sat-fill-big" style="width:{{ sat }}%;background:{% if sat>=90 %}#1c6e2e{% elif sat>=70 %}#e8a020{% else %}#c62828{% endif %}">
+        {{ piano.ganci_usati }} ganci — {{ piano.lunghezza_m }}m
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Visualizzatore slot 3D style -->
+<div class="card border-0 shadow mb-3">
+  <div class="card-header text-white" style="background:#111;border-radius:12px 12px 0 0;">
+    <i class="bi bi-grid me-2" style="color:#4CAF50"></i>
+    <strong style="color:#4CAF50">Piano slot catena — {{ mac.slot_catena }} — {{ piano.ganci_tot }} ganci × 400mm = {{ (piano.ganci_tot * 0.4)|round(1) }}m</strong>
+  </div>
+  <div class="slot-container" style="border-radius:0 0 12px 12px;">
+    <div class="slot-track" id="slotTrack">
+      {% for g in piano.ganci %}
+      <div class="gancio-3d {{ 'occupato' if g.pezzi else 'libero' }}">
+        <div class="g-header">
+          <div class="g-num-lbl">G{{ g.numero }}</div>
+          <span class="g-pos-lbl">{{ g.posizione_m }}m</span>
+        </div>
+        <div class="g-hook"></div>
+        {% for p in g.pezzi %}
+        <div class="pezzo-block {{ 'principale' if p.principale else 'secondario' }}"
+             title="{{ p.desc }} — {{ p.peso|round(1) }}kg">
+          {{ p.codice.split('-')[-1] if '-' in p.codice else p.codice[:10] }}
+          <span class="peso-lbl">{{ p.peso|round(1) }}kg</span>
+        </div>
+        {% endfor %}
+        <div class="g-footer {{ 'has-peso' if g.pezzi else '' }}">
+          {% if g.pezzi %}{{ g.peso|round(1) }}kg{% else %}vuoto{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex gap-3 mt-3 flex-wrap" style="font-size:.68rem;color:#666">
+      <span><span style="display:inline-block;width:12px;height:10px;background:#1c6e2e;border-radius:2px;margin-right:3px"></span>Pezzo principale</span>
+      <span><span style="display:inline-block;width:12px;height:10px;background:#0a3a1a;border:1px solid #1c6e2e80;border-radius:2px;margin-right:3px"></span>Pezzo secondario (appeso)</span>
+      <span><span style="display:inline-block;width:12px;height:10px;background:#0d0d0d;border:1px solid #333;border-radius:2px;margin-right:3px"></span>Gancio libero</span>
+    </div>
+  </div>
+</div>
+
+{% if piano.non_allocati %}
+<div class="alert alert-warning">
+  <h6><i class="bi bi-exclamation-triangle me-2"></i>Componenti non allocati nello slot ({{ piano.non_allocati|length }})</h6>
+  <p class="mb-0 small">Questi pezzi non entrano nel blocco da {{ piano.ganci_tot }} ganci. Considera di aumentare i ganci dello slot o di fare un secondo passaggio.</p>
+  <ul class="mb-0 mt-2 small">
+    {% for na in piano.non_allocati %}
+    <li>{{ na.codice }} — {{ na.descrizione }} ({{ na.ganci_pdf }}g, {{ na.peso }}kg)</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Tabella componenti -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-ul me-2"></i>Lista componenti</span>
+    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+      <i class="bi bi-printer me-1"></i>Stampa foglio operaio
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-dark"><tr>
+        <th>Codice</th><th>Descrizione</th><th>LxAxP (mm)</th>
+        <th class="text-center">Peso/pz</th><th class="text-center">Ganci</th>
+        <th class="text-center">Qtà</th><th>Note</th>
+      </tr></thead>
+      <tbody>
+        {% for c in mac.componenti %}
+        <tr class="{{ 'comp-row-p' if c.ganci_pdf >= 2 else 'comp-row-s' }}">
+          <td><strong>{{ c.codice }}</strong></td>
+          <td>{{ c.descrizione }}</td>
+          <td><small>{{ c.L_mm|int }}×{{ c.A_mm|int }}×{{ c.P_mm|int }}</small></td>
+          <td class="text-center">{{ c.peso_unitario }} kg</td>
+          <td class="text-center"><span class="badge bg-primary rounded-pill">{{ c.ganci_pdf }}</span></td>
+          <td class="text-center fw-bold">{{ c.qty }}</td>
+          <td><small class="text-muted">{{ c.note }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>Piano di carico non ancora calcolato.
+  <a href="{{ url_for('commessa_nuova_pdf') }}" class="alert-link">Ricarica il PDF</a> per ottimizzare.
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{{ url_for('commesse') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Torna alle commesse
+  </a>
+</div>
+{% endblock %}

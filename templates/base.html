@@ -73,6 +73,12 @@
       </a>
     </li>
 
+    <li>
+      <a href="{{ url_for('commesse') }}" class="{% if 'commess' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-truck text-warning"></i> Macchine da Consegnare
+      </a>
+    </li>
+
     <li class="nav-section mt-3">GESTIONE</li>
     <li>
       <a href="{{ url_for('prodotti') }}" class="{% if 'prodott' in request.endpoint %}active{% endif %}">

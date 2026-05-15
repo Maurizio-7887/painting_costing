@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% block title %}Nuova Commessa da PDF – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Nuova Commessa da PDF NetPro{% endblock %}
+
+{% block content %}
+<style>
+.drop-zone{border:2.5px dashed #1c6e2e;border-radius:16px;background:#f0faf2;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .25s;position:relative;}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#e8a020;background:#fffbf0;}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.slot-vis{display:flex;gap:6px;margin:12px 0;}
+.gancio-box{flex:1;border-radius:8px;border:2px solid #e0e0e0;min-height:120px;padding:6px 5px;position:relative;font-size:.62rem;transition:all .3s;}
+.gancio-box.occupato{border-color:#1c6e2e;background:#f0faf2;}
+.gancio-box.libero{border-color:#e8e8e8;background:#fafafa;}
+.gancio-box .g-num{font-weight:700;font-size:.7rem;color:#888;margin-bottom:4px;text-align:center;}
+.gancio-box .g-pos{font-size:.58rem;color:#bbb;text-align:center;margin-bottom:6px;}
+.pezzo-chip{border-radius:5px;padding:2px 4px;margin-bottom:2px;font-size:.6rem;font-weight:600;word-break:break-all;line-height:1.2;}
+.pezzo-chip.principale{background:#1c6e2e;color:#fff;}
+.pezzo-chip.secondario{background:#e8f5e9;color:#1c6e2e;border:1px solid #1c6e2e40;}
+.gancio-peso{font-size:.58rem;color:#888;text-align:center;margin-top:4px;border-top:1px solid #e0e0e0;padding-top:3px;}
+.stat-pill{display:inline-block;padding:4px 14px;border-radius:20px;font-size:.75rem;font-weight:700;}
+.kpi-s{background:#f8f9fa;border-radius:12px;padding:14px 16px;border-left:4px solid;}
+.kpi-s .num{font-size:1.6rem;font-weight:800;line-height:1;}
+.kpi-s .lbl{font-size:.68rem;color:#888;margin-top:2px;}
+.sat-bar{height:18px;border-radius:9px;background:#e0e0e0;overflow:hidden;}
+.sat-fill{height:100%;border-radius:9px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:.72rem;font-weight:700;color:#fff;transition:width 1s ease;}
+</style>
+
+{% if not parsed %}
+<!-- ── UPLOAD ── -->
+<div class="row g-4 mt-1">
+  <div class="col-md-7">
+    <div class="card border-0 shadow">
+      <div class="card-header bg-danger text-white fw-bold">
+        <i class="bi bi-file-earmark-pdf me-2"></i>Carica PDF Commessa NetPro
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+          <input type="hidden" name="action" value="parse">
+          <div class="drop-zone mb-3" id="dz">
+            <input type="file" name="file_pdf" id="filePdf" accept=".pdf" onchange="dzUpdate(this)">
+            <i class="bi bi-file-earmark-pdf fs-1 text-danger mb-2"></i>
+            <div class="fw-bold" id="dzText">Trascina il PDF qui oppure clicca</div>
+            <small class="text-muted">NetPro® – Ordine di Verniciatura Componenti</small>
+          </div>
+          <button type="submit" class="btn btn-danger btn-lg w-100" id="btnParse">
+            <i class="bi bi-magic me-2"></i>Leggi PDF e Ottimizza Slot 3m
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header"><i class="bi bi-info-circle me-2"></i>Come funziona</div>
+      <div class="card-body">
+        <div class="d-flex gap-3 mb-3">
+          <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0" style="width:32px;height:32px;font-size:.85rem">1</div>
+          <div><strong>Carica il PDF NetPro</strong> della macchina da consegnare<br><small class="text-muted">Contiene commessa, cliente, lista componenti con dimensioni</small></div>
+        </div>
+        <div class="d-flex gap-3 mb-3">
+          <div class="rounded-circle bg-warning text-dark d-flex align-items-center justify-content-center fw-bold flex-shrink-0" style="width:32px;height:32px;font-size:.85rem">2</div>
+          <div><strong>Il sistema ottimizza</strong> il carico in 3 metri di catena<br><small class="text-muted">Ogni gancio (400mm) viene riempito al massimo con i pezzi corretti</small></div>
+        </div>
+        <div class="d-flex gap-3 mb-3">
+          <div class="rounded-circle bg-info text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0" style="width:32px;height:32px;font-size:.85rem">3</div>
+          <div><strong>Visualizza il piano gancio per gancio</strong><br><small class="text-muted">Vedi esattamente cosa appendere su ogni gancio del blocco</small></div>
+        </div>
+        <div class="d-flex gap-3">
+          <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0" style="width:32px;height:32px;font-size:.85rem">4</div>
+          <div><strong>Salva in database</strong> e stampa il foglio operaio<br><small class="text-muted">La commessa viene tracciata fino alla consegna</small></div>
+        </div>
+        <hr>
+        <div class="alert alert-success py-2 mb-0">
+          <i class="bi bi-rulers me-1"></i>
+          <strong>Slot macchina:</strong> {{ ganci_slot_default }} ganci × 400mm = {{ (ganci_slot_default * 0.4)|round(1) }}m di catena per macchina
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- ── RISULTATO ── -->
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card border-0 shadow" style="border-left:5px solid #1c6e2e!important">
+      <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+          <div>
+            <h5 class="fw-bold mb-1">{{ parsed.nome_macchina }}</h5>
+            <div class="text-muted small">
+              Commessa: <strong>{{ parsed.commessa }}</strong> &nbsp;|&nbsp;
+              Serie: <code>{{ parsed.num_serie }}</code> &nbsp;|&nbsp;
+              Cliente: <strong>{{ parsed.cliente }}</strong>
+            </div>
+            <div class="text-muted small mt-1">
+              Colore: <strong>{{ parsed.colore }}</strong> &nbsp;|&nbsp;
+              Consegna: <strong>{{ parsed.data_consegna }}</strong> &nbsp;|&nbsp;
+              Slot: <strong>{{ parsed.slot_catena }}</strong>
+            </div>
+          </div>
+          <div>
+            <span class="stat-pill bg-{% if parsed.priorita and parsed.priorita|int <= 2 %}danger text-white{% elif parsed.priorita and parsed.priorita|int <= 3 %}warning text-dark{% else %}secondary text-white{% endif %}">
+              Priorità {{ parsed.priorita }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if piano %}
+<!-- KPI -->
+<div class="row g-3 mb-3">
+  {% set sat = piano.sat_pct %}
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:{% if sat>=90 %}#1c6e2e{% elif sat>=70 %}#e8a020{% else %}#b71c1c{% endif %}">
+      <div class="num {% if sat>=90 %}text-success{% elif sat>=70 %}text-warning{% else %}text-danger{% endif %}">{{ sat }}%</div>
+      <div class="lbl">Saturazione slot</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:#1565c0">
+      <div class="num text-primary">{{ piano.ganci_usati }}/{{ piano.ganci_tot }}</div>
+      <div class="lbl">Ganci occupati</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:#2d9c47">
+      <div class="num text-success">{{ piano.pezzi_tot }}</div>
+      <div class="lbl">Pezzi nel slot</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-s" style="border-color:#6a1b9a">
+      <div class="num" style="color:#6a1b9a">{{ piano.peso_tot }} kg</div>
+      <div class="lbl">Peso tot · {{ piano.lunghezza_m }}m</div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra saturazione -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex justify-content-between mb-2">
+      <strong>Piano slot: {{ piano.lunghezza_m }}m occupati su {{ (piano.ganci_tot * 0.4)|round(1) }}m totali</strong>
+      <span class="badge {% if sat>=90 %}bg-success{% elif sat>=70 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">{{ sat }}%</span>
+    </div>
+    <div class="sat-bar">
+      <div class="sat-fill" style="width:{{ sat }}%;background:{% if sat>=90 %}#1c6e2e{% elif sat>=70 %}#e8a020{% else %}#c62828{% endif %}">
+        {{ piano.ganci_usati }} ganci / {{ piano.lunghezza_m }}m
+      </div>
+    </div>
+    {% if piano.non_allocati %}
+    <div class="alert alert-warning py-2 mt-2 mb-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      <strong>{{ piano.non_allocati|length }} componenti non allocati</strong> — lo slot è pieno. Vernicia in un secondo passaggio o allarga lo slot.
+    </div>
+    {% else %}
+    <div class="alert alert-success py-2 mt-2 mb-0">
+      <i class="bi bi-check-circle me-1"></i>
+      <strong>Tutti i componenti entrano nello slot!</strong> Piano ottimale raggiunto.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Visualizzatore ganci -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header">
+    <i class="bi bi-grid-3x3-gap me-2"></i><strong>Piano gancio per gancio — {{ piano.ganci_tot }} ganci × 400mm</strong>
+  </div>
+  <div class="card-body">
+    <div class="slot-vis">
+      {% for g in piano.ganci %}
+      <div class="gancio-box {{ 'occupato' if g.pezzi else 'libero' }}">
+        <div class="g-num">G{{ g.numero }}</div>
+        <div class="g-pos">{{ g.posizione_m }}m</div>
+        {% for p in g.pezzi %}
+        <div class="pezzo-chip {{ 'principale' if p.principale else 'secondario' }}">
+          {{ p.codice.split('-')[-1] if '-' in p.codice else p.codice }}
+        </div>
+        {% endfor %}
+        {% if g.pezzi %}
+        <div class="gancio-peso">{{ g.peso|round(1) }}kg</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Legenda -->
+    <div class="d-flex gap-3 flex-wrap" style="font-size:.72rem;color:#888">
+      <span><span style="display:inline-block;width:14px;height:10px;background:#1c6e2e;border-radius:3px;margin-right:4px"></span>Pezzo principale (occupa N ganci)</span>
+      <span><span style="display:inline-block;width:14px;height:10px;background:#e8f5e9;border:1px solid #1c6e2e60;border-radius:3px;margin-right:4px"></span>Pezzo secondario (appeso)</span>
+      <span><span style="display:inline-block;width:14px;height:10px;background:#fafafa;border:1px solid #e0e0e0;border-radius:3px;margin-right:4px"></span>Gancio libero</span>
+    </div>
+  </div>
+</div>
+
+<!-- Tabella dettaglio -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header"><i class="bi bi-table me-2"></i>Dettaglio componenti</div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-dark"><tr>
+        <th>Codice</th><th>Descrizione</th><th>LxAxP (mm)</th>
+        <th class="text-center">Peso</th><th class="text-center">Ganci</th>
+        <th class="text-center">Qtà</th><th>Note</th>
+      </tr></thead>
+      <tbody>
+        {% for c in parsed.componenti %}
+        <tr>
+          <td><strong>{{ c.codice }}</strong></td>
+          <td>{{ c.descrizione }}</td>
+          <td><small>{{ c.L_mm|int }}×{{ c.A_mm|int }}×{{ c.P_mm|int }}</small></td>
+          <td class="text-center">{{ c.peso }} kg</td>
+          <td class="text-center"><span class="badge bg-primary rounded-pill">{{ c.ganci_pdf }}</span></td>
+          <td class="text-center">{{ c.qty }}</td>
+          <td><small class="text-muted">{{ c.note }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Salva -->
+<div class="row g-3">
+  <div class="col-md-8">
+    <form method="POST">
+      <input type="hidden" name="action" value="salva">
+      <input type="hidden" name="commessa" value="{{ parsed.commessa }}">
+      <input type="hidden" name="num_serie" value="{{ parsed.num_serie }}">
+      <input type="hidden" name="nome_macchina" value="{{ parsed.nome_macchina }}">
+      <input type="hidden" name="cliente" value="{{ parsed.cliente }}">
+      <input type="hidden" name="colore" value="{{ parsed.colore }}">
+      <input type="hidden" name="data_consegna" value="{{ parsed.data_consegna }}">
+      <input type="hidden" name="priorita" value="{{ parsed.priorita or 5 }}">
+      <input type="hidden" name="doc_num" value="{{ parsed.doc_num }}">
+      <input type="hidden" name="slot_catena" value="{{ parsed.slot_catena }}">
+      <input type="hidden" name="ganci_slot" value="{{ parsed.ganci_slot }}">
+      <input type="hidden" name="operatore" value="{{ parsed.operatore }}">
+      <input type="hidden" name="componenti_json" value='{{ parsed.componenti | tojson | e }}'>
+      <input type="hidden" name="piano_json" value='{{ piano | tojson | e }}'>
+      <div class="card border-0 shadow">
+        <div class="card-body">
+          <h6 class="fw-bold"><i class="bi bi-floppy me-2"></i>Salva commessa</h6>
+          <button type="submit" class="btn btn-success btn-lg w-100 mt-2">
+            <i class="bi bi-check-circle me-2"></i>Salva — {{ parsed.commessa }} · {{ piano.pezzi_tot }} pezzi · {{ piano.sat_pct }}% saturazione
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex flex-column gap-2">
+        <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Carica altro PDF
+        </a>
+        <button class="btn btn-outline-primary" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Stampa piano
+        </button>
+        {% if parsed.errori %}
+        <div class="alert alert-warning py-2 mb-0">
+          <strong>Avvisi:</strong>
+          {% for e in parsed.errori %}<small class="d-block">{{ e }}</small>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dzUpdate(inp) {
+  if (inp.files.length) {
+    document.getElementById('dzText').innerHTML = '<i class="bi bi-check-circle text-success me-1"></i><strong>' + inp.files[0].name + '</strong>';
+    document.getElementById('dz').style.borderColor = '#1c6e2e';
+  }
+}
+const dz = document.getElementById('dz');
+if (dz) {
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) { document.getElementById('filePdf').files = e.dataTransfer.files; dzUpdate(document.getElementById('filePdf')); }
+  });
+}
+const form = document.getElementById('uploadForm');
+if (form) form.addEventListener('submit', () => {
+  const btn = document.getElementById('btnParse');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi PDF in corso...';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – ENOROSSI Paint{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2 me-2"></i>Dashboard{% endblock %}
+
+{% block content %}
+<div class="section-title mt-3">
+  <i class="bi bi-bar-chart-fill"></i> Situazione Impianto – {{ oggi }}
+</div>
+
+<!-- KPI ROW -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card green">
+      <div class="kpi-icon"><i class="bi bi-box-seam"></i></div>
+      <div>
+        <div class="kpi-num">{{ kpi.n_prodotti }}</div>
+        <div class="kpi-lbl">Prodotti catalogo</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card yellow">
+      <div class="kpi-icon"><i class="bi bi-clipboard-check"></i></div>
+      <div>
+        <div class="kpi-num">{{ kpi.n_lotti }}</div>
+        <div class="kpi-lbl">Ordini in attesa</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card blue">
+      <div class="kpi-icon"><i class="bi bi-layers"></i></div>
+      <div>
+        <div class="kpi-num">{{ kpi.pezzi_attesa }}</div>
+        <div class="kpi-lbl">Pezzi da verniciare</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card green" style="background:linear-gradient(135deg,#37474f,#546e7a)">
+      <div class="kpi-icon"><i class="bi bi-collection"></i></div>
+      <div>
+        <div class="kpi-num">{{ kpi.n_lotti }}</div>
+        <div class="kpi-lbl">Lotti pianificati</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Q_R Widget v3.1 -->
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body">
+        <i class="bi bi-thermometer-half fs-1" style="color:#1a5c2a"></i>
+        <h4 class="mt-2 fw-bold">{{ stats.get('q_r_medio_kj', 0)|round(0)|int }} kJ</h4>
+        <p class="text-muted small mb-0">Q<sub>R</sub> Medio/Ciclo</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Ordini per famiglia -->
+  <div class="col-md-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-pie-chart"></i> Ordini per Famiglia Prodotto</div>
+      <div class="card-body">
+        <canvas id="famChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ultimi ordini -->
+  <div class="col-md-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i> Ordini Recenti in Attesa</span>
+        <a href="{{ url_for('lotti') }}" class="btn btn-sm btn-enorossi-outline">Tutti gli ordini</a>
+      </div>
+      <div class="card-body p-0">
+        {% if lotti_recenti %}
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr>
+            <th>N. Ordine</th><th>Prodotto</th><th>Qty</th><th>Colore</th><th>Data</th><th>Prio</th>
+          </tr></thead>
+          <tbody>
+          {% for o in lotti_recenti %}
+          <tr>
+            <td><code>{{ o.numero_ordine }}</code></td>
+            <td>{{ o.codice_prodotto }}</td>
+            <td class="fw-bold">{{ o.quantita }}</td>
+            <td><span class="badge" style="background:#1c6e2e;font-size:.7rem">{{ o.colore[:12] }}</span></td>
+            <td><small>{{ o.data_richiesta }}</small></td>
+            <td>
+              <span class="prio-badge prio-{{ o.priorita }}">P{{ o.priorita }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-inbox fs-1"></i><br>Nessun ordine in attesa
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick actions -->
+<div class="row g-3 mt-1">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-lightning"></i> Azioni Rapide</div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        <a href="{{ url_for('ottimizzatore') }}" class="btn btn-enorossi">
+          <i class="bi bi-diagram-3 me-1"></i> Ottimizza Carico Tunnel
+        </a>
+        <a href="{{ url_for('import_sap') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-cloud-download me-1"></i> Import da SAP/NetPro
+        </a>
+        <a href="{{ url_for('storico') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-bar-chart-line me-1"></i> Calcolo ABC
+        </a>
+        <a href="{{ url_for('prodotto_form') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-plus-circle me-1"></i> Nuovo Prodotto
+        </a>
+        <a href="{{ url_for('storico_export') }}" class="btn btn-outline-success">
+          <i class="bi bi-download me-1"></i> Export ABC CSV
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lotti recenti -->
+{% if lotti %}
+<div class="row g-3 mt-1">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-collection"></i> Ultimi Lotti Pianificati</span>
+        <a href="{{ url_for('lotti') }}" class="btn btn-sm btn-enorossi-outline">Tutti</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr>
+            <th>#</th><th>Nome</th><th>Saturaz.</th><th>Pezzi</th>
+            <th>Peso</th><th>Costo Totale</th><th>Data</th><th>Stato</th>
+          </tr></thead>
+          <tbody>
+          {% for l in lotti %}
+          <tr>
+            <td><a href="{{ url_for('lotto_detail', lotto_id=l.id) }}">{{ l.id }}</a></td>
+            <td>{{ l.nome }}</td>
+            <td>
+              <div class="progress" style="height:16px;width:90px">
+                <div class="progress-bar bg-success" style="width:{{ l.saturazione_pct or 0 }}%">
+                  {{ l.saturazione_pct or 0 }}%
+                </div>
+              </div>
+            </td>
+            <td>{{ (l.sequenza_json or '[]') | tojson | length }}</td>
+            <td>{{ '%.1f' % (l.peso_totale_kg or 0) }} kg</td>
+            <td class="fw-bold">€ {{ '%.2f' % (l.costo_totale_eur or 0) }}</td>
+            <td><small>{{ l.creato_il.strftime("%d/%m %H:%M") if l.creato_il else "—" }}</small></td>
+            <td><span class="badge bg-success">{{ l.stato }}</span></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const famData = {{ fam_count | safe }};
+const labels  = Object.keys(famData);
+const values  = Object.values(famData);
+const colors  = ['#1c6e2e','#2d9c47','#e8a020','#1565c0','#e53935','#7b1fa2','#00838f','#ef6c00'];
+
+if (labels.length > 0) {
+  new Chart(document.getElementById('famChart'), {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

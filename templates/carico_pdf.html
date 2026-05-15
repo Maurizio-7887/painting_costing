@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}Carico PDF Operai – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Carico Giornaliero da PDF{% endblock %}
+
+{% block content %}
+<style>
+.drop-zone{border:2.5px dashed #1c6e2e;border-radius:16px;background:linear-gradient(135deg,#f0faf2,#e8f5e9);min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .25s;position:relative;}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#e8a020;background:linear-gradient(135deg,#fffbf0,#fff8e1);}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.mac-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;letter-spacing:.04em;}
+.mac-v1{background:#1c6e2e;color:#fff;}
+.mac-v2{background:#1565c0;color:#fff;}
+.mac-v3{background:#b71c1c;color:#fff;}
+.mac-cab{background:#6a1b9a;color:#fff;}
+.sat-bar{height:22px;border-radius:10px;background:#e0e0e0;overflow:hidden;}
+.sat-fill{height:100%;border-radius:10px;transition:width .8s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:.75rem;font-weight:700;color:#fff;}
+.row-allocata{background:#f0faf2!important;}
+.row-non-aloc{background:#fff3e0!important;opacity:.85;}
+.alloc-chip{font-size:.68rem;padding:2px 7px;border-radius:10px;}
+.kpi-mini{background:#f8f9fa;border-radius:12px;padding:14px 18px;border-left:4px solid;}
+.kpi-mini .num{font-size:1.7rem;font-weight:700;line-height:1;}
+.kpi-mini .lbl{font-size:.72rem;color:#666;margin-top:2px;}
+.machine-card{border-radius:14px;border:2px solid #e0e0e0;padding:14px 18px;cursor:pointer;transition:all .2s;}
+.machine-card:hover{border-color:#1c6e2e;background:#f0faf2;}
+.step-badge{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;}
+</style>
+
+<!-- Intro steps -->
+<div class="row g-3 mb-4 mt-1">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-3">
+        <div class="d-flex align-items-center gap-4 flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <span class="step-badge bg-success text-white">1</span>
+            <span class="small">Operaio consegna <strong>PDF NetPro/SAP</strong></span>
+          </div>
+          <i class="bi bi-arrow-right text-muted"></i>
+          <div class="d-flex align-items-center gap-2">
+            <span class="step-badge bg-warning text-dark">2</span>
+            <span class="small">Carica il PDF qui sotto</span>
+          </div>
+          <i class="bi bi-arrow-right text-muted"></i>
+          <div class="d-flex align-items-center gap-2">
+            <span class="step-badge bg-info text-white">3</span>
+            <span class="small">Il sistema legge e <strong>ottimizza</strong> il carico</span>
+          </div>
+          <i class="bi bi-arrow-right text-muted"></i>
+          <div class="d-flex align-items-center gap-2">
+            <span class="step-badge bg-primary text-white">4</span>
+            <span class="small">Salva in DB — storico aggiornato</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload form -->
+{% if not parsed %}
+<div class="row g-4">
+  <div class="col-md-7">
+    <div class="card border-0 shadow">
+      <div class="card-header bg-danger text-white">
+        <i class="bi bi-cloud-upload me-2"></i><strong>Carica PDF Distinta Lavori</strong>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+          <input type="hidden" name="action" value="parse">
+          <div class="drop-zone mb-3" id="dropZone">
+            <input type="file" name="file_pdf" id="filePdf" accept=".pdf" onchange="updateDropZone(this)">
+            <i class="bi bi-file-earmark-pdf fs-1 text-danger mb-2"></i>
+            <div class="fw-bold" id="dropText">Trascina il PDF qui oppure clicca</div>
+            <small class="text-muted">Formati: NetPro® / SAP – Distinta Lavori Verniciatura</small>
+          </div>
+          <button type="submit" class="btn btn-danger btn-lg w-100" id="btnParse">
+            <i class="bi bi-magic me-2"></i>Leggi PDF e Ottimizza Carico
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header"><i class="bi bi-hdd-rack me-2"></i>Macchine configurate</div>
+      <div class="card-body">
+        {% for mac, cfg in macchine.items() %}
+        <div class="machine-card mb-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="mac-badge mac-v{{ loop.index }}">{{ mac }}</span>
+            <small class="text-muted">{{ cfg.ganci_tot }} ganci</small>
+          </div>
+          <div class="fw-bold mt-1" style="font-size:.9rem">{{ cfg.desc }}</div>
+          <small class="text-muted">{{ cfg.tipo }}</small>
+        </div>
+        {% endfor %}
+        <div class="alert alert-info py-2 mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          <small>Il PDF deve contenere il campo <strong>Centro: VERN-XX</strong> per il riconoscimento automatico.</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% else %}
+
+<!-- ── RISULTATO PARSING ── -->
+{% set mac = parsed.macchina %}
+{% set mc = macchine.get(mac, {}) %}
+
+<!-- Header macchina -->
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card border-0 shadow" style="border-left:5px solid #1c6e2e!important;border-radius:14px;">
+      <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+          <div>
+            <span class="mac-badge mac-v1 fs-6 me-2">{{ mac or 'N/D' }}</span>
+            <strong style="font-size:1.05rem">{{ mc.get('desc','') }}</strong>
+            <div class="text-muted small mt-1">
+              Operatore: <strong>{{ parsed.operatore }}</strong> &nbsp;|&nbsp;
+              Data: <strong>{{ parsed.data }}</strong> &nbsp;|&nbsp;
+              Documento: <code>{{ parsed.doc_num }}</code>
+            </div>
+          </div>
+          <div class="d-flex gap-3">
+            <div class="kpi-mini" style="border-color:#1c6e2e">
+              <div class="num text-success">{{ parsed.righe|length }}</div>
+              <div class="lbl">Righe ordine</div>
+            </div>
+            <div class="kpi-mini" style="border-color:#1565c0">
+              <div class="num text-primary">{{ parsed.ganci_tot }}</div>
+              <div class="lbl">Ganci totali</div>
+            </div>
+            <div class="kpi-mini" style="border-color:#e8a020">
+              <div class="num text-warning">{{ parsed.colore[:12] }}</div>
+              <div class="lbl">Colore</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if ottimizzato %}
+<!-- KPI Ottimizzazione -->
+<div class="row g-3 mb-3">
+  {% set sat = ottimizzato.sat_pct %}
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="border-color:{% if sat>85 %}#1c6e2e{% elif sat>60 %}#e8a020{% else %}#b71c1c{% endif %}">
+      <div class="num {% if sat>85 %}text-success{% elif sat>60 %}text-warning{% else %}text-danger{% endif %}">{{ sat }}%</div>
+      <div class="lbl">Saturazione catena</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="border-color:#1565c0">
+      <div class="num text-primary">{{ ottimizzato.ganci_usati }}</div>
+      <div class="lbl">Ganci occupati / {{ ottimizzato.ganci_tot }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="border-color:#2d9c47">
+      <div class="num text-success">{{ ottimizzato.pezzi_tot }}</div>
+      <div class="lbl">Pezzi allocati</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="border-color:#6a1b9a">
+      <div class="num" style="color:#6a1b9a">{{ ottimizzato.peso_tot }} kg</div>
+      <div class="lbl">Peso totale</div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra saturazione animata -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex justify-content-between mb-1">
+      <strong>Saturazione catena {{ mac }}</strong>
+      <span class="badge {% if sat>85 %}bg-success{% elif sat>60 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">{{ sat }}%</span>
+    </div>
+    <div class="sat-bar">
+      <div class="sat-fill" style="width:{{ sat }}%;background:{% if sat>85 %}#1c6e2e{% elif sat>60 %}#e8a020{% else %}#c62828{% endif %}">
+        {{ ottimizzato.ganci_usati }} / {{ ottimizzato.ganci_tot }} ganci
+      </div>
+    </div>
+    {% if ottimizzato.non_allocati %}
+    <div class="alert alert-warning py-2 mt-2 mb-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      <strong>{{ ottimizzato.non_allocati|length }} righe non allocate</strong> per mancanza di spazio — da portare al turno successivo o su altra macchina.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Tabella pezzi -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table me-2"></i>Piano di carico ottimizzato</span>
+    <div>
+      <span class="badge bg-success me-1">✓ Allocati: {{ ottimizzato.allocati|length }}</span>
+      {% if ottimizzato.non_allocati %}
+      <span class="badge bg-warning text-dark">⚠ Non allocati: {{ ottimizzato.non_allocati|length }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Ordine</th><th>Codice</th><th>Descrizione</th><th>Famiglia</th>
+            <th class="text-center">Qtà</th><th class="text-center">Ganci/pz</th>
+            <th class="text-center">Ganci tot</th><th>Colore</th><th class="text-center">Prio</th>
+            <th>Stato</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in ottimizzato.allocati %}
+          <tr class="row-allocata">
+            <td><code>{{ r.ordine }}</code></td>
+            <td><strong>{{ r.codice }}</strong></td>
+            <td>{{ r.descrizione }}</td>
+            <td><span class="badge bg-secondary" style="font-size:.65rem">{{ r.famiglia }}</span></td>
+            <td class="text-center fw-bold">{{ r.qty }}</td>
+            <td class="text-center">{{ r.ganci }}</td>
+            <td class="text-center fw-bold text-success">{{ r.qty * r.ganci }}</td>
+            <td><small>{{ r.colore[:14] }}</small></td>
+            <td class="text-center"><span class="badge rounded-pill {% if r.prio<=2 %}bg-danger{% elif r.prio<=4 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">P{{ r.prio }}</span></td>
+            <td>
+              {% if r.get('_parziale') %}
+              <span class="alloc-chip badge bg-warning text-dark">PARZIALE</span>
+              {% else %}
+              <span class="alloc-chip badge bg-success">✓ OK</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% for r in ottimizzato.non_allocati %}
+          <tr class="row-non-aloc">
+            <td><code>{{ r.ordine }}</code></td>
+            <td><strong>{{ r.codice }}</strong></td>
+            <td>{{ r.descrizione }}</td>
+            <td><span class="badge bg-secondary" style="font-size:.65rem">{{ r.famiglia }}</span></td>
+            <td class="text-center fw-bold">{{ r.qty }}</td>
+            <td class="text-center">{{ r.ganci }}</td>
+            <td class="text-center fw-bold text-danger">{{ r.qty * r.ganci }}</td>
+            <td><small>{{ r.colore[:14] }}</small></td>
+            <td class="text-center"><span class="badge rounded-pill {% if r.prio<=2 %}bg-danger{% elif r.prio<=4 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">P{{ r.prio }}</span></td>
+            <td><span class="alloc-chip badge bg-danger">⚠ RIMANDATO</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Azioni -->
+<div class="row g-3">
+  <div class="col-md-8">
+    <form method="POST">
+      <input type="hidden" name="action" value="salva">
+      <input type="hidden" name="macchina" value="{{ parsed.macchina }}">
+      <input type="hidden" name="operatore" value="{{ parsed.operatore }}">
+      <input type="hidden" name="data_prod" value="{{ parsed.data }}">
+      <input type="hidden" name="doc_num" value="{{ parsed.doc_num }}">
+      <input type="hidden" name="ganci_usati" value="{{ ottimizzato.ganci_usati }}">
+      <input type="hidden" name="ganci_tot" value="{{ ottimizzato.ganci_tot }}">
+      <input type="hidden" name="pezzi_tot" value="{{ ottimizzato.pezzi_tot }}">
+      <input type="hidden" name="peso_tot" value="{{ ottimizzato.peso_tot }}">
+      <input type="hidden" name="sat_pct" value="{{ ottimizzato.sat_pct }}">
+      <input type="hidden" name="velocita" value="{{ parsed.velocita or '1.5' }}">
+      <input type="hidden" name="codici_json" value='{{ ottimizzato.allocati | tojson | e }}'>
+      <div class="card border-0 shadow">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="bi bi-floppy me-2"></i>Salva in database</h6>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small">Operatore (verifica)</label>
+              <input type="text" class="form-control form-control-sm" name="operatore_check" value="{{ parsed.operatore }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Data produzione</label>
+              <input type="text" class="form-control form-control-sm" value="{{ parsed.data }}" readonly>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-success btn-lg w-100">
+            <i class="bi bi-check-circle me-2"></i>Conferma e Salva Lotto ({{ ottimizzato.pezzi_tot }} pz · {{ ottimizzato.sat_pct }}% saturazione)
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body d-flex flex-column gap-2">
+        <a href="{{ url_for('carico_pdf') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Carica altro PDF
+        </a>
+        <button class="btn btn-outline-primary" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Stampa Piano Carico
+        </button>
+        {% if parsed.errori %}
+        <div class="alert alert-warning py-2 mb-0">
+          <strong>Avvisi parsing:</strong><br>
+          {% for e in parsed.errori %}<small class="d-block">{{ e }}</small>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateDropZone(input) {
+  const dz = document.getElementById('dropZone');
+  const dt = document.getElementById('dropText');
+  if (input.files.length > 0) {
+    dt.innerHTML = '<i class="bi bi-check-circle text-success me-2"></i><strong>' + input.files[0].name + '</strong>';
+    dz.style.borderColor = '#1c6e2e';
+    dz.style.background = 'linear-gradient(135deg,#e8f5e9,#f0faf2)';
+  }
+}
+const dz = document.getElementById('dropZone');
+if (dz) {
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) { document.getElementById('filePdf').files = e.dataTransfer.files; updateDropZone(document.getElementById('filePdf')); }
+  });
+}
+const form = document.getElementById('uploadForm');
+if (form) form.addEventListener('submit', () => {
+  const btn = document.getElementById('btnParse');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi in corso...';
+});
+</script>
+{% endblock %}
