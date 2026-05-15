@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Configurazione – ENOROSSI{% endblock %}
+{% block page_title %}<i class="bi bi-gear me-2"></i>Configurazione Impianto{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-3">
+  <div class="col-lg-10">
+    <form method="post">
+      <div class="row g-4">
+
+        <!-- Impianto -->
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header"><i class="bi bi-building-gear"></i> Parametri Impianto</div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label class="form-label">Lunghezza Tunnel (m)</label>
+                <input name="lunghezza" type="number" step="0.5" class="form-control"
+                       value="{{ config.lunghezza_tunnel_m }}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Velocità Catena default (m/min)</label>
+                <input name="velocita_default" type="number" step="0.1" class="form-control"
+                       value="{{ config.velocita_default }}">
+              </div>
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label">Velocità Min (m/min)</label>
+                  <input name="velocita_min" type="number" step="0.1" class="form-control"
+                         value="{{ config.velocita_min }}">
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Velocità Max (m/min)</label>
+                  <input name="velocita_max" type="number" step="0.1" class="form-control"
+                         value="{{ config.velocita_max }}">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Capacità termica max (kg)</label>
+                <input name="capacita_termica" type="number" step="10" class="form-control"
+                       value="{{ config.capacita_termica_max_kg }}">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Costi -->
+        <div class="col-md-6">
+          <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-cash-stack"></i> Costi Operativi</div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Costo orario esercizio (€/h)
+                    <small class="text-muted">(energia+ammortamento)</small></label>
+                  <input name="costo_orario" type="number" step="1" class="form-control"
+                         value="{{ config.costo_orario_esercizio }}">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Costo manodopera (€/h)</label>
+                  <input name="costo_manodopera" type="number" step="0.5" class="form-control"
+                         value="{{ config.costo_manodopera_ora }}">
+                </div>
+                <!-- v3.2: nuovi campi costo -->
+                <div class="col-md-6">
+                  <label class="form-label">Costo centro di costo (€/h)
+                    <small class="text-muted d-block">Standard: 350€/h — include ammortamento + energia + overhead</small>
+                  </label>
+                  <input type="number" name="costo_centro_orario" step="1" 
+                         value="{{ config.costo_centro_orario or 350 }}" class="form-control">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Costo energia (€/kWh)</label>
+                  <input type="number" name="costo_kwh" step="0.01" 
+                         value="{{ config.costo_kwh or 0.12 }}" class="form-control">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-droplet"></i> Vernice / Polvere</div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label class="form-label">Peso specifico vernice (kg/L)</label>
+                <input name="peso_vernice" type="number" step="0.05" class="form-control"
+                       value="{{ config.peso_specifico_vernice }}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Efficienza applicazione (0-1)</label>
+                <input name="efficienza" type="number" step="0.01" min="0.1" max="1.0" class="form-control"
+                       value="{{ config.efficienza_applicazione }}">
+                <small class="text-muted">HVLP≈0.65, Elettrostatico≈0.90</small>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Spessore default (micron)</label>
+                <input name="spessore" type="number" step="5" class="form-control"
+                       value="{{ config.spessore_default_micron }}">
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><i class="bi bi-person-gear"></i> Tempi Aggancio</div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-4 mb-3">
+                  <label class="form-label">Classe 1 (min)</label>
+                  <input name="t_agg_1" type="number" step="0.1" class="form-control"
+                         value="{{ config.tempo_aggancio_min }}">
+                </div>
+                <div class="col-4 mb-3">
+                  <label class="form-label">Classe 2 (min)</label>
+                  <input name="t_agg_2" type="number" step="0.1" class="form-control"
+                         value="{{ config.tempo_aggancio_medio_min }}">
+                </div>
+                <div class="col-4 mb-3">
+                  <label class="form-label">Classe 3 (min)</label>
+                  <input name="t_agg_3" type="number" step="0.1" class="form-control"
+                         value="{{ config.tempo_aggancio_complesso_min }}">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- API NetPro -->
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header"><i class="bi bi-cloud-arrow-up"></i> API NetPro</div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">URL API NetPro</label>
+                  <input name="netpro_url" type="url" class="form-control"
+                         value="{{ config.netpro_api_url }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">API Key</label>
+                  <input name="netpro_key" type="text" class="form-control"
+                         value="{{ config.netpro_api_key }}">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-success btn-lg px-5">
+            <i class="bi bi-save me-1"></i> Salva Configurazione
+          </button>
+          <small class="text-muted ms-3">Le modifiche influenzano tutti i calcoli ABC e gli standard di tempo.</small>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
