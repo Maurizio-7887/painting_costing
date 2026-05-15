@@ -1810,13 +1810,6 @@ class ComponenteMacchina(db.Model):
     posizione_gancio= db.Column(db.Integer, default=0)
 
 
-# ── CREA TABELLE NUOVE se non esistono ──
-with app.app_context():
-    try:
-        db.create_all()
-    except Exception:
-        pass
-
 
 # ══════════════════════════════════════════════════════════════════
 # LOGICA OTTIMIZZATORE SLOT 3 METRI
