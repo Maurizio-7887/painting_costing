@@ -227,6 +227,53 @@ class KBRegola(db.Model):
     prodotto_ref    = db.relationship('Prodotto', backref='kb_regole', lazy=True)
 
 
+# MODELLI AGGIUNTIVI: Macchina da consegnare + Componenti
+# ══════════════════════════════════════════════════════════════════
+
+class MacchinaCommessa(db.Model):
+    """Una macchina completa da consegnare al cliente."""
+    __tablename__ = 'macchina_commessa'
+    id              = db.Column(db.Integer, primary_key=True)
+    commessa        = db.Column(db.String(50), unique=True, nullable=False)
+    num_serie       = db.Column(db.String(100))
+    nome_macchina   = db.Column(db.String(200))
+    cliente         = db.Column(db.String(200))
+    colore          = db.Column(db.String(80))
+    data_consegna   = db.Column(db.String(20))
+    priorita        = db.Column(db.Integer, default=5)
+    stato           = db.Column(db.String(30), default='da_verniciare')  # da_verniciare, in_corso, completato
+    doc_num         = db.Column(db.String(80))
+    slot_catena     = db.Column(db.String(20))
+    ganci_slot      = db.Column(db.Integer, default=7)
+    operatore       = db.Column(db.String(100))
+    note            = db.Column(db.Text)
+    # Piano ottimizzato salvato come JSON
+    piano_json      = db.Column(db.Text, default='{}')
+    creata_il       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    componenti      = db.relationship('ComponenteMacchina', backref='macchina', lazy=True, cascade='all,delete')
+
+
+class ComponenteMacchina(db.Model):
+    """Un singolo componente da verniciare per una macchina."""
+    __tablename__ = 'componente_macchina'
+    id              = db.Column(db.Integer, primary_key=True)
+    macchina_id     = db.Column(db.Integer, db.ForeignKey('macchina_commessa.id'), nullable=False)
+    codice          = db.Column(db.String(50))
+    descrizione     = db.Column(db.String(200))
+    L_mm            = db.Column(db.Float, default=0)  # lunghezza
+    A_mm            = db.Column(db.Float, default=0)  # altezza
+    P_mm            = db.Column(db.Float, default=0)  # profondità/larghezza
+    peso_unitario   = db.Column(db.Float, default=0)
+    ganci_pdf       = db.Column(db.Integer, default=1)  # come indicato nel PDF
+    qty             = db.Column(db.Integer, default=1)
+    note            = db.Column(db.String(200))
+    # Risultato ottimizzazione
+    ganci_assegnati = db.Column(db.Integer, default=0)
+    posizione_gancio= db.Column(db.Integer, default=0)
+
+
+
+
 # ── INIT DB ─────────────────────────────────────────────────────
 
 def get_config():
@@ -1709,6 +1756,56 @@ def fix_storico_lotti():
             f'Storico popolato. <a href="/storico">Vai allo storico</a>')
 
 
+
+
+# ══════════════════════════════════════════════════════════════════
+# ROUTE: NESTING PNG commessa
+# ══════════════════════════════════════════════════════════════════
+
+@app.route('/commessa/<int:mac_id>/nesting.png')
+def commessa_nesting(mac_id):
+    """Genera PNG nesting stile laser della catena di verniciatura."""
+    import tempfile, os
+    try:
+        from nesting_catena import alloca_pezzi, render_nesting_png, PezzoNesting
+    except ImportError:
+        return "Modulo nesting_catena.py non trovato", 500
+
+    mac = MacchinaCommessa.query.get_or_404(mac_id)
+    cfg = get_config()
+
+    pezzi = []
+    for c in mac.componenti:
+        pezzi.append(PezzoNesting(
+            cod=c.codice or '?',
+            nome=c.descrizione or c.codice or '?',
+            L_mm=float(c.L_mm or 300),
+            H_mm=float(c.A_mm or 300),
+            P_mm=float(c.P_mm or 80),
+            peso_kg=float(c.peso_unitario or 1),
+            ganci_req=int(c.ganci_pdf or 1),
+            qty=int(c.qty or 1),
+        ))
+
+    if not pezzi:
+        return "Nessun componente nella commessa", 400
+
+    n_ganci = mac.ganci_slot or 7
+    ganci = alloca_pezzi(pezzi, n_ganci)
+
+    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+        render_nesting_png(
+            ganci=ganci,
+            pezzi=pezzi,
+            out_path=f.name,
+            titolo=f'VERNICIATURA — {mac.commessa}',
+            commessa=f'{mac.commessa} · {mac.nome_macchina or ""}',
+            n_ganci=n_ganci,
+            passo_mm=cfg.passo_gancio_mm or 400,
+        )
+        return send_file(f.name, mimetype='image/png',
+                        download_name=f'nesting_{mac.commessa}.png')
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
@@ -1778,52 +1875,6 @@ def api_dashboard_stats():
         'commesse_urgenti': commesse_urgenti,
         'trend': trend,
     })
-
-
-# MODELLI AGGIUNTIVI: Macchina da consegnare + Componenti
-# ══════════════════════════════════════════════════════════════════
-
-class MacchinaCommessa(db.Model):
-    """Una macchina completa da consegnare al cliente."""
-    __tablename__ = 'macchina_commessa'
-    id              = db.Column(db.Integer, primary_key=True)
-    commessa        = db.Column(db.String(50), unique=True, nullable=False)
-    num_serie       = db.Column(db.String(100))
-    nome_macchina   = db.Column(db.String(200))
-    cliente         = db.Column(db.String(200))
-    colore          = db.Column(db.String(80))
-    data_consegna   = db.Column(db.String(20))
-    priorita        = db.Column(db.Integer, default=5)
-    stato           = db.Column(db.String(30), default='da_verniciare')  # da_verniciare, in_corso, completato
-    doc_num         = db.Column(db.String(80))
-    slot_catena     = db.Column(db.String(20))
-    ganci_slot      = db.Column(db.Integer, default=7)
-    operatore       = db.Column(db.String(100))
-    note            = db.Column(db.Text)
-    # Piano ottimizzato salvato come JSON
-    piano_json      = db.Column(db.Text, default='{}')
-    creata_il       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    componenti      = db.relationship('ComponenteMacchina', backref='macchina', lazy=True, cascade='all,delete')
-
-
-class ComponenteMacchina(db.Model):
-    """Un singolo componente da verniciare per una macchina."""
-    __tablename__ = 'componente_macchina'
-    id              = db.Column(db.Integer, primary_key=True)
-    macchina_id     = db.Column(db.Integer, db.ForeignKey('macchina_commessa.id'), nullable=False)
-    codice          = db.Column(db.String(50))
-    descrizione     = db.Column(db.String(200))
-    L_mm            = db.Column(db.Float, default=0)  # lunghezza
-    A_mm            = db.Column(db.Float, default=0)  # altezza
-    P_mm            = db.Column(db.Float, default=0)  # profondità/larghezza
-    peso_unitario   = db.Column(db.Float, default=0)
-    ganci_pdf       = db.Column(db.Integer, default=1)  # come indicato nel PDF
-    qty             = db.Column(db.Integer, default=1)
-    note            = db.Column(db.String(200))
-    # Risultato ottimizzazione
-    ganci_assegnati = db.Column(db.Integer, default=0)
-    posizione_gancio= db.Column(db.Integer, default=0)
-
 
 
 # ══════════════════════════════════════════════════════════════════
