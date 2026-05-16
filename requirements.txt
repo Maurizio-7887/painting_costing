@@ -10,3 +10,6 @@ scipy>=1.11.0
 pdfplumber>=0.10.0
 reportlab>=4.0.0
 whitenoise>=6.6.0
+matplotlib>=3.8.0
+shapely>=2.0.0
+mapbox-earcut>=1.0.0
