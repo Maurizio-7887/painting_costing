@@ -2153,13 +2153,3 @@ def api_commessa_piano(mac_id):
     return jsonify(piano)
 
 
-# ── SAFETY NET: crea tabelle mancanti all'avvio ──────────────────────────
-def _ensure_tables():
-    """Crea tutte le tabelle mancanti. db.create_all() è idempotente."""
-    try:
-        with app.app_context():
-            db.create_all()
-    except Exception as e:
-        app.logger.warning(f'_ensure_tables: {e}')
-
-_ensure_tables()
