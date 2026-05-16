@@ -1922,6 +1922,57 @@ def commessa_nesting(mac_id):
         return send_file(f.name, mimetype='image/png',
                         download_name=f'nesting_{mac.commessa}.png')
 
+
+# ══════════════════════════════════════════════════════════════════
+# ROUTE: Serve STL files per viewer 3D
+# ══════════════════════════════════════════════════════════════════
+
+@app.route('/static/stl/<int:asm_id>/<path:filename>')
+def serve_stl(asm_id, filename):
+    stl_dir = os.path.join(app.static_folder, 'stl', str(asm_id))
+    return send_file(os.path.join(stl_dir, filename), mimetype='model/stl')
+
+@app.route('/api/cad/stl_list/<int:asm_id>')
+def api_stl_list(asm_id):
+    """Lista STL disponibili per un assembly, con URL e codice ART."""
+    stl_dir = os.path.join(app.static_folder, 'stl', str(asm_id))
+    if not os.path.exists(stl_dir):
+        return jsonify({'files': [], 'disponibile': False})
+    records = BOMRecordCAD.query.filter_by(assembly_id=asm_id).all()
+    item_map = {i.codice_art: i for i in ItemMasterCAD.query.filter(
+        ItemMasterCAD.codice_art.in_([r.codice_art for r in records])).all()}
+    files = []
+    for rec in records:
+        safe = rec.codice_art.replace('-', '_')
+        stl_path = os.path.join(stl_dir, f"{safe}.stl")
+        if os.path.exists(stl_path):
+            item = item_map.get(rec.codice_art)
+            files.append({
+                'codice': rec.codice_art,
+                'nome':   rec.nome_part,
+                'url':    f"/static/stl/{asm_id}/{safe}.stl",
+                'qty':    rec.qty,
+                'peso_kg': item.peso_kg if item else 0,
+                'L_mm':   item.lunghezza_mm if item else 0,
+                'H_mm':   item.altezza_mm if item else 0,
+                'cog_z':  item.cog_z_mm if item else 0,
+            })
+    return jsonify({'files': files, 'disponibile': len(files) > 0})
+
+@app.route('/cad/ordine/<int:ordine_id>/viewer3d')
+def cad_viewer3d(ordine_id):
+    """Viewer 3D interattivo Three.js — pezzi appesi alla barra overhead."""
+    ordine = OrdineCAD.query.get_or_404(ordine_id)
+    asm = ordine.assembly_ref
+    nesting_data = {}
+    if ordine.nesting_json and ordine.nesting_json != '{}':
+        try:
+            nesting_data = json.loads(ordine.nesting_json)
+        except Exception:
+            pass
+    return render_template('cad_viewer3d.html',
+                           ordine=ordine, asm=asm, nesting=nesting_data)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
@@ -1953,9 +2004,10 @@ def cad_upload():
                 ) as tmp:
                     f.save(tmp.name)
                     parse_result = analizza_file_automatico(tmp.name)
-                os.unlink(tmp.name)
+                    tmp_path = tmp.name
 
                 if parse_result.errori and not parse_result.parti:
+                    os.unlink(tmp_path)
                     errore = " | ".join(parse_result.errori[:3])
                 else:
                     asm = BOMAssembly(
@@ -1974,6 +2026,35 @@ def cad_upload():
                         parse_result, db, ItemMasterCAD, BOMRecordCAD,
                         assembly_id=asm.id
                     )
+
+                    # ── Estrai e salva STL per viewer 3D ──────────────────
+                    import zipfile as _zf, shutil, re as _re
+                    stl_dir = os.path.join(app.static_folder, 'stl', str(asm.id))
+                    os.makedirs(stl_dir, exist_ok=True)
+                    ext = os.path.splitext(f.filename)[1].lower()
+                    if ext == '.zip':
+                        # ZIP: estrai ogni STL, rinominalo con codice ART
+                        with _zf.ZipFile(tmp_path, 'r') as zf:
+                            stl_files = sorted([n for n in zf.namelist() if n.lower().endswith('.stl')])
+                            for i, stl_rel in enumerate(stl_files):
+                                nome_raw = os.path.splitext(os.path.basename(stl_rel))[0]
+                                nome = _re.sub(r'^\d+_', '', nome_raw).replace('_',' ').strip()
+                                # Trova il record BOM corrispondente per nome
+                                rec = BOMRecordCAD.query.filter_by(
+                                    assembly_id=asm.id, nome_part=nome
+                                ).first()
+                                codice = rec.codice_art if rec else f"part_{i+1:02d}"
+                                safe = codice.replace('-','_')
+                                dest = os.path.join(stl_dir, f"{safe}.stl")
+                                with zf.open(stl_rel) as src, open(dest, 'wb') as dst:
+                                    dst.write(src.read())
+                    elif ext == '.stl':
+                        # STL singolo
+                        rec = BOMRecordCAD.query.filter_by(assembly_id=asm.id).first()
+                        codice = rec.codice_art if rec else 'part_01'
+                        safe = codice.replace('-','_')
+                        shutil.copy(tmp_path, os.path.join(stl_dir, f"{safe}.stl"))
+                    os.unlink(tmp_path)
 
                     flash(
                         f"✅ '{parse_result.assembly_nome}' analizzato: "
