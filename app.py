@@ -230,12 +230,21 @@ class KBRegola(db.Model):
 # ── INIT DB ─────────────────────────────────────────────────────
 
 def get_config():
-    cfg = Configurazione.query.first()
-    if not cfg:
-        cfg = Configurazione()
-        db.session.add(cfg)
-        db.session.commit()
-    return cfg
+    """Ritorna la configurazione impianto. Safety net: se le tabelle non esistono
+    ancora (es. primo avvio prima di flask db upgrade), restituisce valori default
+    in memoria senza crashare."""
+    try:
+        cfg = Configurazione.query.first()
+        if not cfg:
+            cfg = Configurazione()
+            db.session.add(cfg)
+            db.session.commit()
+        return cfg
+    except Exception:
+        db.session.rollback()
+        # Tabella non ancora creata (migration non ancora eseguita):
+        # restituisce oggetto in-memory con valori default — non viene salvato
+        return Configurazione()
 
 
 with app.app_context():
