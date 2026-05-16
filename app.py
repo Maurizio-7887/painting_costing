@@ -579,6 +579,9 @@ def ottimizzatore():
         request.form.getlist('quantita[]')
     )) if request.method == 'POST' else []
 
+    cfg.n_zone = IMPIANTO['n_zone']
+    cfg.ganci_zona = IMPIANTO['ganci_zona']
+
     return render_template('ottimizzatore.html', config=cfg, prodotti=prodotti,
                            result=result, selezione=selezione)
 
