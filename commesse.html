@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Macchine da Consegnare — ENOROSSI{% endblock %}
+{% block page_title %}Macchine da Consegnare{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+  <div style="font-size:.8rem;color:var(--muted)">
+    {{ macchine|length }} commesse
+    <span class="bdg bdg-red" style="margin-left:8px">{{ macchine|selectattr('priorita','le',2)|list|length }} urgenti</span>
+    <span class="bdg bdg-yel" style="margin-left:4px">{{ macchine|selectattr('stato','eq','da_verniciare')|list|length }} da verniciare</span>
+  </div>
+  <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-red"><i class="bi bi-file-earmark-pdf"></i>Nuova da PDF</a>
+</div>
+
+{% if not macchine %}
+<div class="card">
+  <div class="card-body" style="text-align:center;padding:60px">
+    <i class="bi bi-truck" style="font-size:3rem;color:var(--muted2);display:block;margin-bottom:16px"></i>
+    <div style="font-size:1rem;color:var(--muted);margin-bottom:8px">Nessuna commessa macchina</div>
+    <div style="font-size:.8rem;color:var(--muted2);margin-bottom:20px">Carica il PDF NetPro per aggiungere una macchina da verniciare</div>
+    <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-red"><i class="bi bi-file-earmark-pdf"></i>Carica PDF Commessa</a>
+  </div>
+</div>
+{% else %}
+{% for mac in macchine %}
+<div style="margin-bottom:10px">
+  <div class="card" style="border-left:4px solid {% if mac.priorita and mac.priorita<=2 %}var(--red){% elif mac.priorita and mac.priorita==3 %}var(--yel){% else %}var(--bdr2){% endif %}">
+    <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <strong style="font-size:.92rem;color:var(--txt)">{{ mac.nome_macchina }}</strong>
+          <code style="font-size:.7rem">{{ mac.commessa }}</code>
+        </div>
+        <div style="font-size:.72rem;color:var(--muted)">
+          <i class="bi bi-person" style="margin-right:3px"></i>{{ mac.cliente }}
+          &nbsp;·&nbsp;<i class="bi bi-palette" style="margin-right:3px"></i>{{ mac.colore }}
+          &nbsp;·&nbsp;<i class="bi bi-calendar" style="margin-right:3px"></i>Consegna: <strong style="color:var(--txt)">{{ mac.data_consegna }}</strong>
+        </div>
+        <div style="font-size:.65rem;color:var(--muted2);margin-top:3px">{{ mac.componenti|length }} componenti · Slot {{ mac.slot_catena }}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="bdg {% if mac.stato=='completato' %}bdg-grn{% elif mac.stato=='in_corso' %}bdg-gray{% else %}bdg-yel{% endif %}">
+            {% if mac.stato=='completato' %}✓ Verniciata{% elif mac.stato=='in_corso' %}⚙ In corso{% else %}⏳ Da verniciare{% endif %}
+          </div>
+          {% if mac.priorita and mac.priorita<=3 %}<span class="bdg bdg-red">P{{ mac.priorita }}</span>{% endif %}
+        </div>
+        <div style="display:flex;gap:5px">
+          <a href="{{ url_for('commessa_detail', mac_id=mac.id) }}" class="btn-out" style="font-size:.68rem;padding:.28rem .65rem">
+            <i class="bi bi-eye"></i> Dettaglio
+          </a>
+          <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}" target="_blank" class="btn-grn" style="font-size:.68rem;padding:.28rem .65rem">
+            <i class="bi bi-grid-3x3-gap"></i> Nesting 2D
+          </a>
+          <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}" class="btn-out" style="font-size:.68rem;padding:.28rem .65rem" download="nesting_{{ mac.commessa }}.png">
+            <i class="bi bi-download"></i> PNG
+          </a>
+        </div>
+        <div style="font-size:.6rem;color:var(--muted2)">{{ mac.num_serie }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}
