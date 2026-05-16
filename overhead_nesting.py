@@ -380,14 +380,12 @@ def ottimizza_nesting_overhead(
         n_req = max(1, parte.n_ganci_req)
         allocata = False
 
-        # Cerca blocco di n_req ganci consecutivi con spazio
+        # ── Candidati: tutti i blocchi validi (n_req ganci consecutivi) ──
+        candidati = []
         for start_i in range(len(ganci) - n_req + 1):
             blocco = ganci[start_i:start_i + n_req]
-
-            # z proposta = massimo z_occupata nel blocco (parti già presenti)
             z_proposta = max(g.z_occupata_mm for g in blocco) + cfg.gap_verticale_mm
 
-            # Controlla collisione su tutti i ganci del blocco
             collisione = False
             for g in blocco:
                 coll, msg = check_collision_aabb(g, parte, z_proposta, cfg)
@@ -397,22 +395,32 @@ def ottimizza_nesting_overhead(
                     break
 
             if not collisione:
-                # Allocazione
-                peso_per_gancio = parte.peso_kg / n_req
-                z_nuova = z_proposta + parte.h_effettiva_mm + cfg.gap_verticale_mm
-                for g in blocco:
-                    g.peso_tot_kg += peso_per_gancio
-                    g.z_occupata_mm = z_nuova
-                    g.libero = False
-                    g.parti.append(parte)
+                # Score = preferisci blocchi con peso basso E z bassa (bilancia)
+                peso_max_blocco = max(g.peso_tot_kg for g in blocco)
+                z_max_blocco    = max(g.z_occupata_mm for g in blocco)
+                # Score basso = preferito (peso bilanciato + spazio verticale)
+                score = peso_max_blocco * 0.7 + z_max_blocco * 0.001
+                candidati.append((score, start_i, blocco, z_proposta))
 
-                parte.gancio_start_idx = start_i
-                parte.gancio_x_mm = blocco[0].x_mm
-                parte.z_offset_mm = round(z_proposta, 1)
-                parte.allocato = True
-                allocate.append(parte)
-                allocata = True
-                break
+        if candidati:
+            # Scegli il blocco con score minimo (più bilanciato)
+            candidati.sort(key=lambda x: x[0])
+            _, start_i, blocco, z_proposta = candidati[0]
+
+            peso_per_gancio = parte.peso_kg / n_req
+            z_nuova = z_proposta + parte.h_effettiva_mm + cfg.gap_verticale_mm
+            for g in blocco:
+                g.peso_tot_kg  += peso_per_gancio
+                g.z_occupata_mm = z_nuova
+                g.libero = False
+                g.parti.append(parte)
+
+            parte.gancio_start_idx = start_i
+            parte.gancio_x_mm      = blocco[0].x_mm
+            parte.z_offset_mm      = round(z_proposta, 1)
+            parte.allocato         = True
+            allocate.append(parte)
+            allocata = True
 
         if not allocata:
             if not parte.motivo_fallimento:
