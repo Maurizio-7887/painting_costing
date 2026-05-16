@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Nuova Commessa — ENOROSSI{% endblock %}
+{% block page_title %}Nuova Commessa da PDF NetPro{% endblock %}
+{% block content %}
+<style>
+.dz{border:2px dashed var(--bdr2);border-radius:12px;background:rgba(255,255,255,.02);min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;position:relative}
+.dz:hover,.dz.over{border-color:var(--red);background:rgba(200,16,46,.04)}
+.dz input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.slot-rail{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.slot-rail::-webkit-scrollbar{height:3px}
+.slot-rail::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+.ghook{width:82px;flex-shrink:0;border-radius:8px;border:1.5px solid var(--bdr);padding:7px 5px;min-height:130px;display:flex;flex-direction:column;background:var(--bg3)}
+.ghook.occ{border-color:var(--grn);background:rgba(28,110,46,.06)}
+.g-num{font-size:.62rem;font-weight:700;color:var(--muted2);text-align:center;margin-bottom:2px}
+.g-pos{font-size:.54rem;color:var(--muted2);text-align:center;margin-bottom:5px}
+.g-hook-sym{width:2px;height:14px;background:#333;margin:0 auto 5px;position:relative}
+.g-hook-sym::before{content:'';position:absolute;top:-5px;left:-4px;width:10px;height:6px;border:1.5px solid #333;border-bottom:none;border-radius:2px 2px 0 0}
+.pchip{border-radius:4px;padding:3px 4px;margin-bottom:2px;font-size:.56rem;font-weight:700;line-height:1.25;word-break:break-all}
+.pchip.pp{background:var(--grn);color:#fff}
+.pchip.ps{background:rgba(28,110,46,.15);color:var(--grn-h);border:1px solid rgba(28,110,46,.3)}
+.g-wt{font-size:.55rem;color:var(--muted);text-align:center;margin-top:auto;padding-top:4px;border-top:1px solid var(--bdr)}
+.sat-bar{height:16px;border-radius:8px;background:rgba(255,255,255,.05);overflow:hidden}
+.sat-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:.65rem;font-weight:700;color:#fff;transition:width 1s ease}
+</style>
+
+{% if not parsed %}
+<!-- UPLOAD -->
+<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px">
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-file-earmark-pdf" style="margin-right:6px;color:var(--red)"></i>Carica PDF Commessa NetPro</div>
+    <div class="card-body">
+      <form method="POST" enctype="multipart/form-data" id="upForm">
+        <input type="hidden" name="action" value="parse">
+        <div class="dz" id="dz">
+          <input type="file" name="file_pdf" id="fp" accept=".pdf" onchange="dzUpd(this)">
+          <i class="bi bi-file-earmark-pdf" style="font-size:2.4rem;color:var(--red);margin-bottom:10px"></i>
+          <div id="dzTxt" style="font-weight:600;color:var(--txt);margin-bottom:4px">Trascina il PDF o clicca</div>
+          <div style="font-size:.72rem;color:var(--muted)">NetPro® – Ordine di Verniciatura Componenti</div>
+        </div>
+        <button type="submit" class="btn-red" id="btnP" style="width:100%;justify-content:center;margin-top:12px;padding:.65rem">
+          <i class="bi bi-magic"></i>Leggi PDF e Ottimizza Slot 3m
+        </button>
+      </form>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-info-circle" style="margin-right:6px"></i>Come funziona</div>
+    <div class="card-body">
+      {% for n,t,d in [('1','Carica il PDF NetPro','Contiene commessa, cliente, componenti con dimensioni e ganci'),('2','Il sistema ottimizza','Bin-packing in 3 metri di catena per macchina — ogni gancio riempito al massimo'),('3','Piano gancio per gancio','Vedi esattamente cosa appendere su ogni gancio del blocco'),('4','Salva e traccia','La commessa resta in DB fino alla consegna al cliente')] %}
+      <div style="display:flex;gap:12px;margin-bottom:14px">
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0">{{ n }}</div>
+        <div><strong style="font-size:.82rem">{{ t }}</strong><div style="font-size:.7rem;color:var(--muted);margin-top:2px">{{ d }}</div></div>
+      </div>
+      {% endfor %}
+      <div class="alert alert-ok" style="margin-top:4px;font-size:.72rem">
+        <i class="bi bi-rulers" style="margin-right:5px"></i>Slot macchina: {{ ganci_slot_default }} ganci × 400mm = {{ (ganci_slot_default * 0.4)|round(1) }}m di catena
+      </div>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- RISULTATO PARSING -->
+<div class="card" style="margin-bottom:14px;border-left:4px solid {% if parsed.priorita and parsed.priorita|int<=2 %}var(--red){% else %}var(--grn){% endif %}">
+  <div class="card-body" style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:1rem;font-weight:700;color:var(--txt);margin-bottom:4px">{{ parsed.nome_macchina }}</div>
+      <div style="font-size:.72rem;color:var(--muted)">
+        Commessa: <strong>{{ parsed.commessa }}</strong> · Serie: <code>{{ parsed.num_serie }}</code> · Cliente: <strong>{{ parsed.cliente }}</strong>
+      </div>
+      <div style="font-size:.7rem;color:var(--muted);margin-top:2px">
+        Colore: {{ parsed.colore }} · Consegna: <strong style="color:var(--txt)">{{ parsed.data_consegna }}</strong> · Slot: {{ parsed.slot_catena }}
+      </div>
+    </div>
+    <span class="bdg {% if parsed.priorita and parsed.priorita|int<=2 %}bdg-red{% elif parsed.priorita and parsed.priorita|int<=3 %}bdg-yel{% else %}bdg-gray{% endif %}">
+      Priorità {{ parsed.priorita }}
+    </span>
+  </div>
+</div>
+
+{% if piano %}
+<!-- KPI SLOT -->
+{% set sat=piano.sat_pct %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+  <div class="kpi" style="border-bottom-color:{% if sat>=90 %}var(--grn){% elif sat>=70 %}var(--yel){% else %}var(--red){% endif %}">
+    <div class="kpi-num {% if sat>=90 %}style='color:var(--grn-h)'{% elif sat>=70 %}style='color:var(--yel)'{% else %}style='color:var(--red)'{% endif %}">{{ sat }}%</div>
+    <div class="kpi-lbl">Saturazione slot</div>
+  </div>
+  <div class="kpi" style="border-bottom-color:var(--red)">
+    <div class="kpi-num" style="color:var(--red)">{{ piano.ganci_usati }}/{{ piano.ganci_tot }}</div>
+    <div class="kpi-lbl">Ganci occupati</div>
+  </div>
+  <div class="kpi" style="border-bottom-color:var(--grn)">
+    <div class="kpi-num" style="color:var(--grn-h)">{{ piano.pezzi_tot }}</div>
+    <div class="kpi-lbl">Pezzi allocati</div>
+  </div>
+  <div class="kpi" style="border-bottom-color:#7c3aed">
+    <div class="kpi-num" style="color:#a78bfa">{{ piano.peso_tot }} kg</div>
+    <div class="kpi-lbl">{{ piano.lunghezza_m }}m occupati</div>
+  </div>
+</div>
+
+<!-- BARRA SAT -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-body" style="padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong style="font-size:.82rem">Slot catena: {{ piano.lunghezza_m }}m / {{ (piano.ganci_tot*0.4)|round(1) }}m</strong>
+      <span class="bdg {% if sat>=90 %}bdg-grn{% elif sat>=70 %}bdg-yel{% else %}bdg-red{% endif %}">{{ sat }}%</span>
+    </div>
+    <div class="sat-bar">
+      <div class="sat-fill" style="width:{{ sat }}%;background:{% if sat>=90 %}var(--grn){% elif sat>=70 %}var(--yel){% else %}var(--red){% endif %}">
+        {{ piano.ganci_usati }}g / {{ piano.lunghezza_m }}m
+      </div>
+    </div>
+    {% if piano.non_allocati %}
+    <div class="alert alert-warn" style="margin-top:10px;margin-bottom:0;font-size:.75rem">
+      <i class="bi bi-exclamation-triangle"></i> {{ piano.non_allocati|length }} componenti non allocati — slot pieno. Secondo passaggio necessario.
+    </div>
+    {% else %}
+    <div class="alert alert-ok" style="margin-top:10px;margin-bottom:0;font-size:.75rem">
+      <i class="bi bi-check-circle"></i> Tutti i componenti entrano nello slot!
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- VISUALIZZATORE SLOT -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-hdr"><i class="bi bi-grid" style="margin-right:6px"></i>Piano gancio per gancio — {{ piano.ganci_tot }} ganci × 400mm</div>
+  <div class="card-body">
+    <div class="slot-rail">
+      {% for g in piano.ganci %}
+      <div class="ghook {{ 'occ' if g.pezzi else '' }}">
+        <div class="g-num">G{{ g.numero }}</div>
+        <div class="g-pos">{{ g.posizione_m }}m</div>
+        <div class="g-hook-sym"></div>
+        {% for p in g.pezzi %}
+        <div class="pchip {{ 'pp' if p.principale else 'ps' }}" title="{{ p.desc }} — {{ p.peso|round(1) }}kg">
+          {{ p.codice.split('-')[-1] if '-' in p.codice else p.codice[:8] }}
+          <span style="display:block;font-weight:400;opacity:.7">{{ p.peso|round(1) }}kg</span>
+        </div>
+        {% endfor %}
+        {% if g.pezzi %}<div class="g-wt">{{ g.peso|round(1) }}kg</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:16px;margin-top:10px;font-size:.65rem;color:var(--muted)">
+      <span><span style="display:inline-block;width:10px;height:8px;background:var(--grn);border-radius:2px;margin-right:4px"></span>Pezzo principale</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(28,110,46,.15);border:1px solid rgba(28,110,46,.3);border-radius:2px;margin-right:4px"></span>Pezzo secondario</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:var(--bg3);border:1px solid var(--bdr);border-radius:2px;margin-right:4px"></span>Vuoto</span>
+    </div>
+  </div>
+</div>
+
+<!-- TABELLA COMPONENTI -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-hdr"><i class="bi bi-list-ul" style="margin-right:6px"></i>Componenti da verniciare</div>
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>Codice</th><th>Descrizione</th><th>L×A×P (mm)</th><th>Peso/pz</th><th>Ganci</th><th>Qtà</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for c in parsed.componenti %}
+      <tr>
+        <td><strong>{{ c.codice }}</strong></td>
+        <td>{{ c.descrizione }}</td>
+        <td style="font-size:.72rem;color:var(--muted)">{{ c.L_mm|int }}×{{ c.A_mm|int }}×{{ c.P_mm|int }}</td>
+        <td>{{ c.peso }} kg</td>
+        <td><span class="bdg bdg-gray">{{ c.ganci_pdf }}g</span></td>
+        <td><strong>{{ c.qty }}</strong></td>
+        <td style="font-size:.7rem;color:var(--muted)">{{ c.note }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- NESTING 2D ANTEPRIMA -->
+<div class="card" style="margin-bottom:14px;border-top:2px solid var(--grn)">
+  <div class="card-hdr" style="background:#050505;color:var(--grn-h);display:flex;justify-content:space-between;align-items:center">
+    <span><i class="bi bi-grid-3x3-gap" style="margin-right:6px"></i>Nesting 2D — Silhouette pezzi in scala (anteprima)</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn-grn" style="font-size:.68rem;padding:.25rem .75rem" onclick="scaricaNestingPNG()">
+        <i class="bi bi-download"></i> Scarica PNG
+      </button>
+      <button class="btn-out" style="font-size:.68rem;padding:.25rem .75rem" onclick="apriNestingFullscreen()">
+        <i class="bi bi-arrows-fullscreen"></i> Pieno schermo
+      </button>
+    </div>
+  </div>
+  <div class="card-body" style="background:#080808;padding:12px;border-radius:0 0 10px 10px">
+    <canvas id="nesting-canvas" style="width:100%;border-radius:6px;display:block"></canvas>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:.65rem;color:var(--muted);flex-wrap:wrap">
+      <span><span style="display:inline-block;width:10px;height:8px;background:var(--grn);border-radius:2px;margin-right:4px"></span>Pezzo principale</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(28,110,46,.25);border:1px solid rgba(28,110,46,.4);border-radius:2px;margin-right:4px"></span>Pezzo secondario</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:#1a1a1a;border:1px solid #333;border-radius:2px;margin-right:4px"></span>Gancio vuoto</span>
+      <span style="margin-left:auto;color:var(--muted2)">Ogni colonna = 1 gancio × 400mm — scala proporzionale</span>
+    </div>
+  </div>
+</div>
+
+<!-- SALVA -->
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-floppy" style="margin-right:6px"></i>Salva commessa in database</div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="action" value="salva">
+        <input type="hidden" name="commessa" value="{{ parsed.commessa }}">
+        <input type="hidden" name="num_serie" value="{{ parsed.num_serie }}">
+        <input type="hidden" name="nome_macchina" value="{{ parsed.nome_macchina }}">
+        <input type="hidden" name="cliente" value="{{ parsed.cliente }}">
+        <input type="hidden" name="colore" value="{{ parsed.colore }}">
+        <input type="hidden" name="data_consegna" value="{{ parsed.data_consegna }}">
+        <input type="hidden" name="priorita" value="{{ parsed.priorita or 5 }}">
+        <input type="hidden" name="doc_num" value="{{ parsed.doc_num }}">
+        <input type="hidden" name="slot_catena" value="{{ parsed.slot_catena }}">
+        <input type="hidden" name="ganci_slot" value="{{ parsed.ganci_slot }}">
+        <input type="hidden" name="operatore" value="{{ parsed.operatore }}">
+        <input type="hidden" name="componenti_json" value='{{ parsed.componenti | tojson | e }}'>
+        <input type="hidden" name="piano_json" value='{{ piano | tojson | e }}'>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div><label class="form-label">Operatore</label><input type="text" class="form-control" value="{{ parsed.operatore }}" readonly></div>
+          <div><label class="form-label">Data produzione</label><input type="text" class="form-control" value="{{ parsed.data }}" readonly></div>
+        </div>
+        <button type="submit" class="btn-grn" style="width:100%;justify-content:center;padding:.65rem">
+          <i class="bi bi-check-circle"></i>Salva — {{ parsed.commessa }} · {{ piano.pezzi_tot }} pz · {{ piano.sat_pct }}% saturazione
+        </button>
+      </form>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+      <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-out" style="justify-content:center"><i class="bi bi-arrow-left"></i>Carica altro PDF</a>
+      <button class="btn-grn" style="justify-content:center" onclick="document.getElementById('nesting-canvas').scrollIntoView({behavior:'smooth'})"><i class="bi bi-grid-3x3-gap"></i>Vista Nesting 2D</button>
+      <button class="btn-out" style="justify-content:center" onclick="scaricaNestingPNG()"><i class="bi bi-download"></i>Scarica Nesting PNG</button>
+      <button class="btn-out" style="justify-content:center" onclick="window.print()"><i class="bi bi-printer"></i>Stampa piano</button>
+      {% if parsed.errori %}
+      <div class="alert alert-warn" style="font-size:.72rem">
+        <strong>Avvisi parsing:</strong>
+        {% for e in parsed.errori %}<div>{{ e }}</div>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+function dzUpd(i){if(i.files.length){document.getElementById('dzTxt').textContent=i.files[0].name;document.getElementById('dz').style.borderColor='var(--red)';}}
+const dz=document.getElementById('dz');
+if(dz){
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f){document.getElementById('fp').files=e.dataTransfer.files;dzUpd(document.getElementById('fp'));}});
+}
+const upForm=document.getElementById('upForm');
+if(upForm)upForm.addEventListener('submit',()=>{const b=document.getElementById('btnP');b.disabled=true;b.innerHTML='<i class="bi bi-hourglass-split"></i>Analisi PDF...';});
+
+// ── NESTING 2D CANVAS RENDERER ──────────────────────────────────────────────
+(function(){
+  const canvas=document.getElementById('nesting-canvas');
+  if(!canvas) return;
+
+  // Dati piano passati da Jinja2
+  const piano = {{ piano | tojson if piano else 'null' }};
+  if(!piano || !piano.ganci) return;
+
+  const ganci = piano.ganci;
+  const N = ganci.length;
+  const HOOK_W_PX = 90;        // larghezza per gancio
+  const HEADER_H  = 28;        // altezza header gancio
+  const MAX_PIECE_H = 140;     // altezza max area pezzi
+  const FOOTER_H  = 22;        // peso totale
+  const PAD = 4;
+  const TOTAL_W = N * HOOK_W_PX + (N+1) * PAD;
+  const TOTAL_H = HEADER_H + MAX_PIECE_H + FOOTER_H + PAD*3;
+
+  const DPR = window.devicePixelRatio || 1;
+  canvas.width  = TOTAL_W * DPR;
+  canvas.height = TOTAL_H * DPR;
+  canvas.style.height = TOTAL_H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  // Sfondo
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, TOTAL_W, TOTAL_H);
+
+  // Colori pezzi
+  const COL_MAIN  = '#1c6e2e';
+  const COL_SEC   = 'rgba(28,110,46,0.18)';
+  const COL_SEC_B = 'rgba(28,110,46,0.45)';
+  const COL_EMPTY = '#141414';
+  const COL_BDR   = '#2a2a2a';
+  const COL_TXT   = '#e0e0e0';
+  const COL_MUT   = '#666';
+  const COL_HDR   = '#1B5E20';
+
+  // Peso massimo per normalizzare altezze
+  const maxW = Math.max(...ganci.map(g=>g.peso||0), 1);
+
+  ganci.forEach((g, i) => {
+    const x = PAD + i*(HOOK_W_PX + PAD);
+    const hasP = g.pezzi && g.pezzi.length > 0;
+
+    // ── Header gancio ──
+    ctx.fillStyle = hasP ? COL_HDR : '#1a1a1a';
+    roundRect(ctx, x, PAD, HOOK_W_PX, HEADER_H, 5);
+    ctx.fill();
+
+    ctx.fillStyle = hasP ? '#a5d6a7' : COL_MUT;
+    ctx.font = 'bold 9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('G' + g.numero, x + HOOK_W_PX/2, PAD + 11);
+
+    ctx.fillStyle = COL_MUT;
+    ctx.font = '8px monospace';
+    ctx.fillText(g.posizione_m + 'm', x + HOOK_W_PX/2, PAD + 22);
+
+    // ── Corpo gancio ──
+    const bodyY = PAD + HEADER_H + 2;
+    ctx.fillStyle = hasP ? 'rgba(28,110,46,0.04)' : COL_EMPTY;
+    ctx.strokeStyle = hasP ? 'rgba(28,110,46,0.3)' : COL_BDR;
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, bodyY, HOOK_W_PX, MAX_PIECE_H, 4);
+    ctx.fill(); ctx.stroke();
+
+    // Simbolo gancio
+    const hookX = x + HOOK_W_PX/2;
+    const hookY = bodyY + 10;
+    ctx.strokeStyle = hasP ? 'rgba(28,110,46,0.6)' : '#2a2a2a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(hookX, hookY);
+    ctx.lineTo(hookX, hookY + 12);
+    ctx.stroke();
+    // uncino
+    ctx.beginPath();
+    ctx.arc(hookX - 3, hookY - 2, 5, 0, Math.PI, true);
+    ctx.stroke();
+
+    // ── Pezzi ──
+    if(hasP){
+      const pieceAreaH = MAX_PIECE_H - 28;
+      const pieceH = Math.min(Math.floor(pieceAreaH / g.pezzi.length) - 2, 36);
+      const pieceW = HOOK_W_PX - 10;
+      let py = bodyY + 26;
+
+      g.pezzi.forEach(p => {
+        const isMain = p.principale;
+        // Altezza proporzionale al peso
+        const ph = Math.max(pieceH, 14);
+
+        ctx.fillStyle = isMain ? COL_MAIN : COL_SEC;
+        ctx.strokeStyle = isMain ? '#2e7d32' : COL_SEC_B;
+        ctx.lineWidth = 1;
+        roundRect(ctx, x+5, py, pieceW, ph, 3);
+        ctx.fill(); ctx.stroke();
+
+        // Label codice
+        const lbl = p.codice.includes('-') ? p.codice.split('-').pop() : p.codice.substring(0,7);
+        ctx.fillStyle = isMain ? '#e8f5e9' : '#a5d6a7';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(lbl, x + HOOK_W_PX/2, py + ph/2 - 1);
+
+        // Peso
+        ctx.fillStyle = isMain ? 'rgba(255,255,255,0.55)' : 'rgba(165,214,167,0.6)';
+        ctx.font = '7px monospace';
+        ctx.fillText(p.peso.toFixed(1)+'kg', x + HOOK_W_PX/2, py + ph/2 + 8);
+
+        py += ph + 2;
+      });
+    }
+
+    // ── Footer peso ──
+    const footY = bodyY + MAX_PIECE_H + 2;
+    if(hasP && g.peso > 0){
+      // barra peso proporzionale
+      const barW = Math.round((g.peso / maxW) * (HOOK_W_PX - 10));
+      ctx.fillStyle = 'rgba(28,110,46,0.35)';
+      roundRect(ctx, x+5, footY, barW, 10, 3);
+      ctx.fill();
+      ctx.fillStyle = '#a5d6a7';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(g.peso.toFixed(1)+'kg', x + HOOK_W_PX/2, footY + 9);
+    }
+  });
+
+  // ── Etichetta catena ──
+  ctx.fillStyle = COL_MUT;
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('◀── Catena verniciatura ' + (piano.lunghezza_m||'?') + 'm — ' + N + ' ganci × 400mm ──▶', PAD, TOTAL_H - 4);
+
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+    ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+    ctx.lineTo(x+r, y+h); ctx.arcTo(x, y+h, x, y+h-r, r);
+    ctx.lineTo(x, y+r); ctx.arcTo(x, y, x+r, y, r);
+    ctx.closePath();
+  }
+})();
+
+function scaricaNestingPNG(){
+  const c=document.getElementById('nesting-canvas');
+  if(!c) return;
+  const a=document.createElement('a');
+  a.download='nesting_{{ parsed.commessa if parsed else "piano" }}.png';
+  a.href=c.toDataURL('image/png');
+  a.click();
+}
+
+function apriNestingFullscreen(){
+  const c=document.getElementById('nesting-canvas');
+  if(!c) return;
+  const w=window.open('','_blank');
+  w.document.write('<html><body style="margin:0;background:#0a0a0a"><img src="'+c.toDataURL()+'\" style="width:100%;max-width:100%"><\/body><\/html>');
+  w.document.close();
+}
+</script>
+{% endblock %}
