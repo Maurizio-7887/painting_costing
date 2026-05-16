@@ -386,6 +386,23 @@ async function loadAll() {
 
       const mesh = makeMesh(pos, f.codice);
       mesh.scaling.setAll(SC);
+
+      // Centra la mesh sul suo bounding box locale
+      // così position.x/y/z corrisponde al centro geometrico del pezzo
+      mesh.bakeCurrentTransformIntoVertices();
+      const bbox = mesh.getBoundingInfo().boundingBox;
+      const cx = (bbox.maximumWorld.x + bbox.minimumWorld.x) / 2;
+      const cy = (bbox.maximumWorld.y + bbox.minimumWorld.y) / 2;
+      const cz = (bbox.maximumWorld.z + bbox.minimumWorld.z) / 2;
+      // Trasla i vertici per centrare sull'origine
+      const positions = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+      for (let vi = 0; vi < positions.length; vi += 3) {
+        positions[vi]   -= cx;
+        positions[vi+1] -= cy;
+        positions[vi+2] -= cz;
+      }
+      mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+
       mesh.parent = conveyorNode;
       mesh.castShadow = true;
       mesh.receiveShadows = true;
@@ -397,13 +414,27 @@ async function loadAll() {
       mat.roughness = 0.65;
 
       const p = findPos(f.codice);
+      // H_mm e L_mm dai metadati server (dimensioni reali in mm)
+      const hh = (f.H_mm||300) * SC;
+      const ll = (f.L_mm||300) * SC;
       if (p) {
         mat.albedoColor = hex3(PALETTE[fi % PALETTE.length]);
-        mesh.position.set(p.x*SC, -(p.z*SC + (f.H_mm||300)*SC*0.5), 0);
-        if (p.rot) mesh.rotation.z = p.rot * Math.PI/180;
+        // X: posizione gancio sulla barra
+        // Y: negativo = sotto la barra. z_offset = distanza gancio→top pezzo
+        //    centro pezzo = -(z_offset + H/2) 
+        mesh.position.x =  p.x * SC;
+        mesh.position.y = -(p.z * SC + hh * 0.5);
+        // Z: offset leggero per evitare z-fighting tra pezzi sullo stesso gancio
+        mesh.position.z =  (fi % 3 - 1) * 0.04;
+        if (p.rot) mesh.rotation.z = p.rot * Math.PI / 180;
       } else {
+        // Non allocato: esponi a lato in grigio
         mat.albedoColor = new BABYLON.Color3(0.18,0.18,0.20);
-        mesh.position.set(-1.5 + (fi%5)*0.45, -2, Math.floor(fi/5)*0.35);
+        mesh.position.set(
+          L_MAX*SC + 0.5 + (fi % 3) * (ll + 0.1),
+          -(1.0 + Math.floor(fi/3) * (hh + 0.1)),
+          0
+        );
       }
       mesh.material = mat;
 
