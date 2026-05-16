@@ -4,8 +4,99 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}ENOROSSI Paint Optimizer{% endblock %}</title>
+
+<!-- Font Inter da Google Fonts (mancava — causa principale del look "grezzo") -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+
+<!-- Bootstrap Icons -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-<link href="{{ url_for('static', filename='css/enorossi.css') }}" rel="stylesheet">
+
+<!-- Bootstrap 5.3 (locale, no CDN) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+
+<!-- Design system ENOROSSI — sovrascrive Bootstrap dove serve -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enorossi.css') }}">
+
+
+<!-- CSS critico inline: garantisce layout anche se il file esterno non carica -->
+<style>
+:root{--red:#c8102e;--grn:#1c6e2e;--grn-h:#2d9c47;--yel:#e8a020;--bg0:#0a0a0a;--bg1:#111;--bg2:#181818;--bdr:rgba(255,255,255,.07);--bdr2:rgba(255,255,255,.13);--txt:#e0e0e0;--muted:#666;--muted2:#333;--sw:228px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg0);color:var(--txt);font-family:'Inter',system-ui,sans-serif;font-size:.875rem;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+/* SIDEBAR */
+.sb{width:var(--sw);min-height:100vh;background:var(--bg1);border-right:1px solid var(--bdr);position:fixed;top:0;left:0;display:flex;flex-direction:column;z-index:200;transition:transform .25s ease}
+.sb-head{padding:16px 14px 14px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:11px;flex-shrink:0}
+.sb-logo{width:38px;height:38px;border-radius:50%;border:2.5px solid var(--red);background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo span{font-family:'Arial Black',Arial,sans-serif;font-size:19px;font-weight:900;color:var(--red);font-style:italic;line-height:1}
+.sb-name{font-family:'Arial Black',Arial,sans-serif;font-size:15px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.04em;line-height:1}
+.sb-name b{color:var(--red)}
+.sb-sub{font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.sb-nav{list-style:none;padding:8px 0;flex:1;overflow-y:auto}
+.sb-nav::-webkit-scrollbar{width:3px}
+.sb-nav::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+.sb-sec{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted2);padding:14px 14px 4px}
+.sb-nav li a{display:flex;align-items:center;gap:9px;padding:8px 14px;color:var(--muted);text-decoration:none;font-size:.78rem;font-weight:500;transition:all .15s;border-left:2px solid transparent}
+.sb-nav li a i{font-size:.9rem;flex-shrink:0}
+.sb-nav li a:hover{background:rgba(255,255,255,.04);color:var(--txt);border-left-color:var(--muted2)}
+.sb-nav li a.act{background:rgba(200,16,46,.10);color:#fff;border-left-color:var(--red);font-weight:600}
+.sb-nav li a.act i{color:var(--red)}
+.sb-foot{padding:10px 14px;border-top:1px solid var(--bdr);font-size:.58rem;color:var(--muted2);flex-shrink:0}
+/* LAYOUT */
+.main{margin-left:var(--sw);min-height:100vh;display:flex;flex-direction:column}
+/* TOPBAR */
+.topbar{height:50px;background:var(--bg1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.topbar-tog{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:4px;line-height:1;transition:color .15s;border-radius:4px}
+.topbar-tog:hover{color:var(--txt);background:rgba(255,255,255,.05)}
+.topbar-title{font-size:.92rem;font-weight:600;color:var(--txt);flex:1}
+.online{display:flex;align-items:center;gap:5px;font-size:.68rem;color:var(--grn-h);background:rgba(28,110,46,.10);border:1px solid rgba(28,110,46,.20);border-radius:20px;padding:3px 10px}
+.online-dot{width:6px;height:6px;border-radius:50%;background:var(--grn-h);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+/* CONTENT */
+.page{padding:20px 24px 40px}
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px}
+.card-hdr{background:rgba(255,255,255,.02);border-bottom:1px solid var(--bdr);padding:.6rem 1rem;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-radius:10px 10px 0 0}
+.card-body{padding:1rem}
+.btn-red,.btn-grn,.btn-out{border:none;border-radius:7px;font-family:'Inter',system-ui,sans-serif;font-weight:600;font-size:.82rem;padding:.45rem 1rem;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s;white-space:nowrap}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#e8395a;color:#fff}
+.btn-grn{background:var(--grn);color:#fff}.btn-grn:hover{background:var(--grn-h);color:#fff}
+.btn-out{background:transparent;color:var(--muted);border:1px solid var(--bdr2)}.btn-out:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.form-control,.form-select{background:var(--bg0);border:1px solid var(--bdr2);color:var(--txt);font-family:'Inter',system-ui,sans-serif;font-size:.85rem;border-radius:7px;padding:.4rem .75rem;width:100%;transition:border-color .15s,box-shadow .15s}
+.form-control:focus,.form-select:focus{background:var(--bg0);border-color:var(--red);color:var(--txt);outline:none;box-shadow:0 0 0 2px rgba(200,16,46,.15)}
+.form-select option{background:var(--bg1);color:var(--txt)}
+.form-label{color:var(--muted);font-size:.73rem;font-weight:500;margin-bottom:.3rem;display:block}
+.tbl{width:100%;border-collapse:collapse;font-size:.8rem;color:var(--txt)}
+.tbl th{padding:.5rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--bdr2);background:rgba(255,255,255,.02);text-align:left}
+.tbl td{padding:.52rem .75rem;border-bottom:1px solid var(--bdr);vertical-align:middle}
+.tbl tbody tr:hover td{background:rgba(255,255,255,.025)}
+.kpi{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;padding:18px 20px;border-bottom:3px solid;transition:transform .18s ease,box-shadow .18s ease;position:relative;overflow:hidden}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.kpi-num{font-family:'Arial Black',Arial,sans-serif;font-size:2rem;font-weight:900;line-height:1;letter-spacing:-.02em}
+.kpi-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+.kpi-ico{position:absolute;right:14px;top:14px;font-size:1.8rem;opacity:.06}
+.bdg{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.63rem;font-weight:700}
+.bdg-red{background:rgba(200,16,46,.18);color:#f08090;border:1px solid rgba(200,16,46,.25)}
+.bdg-yel{background:rgba(232,160,32,.14);color:var(--yel);border:1px solid rgba(232,160,32,.25)}
+.bdg-grn{background:rgba(28,110,46,.18);color:var(--grn-h);border:1px solid rgba(28,110,46,.25)}
+.bdg-gray{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--bdr2)}
+.s-hdr{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--muted2);display:flex;align-items:center;gap:10px;margin:4px 0 14px}
+.s-hdr::after{content:'';flex:1;height:1px;background:var(--bdr)}
+.alert{border-radius:8px;border-left:3px solid;padding:.65rem 1rem;font-size:.82rem;margin-bottom:1rem}
+.alert-ok{background:rgba(28,110,46,.10);border-color:var(--grn);color:#a0d0a8}
+.alert-warn{background:rgba(232,160,32,.08);border-color:var(--yel);color:#e0b060}
+.alert-err{background:rgba(200,16,46,.10);border-color:var(--red);color:#f09090}
+.alert-info{background:rgba(33,150,243,.08);border-color:#2196f3;color:#90caf9}
+.prog-wrap{height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+.prog-bar{height:100%;border-radius:4px;transition:width .8s ease}
+code{background:rgba(255,255,255,.07);color:#f0a0b0;padding:1px 5px;border-radius:3px;font-size:.8em}
+.d-flex{display:flex}.align-center{align-items:center}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.fw-bold{font-weight:700}.text-muted{color:var(--muted)}.mt-3{margin-top:.75rem}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+@media(max-width:768px){.sb{transform:translateX(-100%)}.sb.open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.5)}.main{margin-left:0}}
+</style>
+
+{% block head %}{% endblock %}
 </head>
 <body>
 
@@ -69,9 +160,45 @@
   <div class="page">{% block content %}{% endblock %}</div>
 </div>
 
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script>
+/* ENOROSSI Paint Optimizer v5 */
+(function(){
+  // Clock topbar
+  function tick(){
+    const el=document.getElementById('clock');
+    if(el){const n=new Date();el.textContent=n.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+  }
+  tick();setInterval(tick,1000);
+
+  // Sidebar toggle mobile
+  window.toggleSb=function(){document.getElementById('sb').classList.toggle('open');};
+
+  // Chart defaults (se Chart.js è caricato dalla pagina figlia)
+  if(typeof Chart!=='undefined'){
+    Chart.defaults.color='#555';
+    Chart.defaults.borderColor='rgba(255,255,255,.06)';
+  }
+
+  // Upload 3D
+  window.upload3D=async function(codice){
+    const fi=document.getElementById('file3d_'+codice);
+    const btn=document.getElementById('btn3d_'+codice);
+    const res=document.getElementById('result3d_'+codice);
+    if(!fi||!fi.files[0]){alert('Seleziona un file 3D.');return;}
+    btn.disabled=true;btn.textContent='Analisi...';
+    const fd=new FormData();fd.append('file_3d',fi.files[0]);fd.append('codice',codice);
+    try{
+      const r=await fetch('/api/analizza_3d',{method:'POST',body:fd});
+      const d=await r.json();
+      if(d.ok) res.innerHTML=`<div class="alert alert-ok mt-2">✅ ${d.lunghezza_mm}×${d.larghezza_mm}×${d.altezza_mm}mm · Sup: ${d.superficie_m2}m² · Peso: ${d.peso_kg}kg</div>`;
+      else res.innerHTML=`<div class="alert alert-warn mt-2">⚠️ ${d.error}</div>`;
+    }catch(e){res.innerHTML=`<div class="alert alert-err mt-2">❌ ${e}</div>`;}
+    btn.disabled=false;btn.textContent='Analizza';
+  };
+})();
+</script>
+<!-- Bootstrap 5.3 JS (locale) -->
+<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 {% block scripts %}{% endblock %}
-</body>
-</html>
 </body>
 </html>
