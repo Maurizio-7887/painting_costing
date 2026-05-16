@@ -1,621 +1,251 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — ENOROSSI Paint Optimizer{% endblock %}
-{% block page_title %}<i class="bi bi-speedometer2 me-2"></i>Dashboard{% endblock %}
-
+{% block title %}Dashboard — ENOROSSI{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 {% block content %}
 <style>
-/* ── SPLASH SCREEN ── */
-#splash{
-  position:fixed;inset:0;z-index:9999;
-  background:#0a0a0a;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .7s ease,visibility .7s ease;
-}
-#splash.hide{opacity:0;visibility:hidden;}
+/* SPLASH */
+#spl{position:fixed;inset:0;z-index:9999;background:#060606;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .65s,visibility .65s}
+#spl.gone{opacity:0;visibility:hidden;pointer-events:none}
+.spl-bg{position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&q=80') center/cover;opacity:.1}
+.spl-veil{position:absolute;inset:0;background:linear-gradient(145deg,#060606 0%,#100408 50%,#040c04 100%);opacity:.92}
+.spl-cnt{position:relative;z-index:2;text-align:center;max-width:700px;padding:32px}
+.spl-ring{width:90px;height:90px;border-radius:50%;border:3px solid var(--red);background:#fff;display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px;box-shadow:0 0 50px rgba(200,16,46,.3)}
+.spl-ring span{font-family:'Arial Black',Arial,sans-serif;font-size:44px;font-weight:900;color:var(--red);font-style:italic;line-height:1}
+.spl-brand{font-family:'Arial Black',Arial,sans-serif;font-size:3.4rem;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.05em;line-height:1}
+.spl-brand b{color:var(--red)}
+.spl-tagline{font-size:.72rem;color:#3a3a3a;letter-spacing:.28em;text-transform:uppercase;margin-top:5px}
+.spl-sep{width:50px;height:2px;background:var(--red);margin:26px auto 20px;opacity:.5}
+.spl-algo{font-family:'Arial Black',Arial,sans-serif;font-size:1.65rem;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.03em;line-height:1.2}
+.spl-algo b{color:var(--red);font-style:italic}
+.spl-tech{font-size:.6rem;color:#2a2a2a;letter-spacing:.18em;text-transform:uppercase;margin-top:10px}
+.spl-bar{width:200px;height:2px;background:rgba(255,255,255,.05);border-radius:1px;margin:30px auto 0;overflow:hidden}
+.spl-fill{height:100%;width:0;background:linear-gradient(90deg,var(--red),#e8395a);animation:splf 2.5s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes splf{to{width:100%}}
+.spl-ver{position:absolute;bottom:20px;font-size:.56rem;color:#222;letter-spacing:.12em;text-transform:uppercase}
 
-.splash-bg{
-  position:absolute;inset:0;
-  background:url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&q=80') center/cover no-repeat;
-  opacity:.18;
-}
-.splash-overlay{
-  position:absolute;inset:0;
-  background:linear-gradient(160deg,#0a0a0a 0%,#1a0a0a 40%,#0a1a0a 100%);
-  opacity:.82;
-}
+/* HERO */
+.hero{border-radius:14px;background:linear-gradient(135deg,#0e0606 0%,#160808 55%,#060e06 100%);border:1px solid rgba(200,16,46,.12);padding:22px 26px;margin-bottom:18px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;right:-60px;top:-60px;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(200,16,46,.07) 0%,transparent 70%)}
+.hero-logo{width:44px;height:44px;border-radius:50%;border:2px solid var(--red);background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hero-logo span{font-family:'Arial Black',Arial,sans-serif;font-size:21px;font-weight:900;color:var(--red);font-style:italic;line-height:1}
+.hero-title{font-family:'Arial Black',Arial,sans-serif;font-size:1.4rem;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.04em;line-height:1}
+.hero-title b{color:var(--red)}
+.hero-sub{font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:rgba(200,16,46,.5);margin-top:3px}
 
-.splash-content{
-  position:relative;z-index:2;
-  text-align:center;
-  padding:40px;
-  max-width:820px;
-}
-
-/* Logo ENOROSSI reale */
-.en-logo-wrap{margin-bottom:24px;}
-.en-logo-ring{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:100px;height:100px;border-radius:50%;
-  border:3px solid #c8102e;
-  background:radial-gradient(circle at 35% 35%,#fff 0%,#f0f0f0 40%,#d8d8d8 100%);
-  box-shadow:0 0 40px rgba(200,16,46,.4),0 0 80px rgba(200,16,46,.15);
-  margin-bottom:16px;
-}
-.en-logo-e{
-  font-family:'Arial Black',sans-serif;
-  font-size:48px;font-weight:900;
-  color:#c8102e;
-  font-style:italic;
-  line-height:1;
-}
-
-.en-brand-name{
-  font-family:'Arial Black','Impact',sans-serif;
-  font-size:3.8rem;font-weight:900;
-  color:#fff;
-  letter-spacing:.08em;
-  line-height:1;
-  text-transform:uppercase;
-}
-.en-brand-name span{color:#c8102e;}
-
-.en-brand-sub{
-  font-size:.85rem;color:#aaa;
-  letter-spacing:.35em;text-transform:uppercase;
-  margin-top:6px;
-}
-
-.algo-label{
-  margin:32px 0 8px;
-  display:inline-block;
-  font-size:.65rem;letter-spacing:.4em;text-transform:uppercase;
-  color:#c8102e;border-top:1px solid #c8102e40;
-  padding-top:12px;
-}
-
-.algo-title{
-  font-family:'Arial Black','Impact',sans-serif;
-  font-size:2rem;font-weight:900;
-  color:#fff;line-height:1.1;
-  text-transform:uppercase;
-  letter-spacing:.04em;
-}
-.algo-title .algo-accent{
-  color:#c8102e;
-  font-style:italic;
-}
-
-.algo-desc{
-  font-size:.88rem;color:#999;
-  margin-top:10px;letter-spacing:.04em;
-}
-
-/* Barra di caricamento */
-.splash-loader{
-  width:260px;height:3px;
-  background:#ffffff18;
-  border-radius:2px;
-  margin:36px auto 0;
-  overflow:hidden;
-}
-.splash-loader-bar{
-  height:100%;width:0%;
-  background:linear-gradient(90deg,#c8102e,#ff4060,#c8102e);
-  background-size:200% 100%;
-  border-radius:2px;
-  animation:loaderFill 2.2s cubic-bezier(.4,0,.2,1) forwards,
-             loaderShimmer 1s linear infinite;
-}
-@keyframes loaderFill{to{width:100%;}}
-@keyframes loaderShimmer{0%{background-position:0% 0;}100%{background-position:200% 0;}}
-
-.splash-version{
-  position:absolute;bottom:24px;
-  font-size:.65rem;color:#444;letter-spacing:.15em;text-transform:uppercase;
-}
-
-/* Particelle SVG decorative */
-.splash-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
-
-/* ── DASHBOARD PRINCIPALE ── */
-.en-hero{
-  border-radius:20px;
-  background:linear-gradient(135deg,#0d1a0d 0%,#1a0a0a 50%,#0d1a0d 100%);
-  border:1px solid rgba(200,16,46,.2);
-  padding:28px 32px;
-  position:relative;overflow:hidden;
-  margin-bottom:1.5rem;
-}
-.en-hero::before{
-  content:'';position:absolute;right:-80px;top:-80px;
-  width:320px;height:320px;border-radius:50%;
-  background:radial-gradient(circle,rgba(200,16,46,.12) 0%,transparent 70%);
-}
-.en-hero::after{
-  content:'';position:absolute;left:-60px;bottom:-60px;
-  width:240px;height:240px;border-radius:50%;
-  background:radial-gradient(circle,rgba(28,110,46,.1) 0%,transparent 70%);
-}
-.hero-logo-inline{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:52px;height:52px;border-radius:50%;
-  border:2px solid #c8102e;
-  background:#fff;
-  margin-right:16px;flex-shrink:0;
-}
-.hero-logo-inline span{
-  font-family:'Arial Black',sans-serif;font-size:24px;
-  font-weight:900;color:#c8102e;font-style:italic;
-}
-.hero-title{
-  font-family:'Arial Black',sans-serif;
-  font-size:1.8rem;font-weight:900;color:#fff;
-  text-transform:uppercase;letter-spacing:.04em;line-height:1;
-}
-.hero-title .red{color:#c8102e;}
-.hero-algo{
-  font-size:.68rem;letter-spacing:.3em;text-transform:uppercase;
-  color:#c8102e;margin-top:5px;
-}
-.live-dot{
-  width:8px;height:8px;border-radius:50%;background:#2d9c47;
-  display:inline-block;animation:pdot 1.8s infinite;
-}
-@keyframes pdot{0%,100%{opacity:1;}50%{opacity:.25;}}
-
-/* KPI cards */
-.kpi-card-en{
-  background:#0d1a10;
-  border:1px solid rgba(28,110,46,.25);
-  border-radius:14px;padding:18px 20px;
-  border-bottom:3px solid;
-  transition:transform .2s,border-color .2s;
-  position:relative;overflow:hidden;
-}
-.kpi-card-en:hover{transform:translateY(-3px);}
-.kpi-card-en .kpi-num{
-  font-family:'Arial Black',sans-serif;
-  font-size:2.2rem;font-weight:900;line-height:1;
-  letter-spacing:-.02em;
-}
-.kpi-card-en .kpi-lbl{
-  font-size:.65rem;color:#7a9a7e;
-  text-transform:uppercase;letter-spacing:.08em;margin-top:4px;
-}
-.kpi-card-en .kpi-ico{
-  position:absolute;right:14px;top:14px;
-  font-size:2rem;opacity:.12;
-}
-
-/* Tunnel visualizer */
-.tunnel-wrap{
-  background:#050d05;border-radius:14px;
-  border:1px solid rgba(28,110,46,.2);
-  padding:18px;
-}
-.tunnel-label{
-  font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;
-  color:#3a6a3e;margin-bottom:10px;
-  display:flex;justify-content:space-between;
-}
-.tunnel-track{
-  height:52px;
-  background:linear-gradient(90deg,#0a180a,#162816,#0a180a);
-  border-radius:8px;border:1px solid #1c3a1c;
-  position:relative;overflow:hidden;
-  display:flex;align-items:center;
-}
-.tunnel-chain{
-  display:flex;gap:5px;padding:0 10px;
-  position:absolute;
-  animation:chainMove 9s linear infinite;
-}
-@keyframes chainMove{from{left:-240px;}to{left:calc(100% + 20px);}}
-.hook{
-  width:10px;height:26px;
-  background:#e8a020;border-radius:2px;
-  flex-shrink:0;position:relative;
-}
-.hook::after{
-  content:'';position:absolute;top:-7px;left:50%;
-  transform:translateX(-50%);
-  width:2px;height:9px;background:#888;
-}
-.hook.vuoto{background:#1a2a1a;opacity:.4;}
-
-/* Macchine badges */
-.mac-status-card{
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.06);
-  background:#0d1a0d;
-  padding:12px 16px;
-  transition:border-color .2s;
-}
-.mac-status-card:hover{border-color:rgba(28,110,46,.4);}
-.mac-sat-track{height:6px;background:#0a150a;border-radius:3px;overflow:hidden;margin-top:8px;}
-.mac-sat-fill{height:100%;border-radius:3px;transition:width 1.4s ease;}
-
-/* Trend bars */
-.trend-wrap{display:flex;align-items:flex-end;gap:5px;height:72px;}
-.t-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
-.t-bar{border-radius:3px 3px 0 0;width:100%;min-height:3px;transition:height .9s ease;}
-.t-date{font-size:.55rem;color:#3a6a3e;text-align:center;}
-.t-val{font-size:.6rem;color:#2d9c47;font-weight:700;text-align:center;min-height:12px;}
-
-/* Quick actions */
-.qa-btn{
-  border-radius:12px;border:1px solid rgba(255,255,255,.07);
-  background:#0d1a0d;
-  display:flex;align-items:center;gap:10px;
-  padding:13px 16px;text-decoration:none;
-  color:#e8f0dc;transition:all .2s;font-size:.82rem;font-weight:600;
-}
-.qa-btn:hover{
-  border-color:rgba(28,110,46,.5);
-  background:#122012;color:#e8f0dc;
-}
-.qa-btn i{font-size:1.15rem;}
-
-/* Sezione header */
-.shdr{
-  font-size:.62rem;font-weight:700;text-transform:uppercase;
-  letter-spacing:.15em;color:#3a5a3e;
-  margin:4px 0 12px;display:flex;align-items:center;gap:8px;
-}
-.shdr::after{
-  content:'';flex:1;height:1px;
-  background:linear-gradient(90deg,rgba(28,110,46,.3),transparent);
-}
+/* CATENA */
+.tunnel-box{background:#050505;border-radius:10px;padding:14px;border:1px solid rgba(255,255,255,.04)}
+.chain-track{height:46px;background:linear-gradient(90deg,#080e08,#0e1e0e,#080e08);border-radius:6px;position:relative;overflow:hidden;border:1px solid #0a140a}
+.chain-inner{display:flex;gap:5px;padding:0 8px;position:absolute;animation:cm 9s linear infinite;align-items:center;height:100%}
+@keyframes cm{from{left:-220px}to{left:calc(100% + 20px)}}
+.hk{width:9px;height:22px;background:var(--yel);border-radius:2px;flex-shrink:0;position:relative}
+.hk::after{content:'';position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:2px;height:9px;background:#444}
+.hk.e{background:#0d1a0d;opacity:.4}
 </style>
 
-<!-- ═══════════════════════════════════════
-     SPLASH SCREEN DI AVVIAMENTO
-══════════════════════════════════════════ -->
-<div id="splash">
-  <div class="splash-bg"></div>
-  <div class="splash-overlay"></div>
-
-  <!-- Particelle decorative -->
-  <svg class="splash-particles" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
-    <circle cx="120" cy="80"  r="1.5" fill="#c8102e" opacity=".4"/>
-    <circle cx="340" cy="200" r="1"   fill="#fff" opacity=".2"/>
-    <circle cx="980" cy="120" r="2"   fill="#c8102e" opacity=".3"/>
-    <circle cx="1100" cy="400" r="1.5" fill="#1c6e2e" opacity=".4"/>
-    <circle cx="80"  cy="500" r="1"   fill="#fff" opacity=".15"/>
-    <circle cx="600" cy="50"  r="1"   fill="#c8102e" opacity=".2"/>
-    <circle cx="750" cy="600" r="2"   fill="#1c6e2e" opacity=".25"/>
-    <!-- linee sottili decorative -->
-    <line x1="0" y1="350" x2="1200" y2="350" stroke="#ffffff" stroke-width=".3" opacity=".04"/>
-    <line x1="600" y1="0" x2="600" y2="700" stroke="#ffffff" stroke-width=".3" opacity=".04"/>
-  </svg>
-
-  <div class="splash-content">
-    <!-- Logo -->
-    <div class="en-logo-wrap">
-      <div class="en-logo-ring">
-        <span class="en-logo-e">e</span>
-      </div>
-    </div>
-
-    <!-- Brand -->
-    <div class="en-brand-name">
-      <span>EN</span>OROSSI
-    </div>
-    <div class="en-brand-sub">Agricultural Machinery · Since 1961</div>
-
-    <!-- Algoritmo -->
-    <div class="algo-label">Sistema interno proprietario</div>
-    <div class="algo-title">
-      Algoritmo di<br>
-      <span class="algo-accent">Ottimizzazione</span><br>
-      Impianto Verniciatura
-    </div>
-    <div class="algo-desc">
-      Bin-packing · ABC Costing · Loop Tunnel Analytics · Commesse Macchine
-    </div>
-
-    <!-- Loader -->
-    <div class="splash-loader">
-      <div class="splash-loader-bar" id="splashBar"></div>
-    </div>
+<!-- SPLASH -->
+<div id="spl">
+  <div class="spl-bg"></div><div class="spl-veil"></div>
+  <div class="spl-cnt">
+    <div class="spl-ring"><span>e</span></div>
+    <div class="spl-brand">EN<b>O</b>ROSSI</div>
+    <div class="spl-tagline">Agricultural Machinery · Since 1961</div>
+    <div class="spl-sep"></div>
+    <div class="spl-algo">Algoritmo di<br><b>Ottimizzazione</b><br>Impianto Verniciatura</div>
+    <div class="spl-tech">Bin-Packing · ABC Costing · Loop Tunnel · Commesse</div>
+    <div class="spl-bar"><div class="spl-fill"></div></div>
   </div>
-
-  <div class="splash-version">v5.0 · Paint Optimizer · Sistema Riservato</div>
+  <div class="spl-ver">v5.0 · Sistema Riservato · ENOROSSI S.p.A.</div>
 </div>
 
-
-<!-- ═══════════════════════════════════════
-     DASHBOARD PRINCIPALE
-══════════════════════════════════════════ -->
-
-<!-- Hero -->
-<div class="en-hero">
-  <div class="row align-items-center" style="position:relative;z-index:1">
-    <div class="col-md-7">
-      <div class="d-flex align-items-center mb-2">
-        <div class="hero-logo-inline"><span>e</span></div>
-        <div>
-          <div class="hero-title">EN<span class="red">OROSSI</span> Paint</div>
-          <div class="hero-algo">Algoritmo di ottimizzazione impianto verniciatura</div>
-        </div>
+<!-- HERO -->
+<div class="hero">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;position:relative;z-index:1">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="hero-logo"><span>e</span></div>
+      <div>
+        <div class="hero-title">EN<b>O</b>ROSSI Paint</div>
+        <div class="hero-sub">Algoritmo di ottimizzazione impianto verniciatura</div>
+        <div id="lc" style="font-size:.65rem;color:var(--muted2);margin-top:3px"></div>
       </div>
-      <div id="liveClock" style="font-size:.75rem;color:#3a6a3e;margin-top:4px">—</div>
     </div>
-    <div class="col-md-5 text-md-end mt-3 mt-md-0">
-      <div class="d-flex gap-2 justify-content-md-end flex-wrap">
-        <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn fw-bold"
-           style="background:#c8102e;color:#fff;border:none;">
-          <i class="bi bi-file-earmark-pdf me-1"></i>Nuova Commessa
-        </a>
-        <a href="{{ url_for('ottimizzatore') }}" class="btn fw-bold"
-           style="background:#1c6e2e;color:#fff;border:none;">
-          <i class="bi bi-diagram-3 me-1"></i>Ottimizza
-        </a>
-      </div>
-      <div class="mt-2 text-end">
-        <span class="live-dot me-1"></span>
-        <small style="color:#3a6a3e;font-size:.7rem">Sistema online</small>
-      </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-red"><i class="bi bi-file-earmark-pdf"></i>Nuova Commessa</a>
+      <a href="{{ url_for('ottimizzatore') }}" class="btn-grn"><i class="bi bi-diagram-3"></i>Ottimizza</a>
     </div>
   </div>
 </div>
 
 <!-- KPI -->
-<div class="row g-3 mb-3">
-  <div class="col-6 col-md-3">
-    <div class="kpi-card-en" style="border-bottom-color:#1c6e2e">
-      <i class="bi bi-boxes kpi-ico" style="color:#1c6e2e"></i>
-      <div class="kpi-num text-success" id="kpi-pezzi">{{ kpi.pezzi_attesa }}</div>
-      <div class="kpi-lbl">Pezzi da verniciare</div>
-    </div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+  <div class="kpi" style="border-bottom-color:var(--grn)">
+    <i class="bi bi-boxes kpi-ico"></i>
+    <div class="kpi-num" style="color:var(--grn-h)" id="k1">{{ kpi.pezzi_attesa }}</div>
+    <div class="kpi-lbl">Pezzi da verniciare</div>
   </div>
-  <div class="col-6 col-md-3">
-    <div class="kpi-card-en" style="border-bottom-color:#c8102e">
-      <i class="bi bi-truck kpi-ico" style="color:#c8102e"></i>
-      <div class="kpi-num" style="color:#c8102e" id="kpi-commesse">—</div>
-      <div class="kpi-lbl">Commesse macchine</div>
-    </div>
+  <div class="kpi" style="border-bottom-color:var(--red)">
+    <i class="bi bi-truck kpi-ico"></i>
+    <div class="kpi-num" style="color:var(--red)" id="k2">—</div>
+    <div class="kpi-lbl">Commesse macchine</div>
   </div>
-  <div class="col-6 col-md-3">
-    <div class="kpi-card-en" style="border-bottom-color:#e8a020">
-      <i class="bi bi-clipboard-check kpi-ico" style="color:#e8a020"></i>
-      <div class="kpi-num text-warning" id="kpi-ordini">{{ kpi.n_lotti }}</div>
-      <div class="kpi-lbl">Ordini in attesa</div>
-    </div>
+  <div class="kpi" style="border-bottom-color:var(--yel)">
+    <i class="bi bi-clipboard-check kpi-ico"></i>
+    <div class="kpi-num" style="color:var(--yel)" id="k3">{{ kpi.n_lotti }}</div>
+    <div class="kpi-lbl">Ordini in attesa</div>
   </div>
-  <div class="col-6 col-md-3">
-    <div class="kpi-card-en" style="border-bottom-color:#7b1fa2">
-      <i class="bi bi-box-seam kpi-ico" style="color:#7b1fa2"></i>
-      <div class="kpi-num" style="color:#a855f7">{{ kpi.n_prodotti }}</div>
-      <div class="kpi-lbl">Prodotti catalogo</div>
-    </div>
+  <div class="kpi" style="border-bottom-color:#7c3aed">
+    <i class="bi bi-box-seam kpi-ico"></i>
+    <div class="kpi-num" style="color:#a78bfa">{{ kpi.n_prodotti }}</div>
+    <div class="kpi-lbl">Prodotti catalogo</div>
   </div>
 </div>
 
-<!-- Tunnel + Commesse urgenti -->
-<div class="row g-3 mb-3">
-  <div class="col-md-8">
-    <div class="tunnel-wrap">
-      <div class="tunnel-label">
-        <span><i class="bi bi-diagram-2 me-1"></i>Loop Tunnel — catena in movimento</span>
-        <span style="color:#1c6e2e">▶ Live</span>
+<!-- TUNNEL + COMMESSE URGENTI -->
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:18px">
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-diagram-2" style="margin-right:6px"></i>Loop Tunnel — catena in movimento<span style="float:right;color:var(--grn-h)">▶ Live</span></div>
+    <div class="card-body">
+      <div class="tunnel-box">
+        <div style="display:flex;justify-content:space-between;font-size:.57rem;color:var(--muted2);margin-bottom:8px">
+          <span>◀ INGRESSO</span><span style="color:var(--muted2)">— 170 m —</span><span>USCITA ▶</span>
+        </div>
+        <div class="chain-track"><div class="chain-inner" id="chain"></div></div>
+        <div id="ci" style="font-size:.6rem;color:var(--muted2);text-align:right;margin-top:5px"></div>
       </div>
-      <div class="tunnel-track">
-        <div class="tunnel-chain" id="chain"></div>
-      </div>
-      <div class="d-flex justify-content-between mt-2" style="font-size:.6rem;color:#2a4a2a">
-        <span>INGRESSO</span>
-        <span>—— 170 m ——</span>
-        <span>USCITA</span>
-      </div>
-      <div id="chainInfo" style="font-size:.68rem;color:#3a6a3e;text-align:right;margin-top:4px"></div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div style="height:100%;display:flex;flex-direction:column;gap:10px" id="commessPanel">
-      <div style="font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:#3a5a3e">
-        Commesse urgenti
-      </div>
-      <div class="text-center py-3" style="color:#3a6a3e">
-        <div class="spinner-border spinner-border-sm"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Trend + Ordini recenti -->
-<div class="row g-3 mb-3">
-  <div class="col-md-4">
-    <div style="background:#0d1a0d;border:1px solid rgba(28,110,46,.2);border-radius:14px;padding:16px">
-      <div class="shdr">Produzione 7 giorni</div>
-      <div class="trend-wrap" id="trendBars">
-        <div style="color:#3a6a3e;font-size:.7rem;width:100%;text-align:center">
-          <div class="spinner-border spinner-border-sm"></div>
+      <!-- Trend -->
+      <div style="margin-top:14px">
+        <div style="font-size:.58rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Produzione ultimi 7 giorni</div>
+        <div id="trend" style="display:flex;align-items:flex-end;gap:5px;height:56px">
+          <div style="color:var(--muted2);width:100%;text-align:center;padding-top:16px;font-size:.72rem"><i class="bi bi-hourglass-split"></i></div>
         </div>
       </div>
     </div>
   </div>
-  <div class="col-md-8">
-    <div style="background:#0d1a0d;border:1px solid rgba(28,110,46,.2);border-radius:14px;overflow:hidden">
-      <div style="padding:14px 16px;border-bottom:1px solid rgba(28,110,46,.15);display:flex;justify-content:space-between;align-items:center">
-        <span class="shdr mb-0">Ordini recenti in attesa</span>
-        <a href="{{ url_for('lotti') }}" class="btn btn-sm"
-           style="background:rgba(28,110,46,.2);color:#2d9c47;border:none;font-size:.72rem">Tutti →</a>
-      </div>
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-exclamation-triangle" style="margin-right:6px;color:var(--red)"></i>Commesse urgenti</div>
+    <div id="cup" style="padding:0">
+      <div style="text-align:center;padding:24px;color:var(--muted2)"><i class="bi bi-hourglass-split"></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- ORDINI + AZIONI -->
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:18px">
+  <div class="card">
+    <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+      <span><i class="bi bi-clock-history" style="margin-right:6px"></i>Ordini recenti in attesa</span>
+      <a href="{{ url_for('import_sap') }}" class="btn-out" style="font-size:.7rem;padding:.25rem .6rem"><i class="bi bi-cloud-download"></i>Import SAP</a>
+    </div>
+    <div class="card-body" style="padding:0">
       {% if lotti_recenti %}
-      <table class="table table-sm mb-0" style="color:#e8f0dc">
-        <thead style="background:#081208">
-          <tr style="font-size:.65rem;color:#3a6a3e;text-transform:uppercase;letter-spacing:.06em">
-            <th>Ordine</th><th>Codice</th><th>Qtà</th><th>Colore</th><th>Prio</th>
-          </tr>
-        </thead>
+      <table class="tbl">
+        <thead><tr><th>Ordine</th><th>Codice</th><th>Qtà</th><th>Colore</th><th>Prio</th></tr></thead>
         <tbody>
         {% for o in lotti_recenti %}
-        <tr style="border-color:rgba(28,110,46,.1);font-size:.8rem">
-          <td><code style="color:#2d9c47">{{ o.numero_ordine }}</code></td>
+        <tr>
+          <td><code>{{ o.numero_ordine }}</code></td>
           <td><strong>{{ o.codice_prodotto }}</strong></td>
           <td>{{ o.quantita }}</td>
-          <td><small style="color:#7a9a7e">{{ o.colore[:14] }}</small></td>
-          <td><span class="badge rounded-pill {% if o.priorita<=2 %}bg-danger{% elif o.priorita<=4 %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size:.6rem">P{{ o.priorita }}</span></td>
+          <td style="font-size:.72rem;color:var(--muted)">{{ o.colore[:16] }}</td>
+          <td><span class="bdg {% if o.priorita<=2 %}bdg-red{% elif o.priorita<=4 %}bdg-yel{% else %}bdg-grn{% endif %}">P{{ o.priorita }}</span></td>
         </tr>
         {% endfor %}
         </tbody>
       </table>
       {% else %}
-      <div class="text-center py-4" style="color:#3a6a3e">
-        <i class="bi bi-inbox fs-2"></i><br><small>Nessun ordine in attesa</small>
+      <div style="text-align:center;padding:36px;color:var(--muted2)">
+        <i class="bi bi-inbox" style="font-size:1.8rem;display:block;margin-bottom:8px"></i>Nessun ordine in attesa
       </div>
       {% endif %}
     </div>
   </div>
-</div>
-
-<!-- Azioni rapide -->
-<div class="shdr">Azioni rapide</div>
-<div class="row g-3 mb-3">
-  <div class="col-6 col-md-3">
-    <a href="{{ url_for('commessa_nuova_pdf') }}" class="qa-btn">
-      <i class="bi bi-file-earmark-pdf" style="color:#c8102e"></i>
-      <span>Nuova Commessa PDF</span>
-    </a>
-  </div>
-  <div class="col-6 col-md-3">
-    <a href="{{ url_for('commesse') }}" class="qa-btn">
-      <i class="bi bi-truck" style="color:#e8a020"></i>
-      <span>Macchine da consegnare</span>
-    </a>
-  </div>
-  <div class="col-6 col-md-3">
-    <a href="{{ url_for('ottimizzatore') }}" class="qa-btn">
-      <i class="bi bi-diagram-3" style="color:#1c6e2e"></i>
-      <span>Ottimizza carico</span>
-    </a>
-  </div>
-  <div class="col-6 col-md-3">
-    <a href="{{ url_for('storico') }}" class="qa-btn">
-      <i class="bi bi-graph-up-arrow" style="color:#a855f7"></i>
-      <span>Storico costi ABC</span>
-    </a>
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-lightning" style="margin-right:6px"></i>Azioni rapide</div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+      <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-red" style="justify-content:center;padding:.6rem"><i class="bi bi-file-earmark-pdf"></i>Nuova Commessa PDF</a>
+      <a href="{{ url_for('commesse') }}" class="btn-out" style="justify-content:center;padding:.6rem"><i class="bi bi-truck"></i>Tutte le Commesse</a>
+      <a href="{{ url_for('ottimizzatore') }}" class="btn-grn" style="justify-content:center;padding:.6rem"><i class="bi bi-diagram-3"></i>Ottimizza Carico</a>
+      <a href="{{ url_for('storico') }}" class="btn-out" style="justify-content:center;padding:.6rem"><i class="bi bi-graph-up-arrow"></i>Storico Costi ABC</a>
+      <a href="{{ url_for('prodotti') }}" class="btn-out" style="justify-content:center;padding:.6rem"><i class="bi bi-box-seam"></i>Catalogo Prodotti</a>
+    </div>
   </div>
 </div>
 
-<!-- Ultimi lotti -->
 {% if lotti %}
-<div class="shdr">Ultimi lotti</div>
-<div style="background:#0d1a0d;border:1px solid rgba(28,110,46,.2);border-radius:14px;overflow:hidden">
-  <table class="table table-sm mb-0" style="color:#e8f0dc">
-    <thead style="background:#081208">
-      <tr style="font-size:.63rem;color:#3a6a3e;text-transform:uppercase;letter-spacing:.06em">
-        <th>#</th><th>Nome</th><th>Saturazione</th><th>Pezzi</th><th>Peso</th><th>Costo</th><th>Data</th><th>Stato</th>
+<div class="s-hdr">Ultimi lotti</div>
+<div class="card">
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>#</th><th>Nome</th><th>Saturazione</th><th>Pezzi</th><th>Peso</th><th>Costo</th><th>Data</th><th>Stato</th></tr></thead>
+      <tbody>
+      {% for l in lotti %}
+      <tr>
+        <td><a href="{{ url_for('lotto_detail', lotto_id=l.id) }}" style="color:var(--grn-h);font-weight:700">{{ l.id }}</a></td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.nome }}</td>
+        <td style="min-width:90px">
+          <div class="prog-wrap"><div class="prog-bar" style="width:{{ l.saturazione_pct or 0 }}%;background:var(--grn)"></div></div>
+          <span style="font-size:.6rem;color:var(--muted)">{{ l.saturazione_pct or 0 }}%</span>
+        </td>
+        <td>{{ l.n_pezzi_totali or '—' }}</td>
+        <td style="color:var(--muted);font-size:.78rem">{{ '%.1f'%(l.peso_totale_kg or 0) }} kg</td>
+        <td style="color:var(--grn-h);font-weight:700">€ {{ '%.2f'%(l.costo_totale_eur or 0) }}</td>
+        <td style="color:var(--muted);font-size:.72rem">{{ l.creato_il.strftime('%d/%m %H:%M') if l.creato_il else '—' }}</td>
+        <td><span class="bdg {% if l.stato=='completato' %}bdg-grn{% else %}bdg-yel{% endif %}">{{ l.stato }}</span></td>
       </tr>
-    </thead>
-    <tbody>
-    {% for l in lotti %}
-    <tr style="border-color:rgba(28,110,46,.08);font-size:.8rem">
-      <td><a href="{{ url_for('lotto_detail', lotto_id=l.id) }}" style="color:#2d9c47;font-weight:700">{{ l.id }}</a></td>
-      <td>{{ l.nome }}</td>
-      <td style="min-width:100px">
-        <div style="height:10px;background:#0a150a;border-radius:5px;overflow:hidden">
-          <div style="height:100%;width:{{ l.saturazione_pct or 0 }}%;background:#1c6e2e;border-radius:5px"></div>
-        </div>
-        <small style="color:#3a6a3e;font-size:.6rem">{{ l.saturazione_pct or 0 }}%</small>
-      </td>
-      <td>{{ l.n_pezzi_totali or '—' }}</td>
-      <td><small>{{ '%.1f' % (l.peso_totale_kg or 0) }} kg</small></td>
-      <td style="color:#2d9c47;font-weight:700">€ {{ '%.2f' % (l.costo_totale_eur or 0) }}</td>
-      <td><small style="color:#3a6a3e">{{ l.creato_il.strftime('%d/%m %H:%M') if l.creato_il else '—' }}</small></td>
-      <td><span class="badge {% if l.stato=='completato' %}bg-success{% else %}bg-warning text-dark{% endif %}" style="font-size:.6rem">{{ l.stato }}</span></td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-/* ── SPLASH ── */
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    document.getElementById('splash').classList.add('hide');
-    setTimeout(() => document.getElementById('splash').remove(), 800);
-  }, 2600);
-});
-
-/* ── CLOCK ── */
-function tick() {
-  const n = new Date();
-  const el = document.getElementById('liveClock');
-  if (el) el.textContent =
-    n.toLocaleDateString('it-IT',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) +
-    ' · ' + n.toLocaleTimeString('it-IT');
+// Splash
+addEventListener('load',()=>setTimeout(()=>{const s=document.getElementById('spl');if(s){s.classList.add('gone');setTimeout(()=>s.remove(),700);}},2700));
+// Clock
+function tick(){const n=new Date();const e=document.getElementById('lc');if(e)e.textContent=n.toLocaleDateString('it-IT',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' · '+n.toLocaleTimeString('it-IT');}
+tick();setInterval(tick,1000);
+// Chain
+function buildChain(sat){
+  const c=document.getElementById('chain');if(!c)return;
+  const n=40,occ=Math.round(n*(sat||50)/100);
+  c.innerHTML=Array.from({length:n},(_,i)=>`<div class="hk${i<occ?'':' e'}"></div>`).join('');
+  const ci=document.getElementById('ci');if(ci)ci.textContent=`${occ}/${n} ganci · ${(sat||50).toFixed(0)}% saturazione`;
 }
-tick(); setInterval(tick, 1000);
-
-/* ── CATENA TUNNEL ── */
-function buildChain(satPct) {
-  const chain = document.getElementById('chain');
-  if (!chain) return;
-  const n = 42, occ = Math.round(n * (satPct || 55) / 100);
-  chain.innerHTML = Array.from({length:n}, (_,i) =>
-    `<div class="hook ${i < occ ? '' : 'vuoto'}"></div>`
-  ).join('');
-  const info = document.getElementById('chainInfo');
-  if (info) info.textContent = `${occ}/${n} ganci occupati · ${Math.round(satPct||55)}% saturazione`;
-}
-buildChain(55);
-
-/* ── STATS API ── */
-async function loadStats() {
-  try {
-    const r = await fetch('/api/dashboard_stats');
-    const d = await r.json();
-
-    // KPI commesse
-    const elC = document.getElementById('kpi-commesse');
-    if (elC) elC.textContent = d.n_commesse || 0;
-
-    buildChain(d.sat_media || 55);
-
-    // Commesse urgenti
-    const cp = document.getElementById('commessPanel');
-    if (cp && d.commesse_urgenti) {
-      const colMap = {1:'#c8102e',2:'#e65100',3:'#f9a825'};
-      let h = '<div style="font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:#3a5a3e;margin-bottom:8px">Commesse urgenti</div>';
-      if (d.commesse_urgenti.length === 0) {
-        h += '<div style="color:#3a6a3e;font-size:.75rem;text-align:center;padding:16px">Nessuna urgente</div>';
-      }
-      for (const c of d.commesse_urgenti) {
-        const col = colMap[c.priorita] || '#888';
-        h += `<div class="mac-status-card">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:.78rem;font-weight:700;color:#e8f0dc">${c.nome}</span>
-            <span style="font-size:.6rem;background:${col};color:#fff;padding:2px 8px;border-radius:10px;font-weight:700">P${c.priorita}</span>
-          </div>
-          <div style="font-size:.65rem;color:#3a6a3e;margin-top:2px">${c.cliente}</div>
-          <div style="font-size:.62rem;color:#555;margin-top:1px">Consegna: ${c.data_consegna}</div>
-        </div>`;
-      }
-      cp.innerHTML = h;
-    }
-
+buildChain(50);
+// Stats API
+async function loadStats(){
+  try{
+    const d=await(await fetch('/api/dashboard_stats')).json();
+    document.getElementById('k2').textContent=d.n_commesse||0;
+    buildChain(d.sat_media||50);
     // Trend
-    const trend = d.trend || [];
-    const maxPz = Math.max(...trend.map(t => t.pezzi), 1);
-    const tb = document.getElementById('trendBars');
-    if (tb) tb.innerHTML = trend.map(t => {
-      const h = Math.max(4, Math.round(t.pezzi / maxPz * 68));
-      return `<div class="t-col">
-        <div class="t-val">${t.pezzi || ''}</div>
-        <div class="t-bar" style="height:${h}px;background:${t.pezzi > 0 ? '#1c6e2e' : '#0d1a0d'}"></div>
-        <div class="t-date">${t.data}</div>
-      </div>`;
-    }).join('');
-
-  } catch(e) { console.warn('stats', e); }
+    const trend=d.trend||[];const mx=Math.max(...trend.map(t=>t.pezzi),1);
+    const tb=document.getElementById('trend');
+    if(tb)tb.innerHTML=trend.map(t=>{
+      const h=Math.max(3,Math.round(t.pezzi/mx*52));
+      return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <span style="font-size:.56rem;color:var(--grn-h)">${t.pezzi||''}</span>
+        <div style="border-radius:3px 3px 0 0;width:100%;height:${h}px;background:${t.pezzi>0?'var(--grn)':'rgba(255,255,255,.04)'}"></div>
+        <span style="font-size:.54rem;color:var(--muted2)">${t.data}</span>
+      </div>`;}).join('');
+    // Commesse urgenti
+    const cp=document.getElementById('cup');
+    if(cp){
+      const cu=d.commesse_urgenti||[];
+      if(!cu.length){cp.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted2);font-size:.78rem">Nessuna urgente</div>';}
+      else{cp.innerHTML=cu.map(c=>`<div style="padding:11px 14px;border-bottom:1px solid var(--bdr)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:.8rem">${c.nome}</strong>
+          <span class="bdg bdg-red">P${c.priorita}</span>
+        </div>
+        <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${c.cliente}</div>
+        <div style="font-size:.62rem;color:var(--muted2)">Consegna: ${c.data_consegna}</div>
+      </div>`).join('');}
+    }
+  }catch(e){console.warn(e);}
 }
-loadStats(); setInterval(loadStats, 60000);
+loadStats();setInterval(loadStats,60000);
 </script>
 {% endblock %}

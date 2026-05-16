@@ -1,115 +1,42 @@
 {% extends "base.html" %}
-{% block title %}Catalogo Prodotti – ENOROSSI{% endblock %}
-{% block page_title %}<i class="bi bi-box-seam me-2"></i>Catalogo Prodotti{% endblock %}
-
+{% block title %}Catalogo Prodotti — ENOROSSI{% endblock %}
+{% block page_title %}Catalogo Prodotti{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
-  <div class="section-title mb-0">
-    <i class="bi bi-box-seam"></i> {{ prodotti|length }} prodotti
-    {% if fam_sel %} – {{ fam_sel }}{% endif %}
-  </div>
-  <a href="{{ url_for('prodotto_form') }}" class="btn btn-enorossi">
-    <i class="bi bi-plus-circle me-1"></i> Nuovo Prodotto
-  </a>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select name="fam" class="form-select" style="width:180px" onchange="this.form.submit()">
+      <option value="">Tutte le famiglie</option>
+      {% for f in famiglie %}<option value="{{ f }}" {% if f==fam_sel %}selected{% endif %}>{{ f }}</option>{% endfor %}
+    </select>
+  </form>
+  <a href="{{ url_for('prodotto_form') }}" class="btn-red"><i class="bi bi-plus-circle"></i>Nuovo prodotto</a>
 </div>
-
-<!-- Filtro famiglia -->
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-      <small class="text-muted me-1">Filtra:</small>
-      <a href="{{ url_for('prodotti') }}" class="btn btn-sm {% if not fam_sel %}btn-enorossi{% else %}btn-outline-secondary{% endif %}">
-        Tutte
-      </a>
-      {% for f in famiglie %}
-      <a href="{{ url_for('prodotti', famiglia=f) }}" class="btn btn-sm {% if fam_sel==f %}btn-enorossi{% else %}btn-outline-secondary{% endif %}">
-        {{ f }}
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-</div>
-
-<!-- Tabella prodotti -->
 <div class="card">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr>
-          <th>Codice</th>
-          <th>Nome</th>
-          <th>Famiglia</th>
-          <th class="text-end">L×W×H (mm)</th>
-          <th class="text-end">Peso kg</th>
-          <th class="text-end">Sup. m²</th>
-          <th class="text-end">Passo m</th>
-          <th class="text-center">3D</th>
-          <th class="text-center">Azioni</th>
-        </tr></thead>
-        <tbody>
-        {% for p in prodotti %}
-        <tr>
-          <td><code class="text-success fw-bold">{{ p.codice }}</code></td>
-          <td>{{ p.nome }}</td>
-          <td><span class="badge-famiglia">{{ p.famiglia }}</span></td>
-          <td class="text-end text-muted small">
-            {{ p.dim_x|int }}×{{ p.dim_z|int }}×{{ p.dim_y|int }}
-          </td>
-          <td class="text-end fw-bold">{{ p.peso_kg }}</td>
-          <td class="text-end">{{ p.superficie_m2_m2 }}</td>
-          <td class="text-end">{{ p.passo_gancio_m }}</td>
-          <td class="text-center">
-            {% if p.file_3d %}
-            <i class="bi bi-file-earmark-binary text-success" title="{{ p.file_3d }}"></i>
-            {% else %}
-            <button class="btn btn-sm btn-outline-secondary py-0 px-1"
-                    data-bs-toggle="collapse" data-bs-target="#upload3d_{{ p.codice }}"
-                    title="Carica file 3D">
-              <i class="bi bi-upload" style="font-size:.75rem"></i>
-            </button>
-            {% endif %}
-          </td>
-          <td class="text-center">
-            <a href="{{ url_for('prodotto_form', pid=p.id) }}"
-               class="btn btn-sm btn-outline-primary py-0 px-2" title="Modifica">
-              <i class="bi bi-pencil" style="font-size:.75rem"></i>
-            </a>
-          </td>
-        </tr>
-        <!-- Upload 3D collapsible -->
-        {% if not p.file_3d %}
-        <tr class="collapse" id="upload3d_{{ p.codice }}">
-          <td colspan="9" class="bg-light py-2 px-3">
-            <div class="upload-zone d-inline-flex align-items-center gap-3 p-2 w-100">
-              <input type="file" id="file3d_{{ p.codice }}"
-                     accept=".stl,.obj,.ply,.3mf,.off,.glb,.gltf"
-                     onchange="document.getElementById('fn_{{ p.codice }}').textContent=this.files[0]?.name||''">
-              <small id="fn_{{ p.codice }}" class="text-muted">STL, OBJ, PLY, 3MF</small>
-              <button id="btn3d_{{ p.codice }}" class="btn btn-sm btn-enorossi ms-auto"
-                      onclick="upload3D('{{ p.codice }}')">
-                <i class="bi bi-cpu me-1"></i>Analizza con Trimesh
-              </button>
-            </div>
-            <div id="result3d_{{ p.codice }}"></div>
-          </td>
-        </tr>
-        {% endif %}
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- Info Trimesh -->
-<div class="card mt-3 border-0 bg-light">
-  <div class="card-body py-2">
-    <small class="text-muted">
-      <i class="bi bi-info-circle me-1"></i>
-      <strong>Trimesh 3D:</strong> carica file STL/OBJ/PLY/3MF per estrarre automaticamente
-      dimensioni, superficie e peso. Per file STEP/IGES converti prima in STL
-      (FreeCAD → File → Esporta → STL).
-    </small>
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>Codice</th><th>Nome</th><th>Famiglia</th><th>Dimensioni (mm)</th><th>Peso</th><th>Superficie</th><th>Passo</th><th>Complessità</th><th></th></tr></thead>
+      <tbody>
+      {% for p in prodotti %}
+      <tr>
+        <td><code>{{ p.codice }}</code></td>
+        <td><strong>{{ p.nome }}</strong></td>
+        <td><span class="bdg bdg-gray">{{ p.famiglia }}</span></td>
+        <td style="font-size:.72rem;color:var(--muted)">{{ p.lunghezza_mm|int }}×{{ p.altezza_mm|int }}×{{ p.larghezza_mm|int }}</td>
+        <td>{{ p.peso_kg }} kg</td>
+        <td>{{ '%.3f'%p.superficie_m2 }} m²</td>
+        <td>{{ (p.passo_gancio_m*1000)|int }} mm</td>
+        <td>
+          <span class="bdg {% if p.complessita_aggancio==3 %}bdg-red{% elif p.complessita_aggancio==2 %}bdg-yel{% else %}bdg-grn{% endif %}">
+            {{ ['','Semplice','Medio','Complesso'][p.complessita_aggancio or 1] }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('prodotto_form', pid=p.id) }}" class="btn-out" style="font-size:.7rem;padding:.25rem .5rem"><i class="bi bi-pencil"></i></a>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}

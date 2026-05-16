@@ -1,89 +1,54 @@
 {% extends "base.html" %}
-{% block title %}Macchine da Consegnare – ENOROSSI{% endblock %}
-{% block page_title %}<i class="bi bi-truck me-2 text-warning"></i>Macchine da Consegnare{% endblock %}
-
+{% block title %}Macchine da Consegnare — ENOROSSI{% endblock %}
+{% block page_title %}Macchine da Consegnare{% endblock %}
 {% block content %}
-<style>
-.mc-card{border-radius:14px;border:2px solid #e0e0e0;padding:18px 20px;transition:all .2s;cursor:pointer;text-decoration:none;color:inherit;display:block;}
-.mc-card:hover{border-color:#1c6e2e;box-shadow:0 4px 20px rgba(28,110,46,.12);color:inherit;text-decoration:none;}
-.mc-card.prio-1{border-left:5px solid #c62828!important;}
-.mc-card.prio-2{border-left:5px solid #e65100!important;}
-.mc-card.prio-3{border-left:5px solid #f9a825!important;}
-.prio-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;}
-.sat-mini{height:8px;border-radius:4px;background:#f0f0f0;overflow:hidden;}
-.sat-mini-fill{height:100%;border-radius:4px;}
-.stato-badge{font-size:.68rem;padding:3px 10px;border-radius:12px;font-weight:700;}
-</style>
-
-<div class="d-flex justify-content-between align-items-center mb-3 mt-1">
-  <div>
-    <span class="text-muted">{{ macchine|length }} commesse totali</span>
-    <span class="badge bg-danger ms-2">{{ macchine|selectattr('priorita','le',2)|list|length }} urgenti</span>
-    <span class="badge bg-warning text-dark ms-1">{{ macchine|selectattr('stato','eq','da_verniciare')|list|length }} da verniciare</span>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+  <div style="font-size:.8rem;color:var(--muted)">
+    {{ macchine|length }} commesse
+    <span class="bdg bdg-red" style="margin-left:8px">{{ macchine|selectattr('priorita','le',2)|list|length }} urgenti</span>
+    <span class="bdg bdg-yel" style="margin-left:4px">{{ macchine|selectattr('stato','eq','da_verniciare')|list|length }} da verniciare</span>
   </div>
-  <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn btn-danger fw-bold">
-    <i class="bi bi-file-earmark-pdf me-2"></i>Nuova Commessa da PDF
-  </a>
+  <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-red"><i class="bi bi-file-earmark-pdf"></i>Nuova da PDF</a>
 </div>
 
 {% if not macchine %}
-<div class="card border-0 shadow-sm">
-  <div class="card-body text-center py-5">
-    <i class="bi bi-truck fs-1 text-muted mb-3 d-block"></i>
-    <h5 class="text-muted">Nessuna commessa macchina</h5>
-    <p class="text-muted">Carica il primo PDF NetPro per aggiungere una macchina da verniciare</p>
-    <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn btn-danger btn-lg">
-      <i class="bi bi-file-earmark-pdf me-2"></i>Carica PDF Commessa
-    </a>
+<div class="card">
+  <div class="card-body" style="text-align:center;padding:60px">
+    <i class="bi bi-truck" style="font-size:3rem;color:var(--muted2);display:block;margin-bottom:16px"></i>
+    <div style="font-size:1rem;color:var(--muted);margin-bottom:8px">Nessuna commessa macchina</div>
+    <div style="font-size:.8rem;color:var(--muted2);margin-bottom:20px">Carica il PDF NetPro per aggiungere una macchina da verniciare</div>
+    <a href="{{ url_for('commessa_nuova_pdf') }}" class="btn-red"><i class="bi bi-file-earmark-pdf"></i>Carica PDF Commessa</a>
   </div>
 </div>
 {% else %}
-
 {% for mac in macchine %}
-{% set piano = {} %}
-<a href="{{ url_for('commessa_detail', mac_id=mac.id) }}" class="mc-card mb-3 prio-{{ mac.priorita if mac.priorita and mac.priorita <= 3 else '4' }}">
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-    <div class="flex-grow-1">
-      <div class="d-flex align-items-center gap-2 mb-1">
-        <span class="prio-dot" style="background:{% if mac.priorita and mac.priorita <= 2 %}#c62828{% elif mac.priorita and mac.priorita == 3 %}#f9a825{% else %}#9e9e9e{% endif %}"></span>
-        <strong style="font-size:1.05rem">{{ mac.nome_macchina }}</strong>
-        <code class="text-muted" style="font-size:.75rem">{{ mac.commessa }}</code>
-      </div>
-      <div class="text-muted small mb-2">
-        <i class="bi bi-person me-1"></i>{{ mac.cliente }} &nbsp;|&nbsp;
-        <i class="bi bi-palette me-1"></i>{{ mac.colore }} &nbsp;|&nbsp;
-        <i class="bi bi-calendar me-1"></i>Consegna: <strong>{{ mac.data_consegna }}</strong>
-      </div>
-      <div class="d-flex align-items-center gap-3">
-        <div style="flex:1;max-width:160px">
-          <div class="sat-mini">
-            {% set sat = namespace(val=0) %}
-            {% if mac.piano_json %}
-              {% set pj = mac.piano_json | tojson %}
-            {% endif %}
-            <div class="sat-mini-fill" style="width:60%;background:#1c6e2e"></div>
-          </div>
+<a href="{{ url_for('commessa_detail', mac_id=mac.id) }}" style="display:block;margin-bottom:10px;text-decoration:none">
+  <div class="card" style="border-left:4px solid {% if mac.priorita and mac.priorita<=2 %}var(--red){% elif mac.priorita and mac.priorita==3 %}var(--yel){% else %}var(--bdr2){% endif %};transition:border-color .2s">
+    <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <strong style="font-size:.92rem;color:var(--txt)">{{ mac.nome_macchina }}</strong>
+          <code style="font-size:.7rem">{{ mac.commessa }}</code>
         </div>
-        <small class="text-muted">{{ mac.componenti|length }} componenti &nbsp;|&nbsp; Slot {{ mac.slot_catena }}</small>
+        <div style="font-size:.72rem;color:var(--muted)">
+          <i class="bi bi-person" style="margin-right:3px"></i>{{ mac.cliente }}
+          &nbsp;·&nbsp;<i class="bi bi-palette" style="margin-right:3px"></i>{{ mac.colore }}
+          &nbsp;·&nbsp;<i class="bi bi-calendar" style="margin-right:3px"></i>Consegna: <strong style="color:var(--txt)">{{ mac.data_consegna }}</strong>
+        </div>
+        <div style="font-size:.65rem;color:var(--muted2);margin-top:3px">{{ mac.componenti|length }} componenti · Slot {{ mac.slot_catena }}</div>
       </div>
-    </div>
-    <div class="text-end">
-      <div>
-        <span class="stato-badge
-          {% if mac.stato == 'completato' %}bg-success text-white
-          {% elif mac.stato == 'in_corso' %}bg-info text-white
-          {% else %}bg-light text-dark border{% endif %}">
-          {% if mac.stato == 'completato' %}✓ Verniciata
-          {% elif mac.stato == 'in_corso' %}⚙ In corso
-          {% else %}⏳ Da verniciare{% endif %}
-        </span>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="bdg {% if mac.stato=='completato' %}bdg-grn{% elif mac.stato=='in_corso' %}bdg-gray{% else %}bdg-yel{% endif %}" style="margin-bottom:4px">
+          {% if mac.stato=='completato' %}✓ Verniciata{% elif mac.stato=='in_corso' %}⚙ In corso{% else %}⏳ Da verniciare{% endif %}
+        </div>
+        {% if mac.priorita and mac.priorita<=3 %}
+        <div><span class="bdg bdg-red">P{{ mac.priorita }}</span></div>
+        {% endif %}
+        <div style="font-size:.6rem;color:var(--muted2);margin-top:4px">{{ mac.num_serie }}</div>
       </div>
-      <small class="text-muted d-block mt-1">{{ mac.num_serie }}</small>
-      <small class="text-muted">{{ mac.creata_il.strftime('%d/%m/%Y') if mac.creata_il else '' }}</small>
     </div>
   </div>
 </a>
 {% endfor %}
-
 {% endif %}
 {% endblock %}

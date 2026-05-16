@@ -1,101 +1,29 @@
 {% extends "base.html" %}
-{% block title %}Import SAP/NetPro – ENOROSSI{% endblock %}
-{% block page_title %}<i class="bi bi-cloud-download me-2"></i>Import SAP / NetPro{% endblock %}
-
+{% block title %}Import SAP/NetPro — ENOROSSI{% endblock %}
+{% block page_title %}Import SAP / NetPro{% endblock %}
 {% block content %}
-<div class="row g-4 mt-2">
-
-  <!-- Import CSV SAP -->
-  <div class="col-md-7">
-    <div class="card">
-      <div class="card-header"><i class="bi bi-file-earmark-spreadsheet"></i> Import CSV da SAP (CO40/CO41)</div>
-      <div class="card-body">
-        <p class="text-muted small">
-          Esporta gli ordini di produzione da SAP con la transazione CO40 o CO41,
-          salva come CSV con separatore <code>;</code> e caricalo qui.
-        </p>
-        <form method="post" enctype="multipart/form-data" action="{{ url_for('import_sap') }}">
-          <div class="mb-3">
-            <label class="form-label">File CSV SAP</label>
-            <input type="file" name="file_csv" class="form-control" accept=".csv,.txt" required>
-          </div>
-          <button type="submit" class="btn btn-enorossi">
-            <i class="bi bi-upload me-1"></i> Importa Ordini
-          </button>
-          <a href="{{ url_for('import_sap') }}" class="btn btn-outline-secondary ms-2">
-            <i class="bi bi-download me-1"></i> Scarica Template CSV
-          </a>
-        </form>
-
-        <!-- Struttura colonne SAP attese -->
-        <div class="mt-4">
-          <h6 class="text-muted"><i class="bi bi-info-circle me-1"></i>Colonne SAP riconosciute</h6>
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered text-sm">
-              <thead class="table-light"><tr>
-                <th>Campo interno</th><th>Nomi colonna SAP accettati</th>
-              </tr></thead>
-              <tbody>
-              <tr><td>Numero Ordine</td><td><code>AUFNR</code>, Ordine, Order</td></tr>
-              <tr><td>Codice Prodotto</td><td><code>MATNR</code>, Materiale, Material</td></tr>
-              <tr><td>Quantità</td><td><code>GAMNG</code>, Quantità, Qty</td></tr>
-              <tr><td>Data Inizio</td><td><code>GSTRP</code>, Data Inizio, BasicStartDate</td></tr>
-              <tr><td>Priorità</td><td><code>PRIOK</code>, Priorità</td></tr>
-              <tr><td>Colore</td><td><code>FARBE</code>, Colore, Color</td></tr>
-              <tr><td>Centro Lavoro</td><td><code>ARBPL</code>, Centro Lavoro</td></tr>
-              </tbody>
-            </table>
-          </div>
+<div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px">
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-cloud-download" style="margin-right:6px"></i>Carica file CSV SAP / NetPro</div>
+    <div class="card-body">
+      <form method="POST" enctype="multipart/form-data">
+        <div style="border:2px dashed var(--bdr2);border-radius:10px;padding:28px;text-align:center;margin-bottom:14px;cursor:pointer" onclick="document.getElementById('fcsv').click()">
+          <i class="bi bi-file-earmark-spreadsheet" style="font-size:2.2rem;color:var(--grn-h);display:block;margin-bottom:8px"></i>
+          <div style="font-weight:600;margin-bottom:4px">Clicca per selezionare il CSV</div>
+          <div style="font-size:.72rem;color:var(--muted)">Formato SAP/NetPro con separatore punto e virgola (;)</div>
+          <input id="fcsv" type="file" name="file_csv" accept=".csv,.txt" style="display:none" onchange="this.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.textContent=this.files[0].name">
         </div>
-      </div>
+        <button type="submit" class="btn-grn" style="width:100%;justify-content:center"><i class="bi bi-upload"></i>Importa ordini</button>
+      </form>
     </div>
   </div>
-
-  <!-- API NetPro -->
-  <div class="col-md-5">
-    <div class="card">
-      <div class="card-header"><i class="bi bi-plug"></i> API REST per NetPro</div>
-      <div class="card-body">
-        <p class="text-muted small">
-          Configura NetPro per inviare ordini direttamente via REST API.
-        </p>
-        <div class="bg-dark text-light rounded p-3 small font-monospace">
-          <div class="text-success">POST /api/v1/ottimizza</div>
-          <div class="text-muted">Host: https://tuo-dominio.railway.app</div>
-          <div class="text-warning">Header: X-API-Key: &lt;API_KEY&gt;</div>
-          <div class="text-muted">Content-Type: application/json</div>
-          <br>
-          <div class="text-info">Body (array JSON):</div>
-          <div>[</div>
-          <div>&nbsp;{</div>
-          <div>&nbsp;&nbsp;"numero_ordine": "100001",</div>
-          <div>&nbsp;&nbsp;"codice_prodotto": "FALC-TF280",</div>
-          <div>&nbsp;&nbsp;"quantita": 5,</div>
-          <div>&nbsp;&nbsp;"colore": "VERDE RAL 6005",</div>
-          <div>&nbsp;&nbsp;"priorita": 3,</div>
-          <div>&nbsp;&nbsp;"startDate": "15.05.2026"</div>
-          <div>&nbsp;}</div>
-          <div>]</div>
-        </div>
-        <div class="mt-3">
-          <h6 class="small text-muted">Response:</h6>
-          <div class="bg-dark text-light rounded p-2 small font-monospace">
-            {"status":"ok","imported":1,"errors":[]}
-          </div>
-        </div>
-        <div class="alert alert-warning py-2 mt-3 small">
-          <i class="bi bi-key me-1"></i>
-          Imposta la variabile d'ambiente <code>API_KEY</code> su Railway
-          per proteggere l'endpoint.
-        </div>
-      </div>
-    </div>
-
-    <!-- Template CSV preview -->
-    <div class="card mt-3">
-      <div class="card-header"><i class="bi bi-file-text"></i> Template CSV (esempio)</div>
-      <div class="card-body">
-        <pre class="bg-light p-2 rounded small" style="overflow-x:auto">{{ template_csv }}</pre>
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-code-slash" style="margin-right:6px"></i>Formato CSV atteso</div>
+    <div class="card-body">
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Colonne separate da <code>;</code> — prima riga intestazione:</div>
+      <pre style="background:#0a0a0a;border:1px solid var(--bdr);border-radius:7px;padding:12px;font-size:.7rem;color:var(--grn-h);overflow-x:auto;white-space:pre-wrap">{{ template_csv }}</pre>
+      <div class="alert alert-info" style="margin-top:12px;font-size:.72rem;margin-bottom:0">
+        <i class="bi bi-info-circle" style="margin-right:5px"></i>Gli ordini importati appaiono nella sezione Ordini con origine SAP.
       </div>
     </div>
   </div>

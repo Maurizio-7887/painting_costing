@@ -1,157 +1,79 @@
 {% extends "base.html" %}
-{% block title %}Knowledge Base Operativa – ENOROSSI{% endblock %}
-{% block page_title %}<i class="bi bi-lightbulb me-2 text-warning"></i>Knowledge Base Operativa{% endblock %}
-
+{% block title %}Knowledge Base — ENOROSSI{% endblock %}
+{% block page_title %}Knowledge Base{% endblock %}
 {% block content %}
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card border-warning">
-      <div class="card-header" style="background:var(--en-green);color:#fff;">
-        <i class="bi bi-brain me-2"></i>
-        L'esperienza del capo produzione diventa regola permanente del sistema
-      </div>
-      <div class="card-body">
-        <p class="mb-0 text-muted">
-          Aggiungi qui le regole che normalmente tieni in testa:
-          <em>"Questo pezzo va solo nelle zone centrali"</em>,
-          <em>"Con l'umidità alta rallento la catena"</em>,
-          <em>"Questo codice richiede spessore maggiore"</em>.
-          Il sistema le applicherà automaticamente ad ogni ottimizzazione.
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Form nuova regola -->
-<div class="card mb-4">
-  <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Aggiungi Nuova Regola</div>
-  <div class="card-body">
-    <form method="post" action="{{ url_for('kb_nuova_regola') }}">
-      <div class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label">Prodotto (lascia vuoto per regola globale)</label>
+<div style="display:grid;grid-template-columns:1fr 1.6fr;gap:18px">
+  <!-- Form nuova regola -->
+  <div class="card">
+    <div class="card-hdr"><i class="bi bi-plus-circle" style="margin-right:6px"></i>Nuova regola</div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('kb_nuova_regola') }}">
+        <div style="margin-bottom:10px">
+          <label class="form-label">Prodotto (opzionale)</label>
           <select name="prodotto_id" class="form-select">
-            <option value="">— Regola globale impianto —</option>
-            {% for p in prodotti %}
-            <option value="{{ p.id }}">{{ p.codice }} — {{ p.descrizione[:40] }}</option>
-            {% endfor %}
+            <option value="">— Tutte le macchine —</option>
+            {% for p in prodotti %}<option value="{{ p.id }}">{{ p.codice }} — {{ p.nome[:30] }}</option>{% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div style="margin-bottom:10px">
           <label class="form-label">Tipo regola</label>
           <select name="tipo" class="form-select">
-            <option value="zona">📍 Vincolo zona</option>
-            <option value="spessore">🎨 Spessore vernice</option>
-            <option value="velocita">⚡ Velocità catena</option>
-            <option value="ambientale">🌡️ Condizione ambientale</option>
             <option value="nota">📝 Nota operativa</option>
+            <option value="velocita">⚡ Modifica velocità catena</option>
+            <option value="zona">📍 Zona catena preferita</option>
           </select>
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Descrizione (in linguaggio libero)</label>
-          <input type="text" name="descrizione" class="form-control"
-                 placeholder="Es: Questo pezzo oscilla in curva, tenere in zone 3-7" required>
+        <div style="margin-bottom:10px">
+          <label class="form-label">Descrizione</label>
+          <textarea name="descrizione" class="form-control" rows="3" placeholder="Descrivi la regola..."></textarea>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Zona MIN (1-10)</label>
-          <input type="number" name="zona_min" class="form-control" value="1" min="1" max="10">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div>
+            <label class="form-label">Δ Velocità (%)</label>
+            <input name="velocita_delta_pct" type="number" step="1" class="form-control" placeholder="es. -10">
+          </div>
+          <div>
+            <label class="form-label">Priorità</label>
+            <input name="priorita" type="number" min="1" max="10" value="5" class="form-control">
+          </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Zona MAX (1-10)</label>
-          <input type="number" name="zona_max" class="form-control" value="10" min="1" max="10">
+        <button type="submit" class="btn-grn" style="width:100%;justify-content:center"><i class="bi bi-plus"></i>Aggiungi regola</button>
+      </form>
+    </div>
+  </div>
+  <!-- Lista regole -->
+  <div>
+    <div class="s-hdr">{{ regole|length }} regole attive</div>
+    {% if not regole %}
+    <div class="card"><div class="card-body" style="text-align:center;padding:40px;color:var(--muted)">
+      <i class="bi bi-lightbulb" style="font-size:2rem;display:block;margin-bottom:10px"></i>Nessuna regola. Aggiungila a sinistra.
+    </div></div>
+    {% endif %}
+    {% for r in regole %}
+    <div class="card" style="margin-bottom:8px;border-left:3px solid {% if r.attiva %}var(--grn){% else %}var(--muted2){% endif %}">
+      <div class="card-body" style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span class="bdg {% if r.tipo=='velocita' %}bdg-yel{% elif r.tipo=='zona' %}bdg-gray{% else %}bdg-grn{% endif %}">{{ r.tipo }}</span>
+            {% if r.prodotto_ref %}<code style="font-size:.7rem">{{ r.prodotto_ref.codice }}</code>{% endif %}
+            {% if r.velocita_delta_pct %}<span class="bdg bdg-yel">Δvel {{ r.velocita_delta_pct:+.0f }}%</span>{% endif %}
+          </div>
+          <div style="font-size:.82rem;color:var(--txt)">{{ r.descrizione }}</div>
+          <div style="font-size:.65rem;color:var(--muted);margin-top:4px">Priorità {{ r.priorita }} · {{ r.creata_il.strftime('%d/%m/%Y') if r.creata_il else '' }}</div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Spessore override (µm)</label>
-          <input type="number" name="spessore_override" class="form-control" placeholder="es. 100">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Δ Velocità (%)</label>
-          <input type="number" name="velocita_delta" class="form-control" value="0" step="5"
-                 placeholder="-15 = rallenta del 15%">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Priorità (1=max)</label>
-          <input type="number" name="priorita" class="form-control" value="5" min="1" max="10">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Inserita da</label>
-          <input type="text" name="operatore" class="form-control" placeholder="Nome operatore">
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-enorossi">
-            <i class="bi bi-plus-lg me-2"></i>Aggiungi Regola KB
-          </button>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <form method="POST" action="{{ url_for('kb_toggle', rid=r.id) }}">
+            <button class="btn-out" style="font-size:.7rem;padding:.25rem .5rem" title="{{ 'Disattiva' if r.attiva else 'Attiva' }}">
+              <i class="bi bi-{{ 'pause' if r.attiva else 'play' }}"></i>
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('kb_delete', rid=r.id) }}" onsubmit="return confirm('Eliminare?')">
+            <button class="btn-out" style="font-size:.7rem;padding:.25rem .5rem;color:var(--red);border-color:rgba(200,16,46,.3)"><i class="bi bi-trash"></i></button>
+          </form>
         </div>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- Lista regole -->
-<div class="card">
-  <div class="card-header d-flex justify-content-between">
-    <span><i class="bi bi-list-check me-2"></i>Regole Attive ({{ regole|length }})</span>
-    <span class="badge bg-success">{{ regole|selectattr('attiva')|list|length }} attive</span>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Stato</th><th>Tipo</th><th>Prodotto</th><th>Descrizione</th>
-            <th>Zone</th><th>Spessore</th><th>Δ Vel.</th><th>Priorità</th><th>Autore</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for r in regole %}
-        <tr class="{{ '' if r.attiva else 'text-muted opacity-50' }}">
-          <td>
-            <form method="post" action="{{ url_for('kb_toggle', rid=r.id) }}" class="d-inline">
-              <button class="btn btn-sm {{ 'btn-success' if r.attiva else 'btn-outline-secondary' }} py-0">
-                {{ '✓' if r.attiva else '○' }}
-              </button>
-            </form>
-          </td>
-          <td>
-            {% if r.tipo == 'zona' %}<span class="badge bg-primary">📍 Zona</span>
-            {% elif r.tipo == 'spessore' %}<span class="badge" style="background:var(--en-green)">🎨 Spessore</span>
-            {% elif r.tipo == 'velocita' %}<span class="badge bg-warning text-dark">⚡ Velocità</span>
-            {% elif r.tipo == 'ambientale' %}<span class="badge bg-info">🌡️ Ambient.</span>
-            {% else %}<span class="badge bg-secondary">📝 Nota</span>{% endif %}
-          </td>
-          <td>
-            {% if r.prodotto_ref %}
-              <code>{{ r.prodotto_ref.codice }}</code>
-            {% else %}
-              <span class="text-muted">Globale</span>
-            {% endif %}
-          </td>
-          <td>{{ r.descrizione[:80] }}{% if r.descrizione|length > 80 %}…{% endif %}</td>
-          <td>
-            {% if r.zona_min != 1 or r.zona_max != 10 %}
-              <span class="badge bg-primary">Z{{ r.zona_min }}–Z{{ r.zona_max }}</span>
-            {% else %}—{% endif %}
-          </td>
-          <td>{{ r.spessore_override_micron|int if r.spessore_override_micron else '—' }}{% if r.spessore_override_micron %}µm{% endif %}</td>
-          <td>{{ ('+' if r.velocita_delta_pct > 0 else '') + r.velocita_delta_pct|string + '%' if r.velocita_delta_pct != 0 else '—' }}</td>
-          <td><span class="badge bg-secondary">{{ r.priorita }}</span></td>
-          <td><small class="text-muted">{{ r.creata_da or '—' }}</small></td>
-          <td>
-            <form method="post" action="{{ url_for('kb_delete', rid=r.id) }}"
-                  onsubmit="return confirm('Eliminare questa regola?')">
-              <button class="btn btn-sm btn-outline-danger py-0">✕</button>
-            </form>
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="10" class="text-center text-muted py-4">
-          Nessuna regola KB — aggiungi la prima conoscenza dell'esperto!
-        </td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
     </div>
+    {% endfor %}
   </div>
 </div>
 {% endblock %}

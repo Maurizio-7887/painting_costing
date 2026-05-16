@@ -1,53 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Storico Lotti – ENOROSSI{% endblock %}
-{% block page_title %}<i class="bi bi-collection me-2"></i>Storico Lotti{% endblock %}
-
+{% block title %}Lotti — ENOROSSI{% endblock %}
+{% block page_title %}Lotti Produzione{% endblock %}
 {% block content %}
-<div class="section-title mt-3"><i class="bi bi-collection"></i> Lotti Pianificati</div>
 <div class="card">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr>
-          <th>#</th><th>Nome Lotto</th>
-          <th class="text-center">Saturaz.</th>
-          <th class="text-end">Peso kg</th>
-          <th class="text-end">Lungh. usata</th>
-          <th class="text-end">T.ciclo</th>
-          <th class="text-end">Costo €</th>
-          <th>Data</th><th>Stato</th><th></th>
-        </tr></thead>
-        <tbody>
-        {% for l in lotti %}
-        <tr>
-          <td><strong>#{{ l.id }}</strong></td>
-          <td>{{ l.nome }}</td>
-          <td>
-            <div class="progress" style="height:18px;width:100px">
-              <div class="progress-bar bg-success" style="width:{{ l.saturazione_pct or 0 }}%">
-                {{ '%.0f'|format(l.saturazione_pct or 0) }}%
-              </div>
-            </div>
-          </td>
-          <td class="text-end">{{ '%.1f'|format(l.peso_totale_kg or 0) }}</td>
-          <td class="text-end">{{ '%.1f'|format(l.lunghezza_usata_m or 0) }}m</td>
-          <td class="text-end">{{ '%.1f'|format(l.tempo_ciclo_min or 0) }} min</td>
-          <td class="text-end fw-bold text-success">€ {{ '%.2f'|format(l.costo_totale_eur or 0) }}</td>
-          <td><small>{{ l.creato_il.strftime("%d/%m %H:%M") if l.creato_il else "—" }}</small></td>
-          <td><span class="badge bg-success">{{ l.stato }}</span></td>
-          <td>
-            <a href="{{ url_for('lotto_detail', lotto_id=l.id) }}"
-               class="btn btn-sm btn-outline-primary py-0 px-2">
-              <i class="bi bi-eye" style="font-size:.75rem"></i>
-            </a>
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="10" class="text-center text-muted py-4">Nessun lotto ancora pianificato</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>#</th><th>Nome</th><th>Stato</th><th>Saturazione</th><th>Pezzi</th><th>Peso</th><th>Costo</th><th>Data</th></tr></thead>
+      <tbody>
+      {% for l in lotti %}
+      <tr onclick="window.location='{{ url_for('lotto_detail', lotto_id=l.id) }}'" style="cursor:pointer">
+        <td style="font-weight:700;color:var(--grn-h)">{{ l.id }}</td>
+        <td>{{ l.nome }}</td>
+        <td><span class="bdg {% if l.stato=='completato' %}bdg-grn{% elif l.stato=='in_corso' %}bdg-yel{% else %}bdg-gray{% endif %}">{{ l.stato }}</span></td>
+        <td style="min-width:90px">
+          <div class="prog-wrap"><div class="prog-bar green" style="width:{{ l.saturazione_pct or 0 }}%"></div></div>
+          <span style="font-size:.62rem;color:var(--muted)">{{ l.saturazione_pct or 0 }}%</span>
+        </td>
+        <td>{{ l.n_pezzi_totali or '—' }}</td>
+        <td style="color:var(--muted);font-size:.78rem">{{ '%.1f'%(l.peso_totale_kg or 0) }} kg</td>
+        <td style="color:var(--grn-h);font-weight:700">€ {{ '%.2f'%(l.costo_totale_eur or 0) }}</td>
+        <td style="color:var(--muted);font-size:.72rem">{{ l.creato_il.strftime('%d/%m/%Y') if l.creato_il else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="text-align:center;padding:36px;color:var(--muted)">Nessun lotto</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}

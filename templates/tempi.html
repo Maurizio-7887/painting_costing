@@ -1,75 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Standard Tempi – ENOROSSI{% endblock %}
-{% block page_title %}<i class="bi bi-stopwatch me-2"></i>Standard di Tempo{% endblock %}
-
+{% block title %}Tempi Standard — ENOROSSI{% endblock %}
+{% block page_title %}Tempi Standard Aggancio{% endblock %}
 {% block content %}
-<div class="section-title mt-3">
-  <i class="bi bi-stopwatch"></i> Standard Tempi per Prodotto
+<div style="display:flex;gap:10px;margin-bottom:14px">
+  <form method="GET" style="display:flex;gap:8px">
+    <select name="fam" class="form-select" style="width:160px" onchange="this.form.submit()">
+      <option value="">Tutte le famiglie</option>
+      {% for f in famiglie %}<option value="{{ f }}" {% if f==fam_sel %}selected{% endif %}>{{ f }}</option>{% endfor %}
+    </select>
+  </form>
 </div>
-
-<!-- Filtro -->
-<div class="d-flex flex-wrap gap-2 mb-3">
-  <a href="{{ url_for('storico') }}" class="btn btn-sm {% if not fam_sel %}btn-enorossi{% else %}btn-outline-secondary{% endif %}">Tutte</a>
-  {% for f in famiglie %}
-  <a href="{{ url_for('tempi', famiglia=f) }}" class="btn btn-sm {% if fam_sel==f %}btn-enorossi{% else %}btn-outline-secondary{% endif %}">{{ f }}</a>
-  {% endfor %}
-</div>
-
-<!-- Parametri usati -->
-<div class="card mb-3">
-  <div class="card-body py-2 d-flex flex-wrap gap-3">
-    <span class="stat-pill"><span class="dot" style="background:var(--en-green)"></span>Tunnel: {{ config.lunghezza_tunnel_m }}m</span>
-    <span class="stat-pill"><span class="dot" style="background:var(--en-yellow)"></span>Velocità: {{ config.velocita_catena_mmin }} m/min</span>
-    <span class="stat-pill"><span class="dot" style="background:#1565c0"></span>Costo orario: €{{ config.costo_orario_eur }}/h</span>
-    <span class="stat-pill"><span class="dot" style="background:#7b1fa2"></span>T.aggancio: {{ config.tempo_aggancio_sec }}s | T.sgancio: {{ config.tempo_sgancio_sec }}s</span>
-    <span class="stat-pill"><span class="dot" style="background:#00838f"></span>Operatori: {{ config.operatori_linea }}</span>
-  </div>
-</div>
-
 <div class="card">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr>
-          <th>Codice</th>
-          <th>Nome</th>
-          <th>Famiglia</th>
-          <th class="text-end">T.ciclo tunnel</th>
-          <th class="text-end">T.occupazione</th>
-          <th class="text-end">T.agg.</th>
-          <th class="text-end">T.sga.</th>
-          <th class="text-end fw-bold">T.TOTALE</th>
-          <th class="text-end fw-bold">Pezzi/h</th>
-          <th class="text-end">€/pezzo linea</th>
-        </tr></thead>
-        <tbody>
-        {% for p in lista %}
-        <tr>
-          <td><code class="text-success">{{ p.codice }}</code></td>
-          <td>{{ p.nome }}</td>
-          <td><span class="badge-famiglia">{{ p.famiglia }}</span></td>
-          <td class="text-end">{{ p.tempo_ciclo_tunnel_min }} min</td>
-          <td class="text-end">{{ p.tempo_occupazione_min }} min</td>
-          <td class="text-end text-muted">{{ p.tempo_aggancio_min }} min</td>
-          <td class="text-end text-muted">{{ p.tempo_sgancio_min }} min</td>
-          <td class="text-end fw-bold">{{ p.tempo_totale_min }} min</td>
-          <td class="text-end fw-bold text-success">{{ p.pezzi_ora }}</td>
-          <td class="text-end">€ {{ '%.4f'|format(p.costo_linea_per_pezzo) }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div class="card mt-3 bg-light border-0">
-  <div class="card-body py-2 small text-muted">
-    <strong>Legenda:</strong>
-    T.ciclo tunnel = Lunghezza_tunnel / Velocità_catena |
-    T.occupazione = Passo_pezzo / Velocità_catena |
-    T.totale = T.ciclo + T.aggancio + T.sgancio |
-    Pezzi/h = 60 / T.totale
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>Codice</th><th>Nome</th><th>Complessità</th><th>T. aggancio (min)</th><th>Ganci/pz</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for r in lista %}
+      <tr>
+        <td><code>{{ r.codice }}</code></td>
+        <td>{{ r.nome }}</td>
+        <td><span class="bdg {% if r.complessita==3 %}bdg-red{% elif r.complessita==2 %}bdg-yel{% else %}bdg-grn{% endif %}">
+          {{ ['','Semplice','Medio','Complesso'][r.complessita or 1] }}</span></td>
+        <td><strong>{{ '%.1f'%r.tempo_aggancio_min }}</strong></td>
+        <td>{{ '%.2f'%r.ganci_per_pezzo }}</td>
+        <td style="font-size:.72rem;color:var(--muted)">{{ r.note or '' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}
