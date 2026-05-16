@@ -22,8 +22,8 @@
 </div>
 {% else %}
 {% for mac in macchine %}
-<a href="{{ url_for('commessa_detail', mac_id=mac.id) }}" style="display:block;margin-bottom:10px;text-decoration:none">
-  <div class="card" style="border-left:4px solid {% if mac.priorita and mac.priorita<=2 %}var(--red){% elif mac.priorita and mac.priorita==3 %}var(--yel){% else %}var(--bdr2){% endif %};transition:border-color .2s">
+<div style="margin-bottom:10px">
+  <div class="card" style="border-left:4px solid {% if mac.priorita and mac.priorita<=2 %}var(--red){% elif mac.priorita and mac.priorita==3 %}var(--yel){% else %}var(--bdr2){% endif %}">
     <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
@@ -37,18 +37,29 @@
         </div>
         <div style="font-size:.65rem;color:var(--muted2);margin-top:3px">{{ mac.componenti|length }} componenti · Slot {{ mac.slot_catena }}</div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div class="bdg {% if mac.stato=='completato' %}bdg-grn{% elif mac.stato=='in_corso' %}bdg-gray{% else %}bdg-yel{% endif %}" style="margin-bottom:4px">
-          {% if mac.stato=='completato' %}✓ Verniciata{% elif mac.stato=='in_corso' %}⚙ In corso{% else %}⏳ Da verniciare{% endif %}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="bdg {% if mac.stato=='completato' %}bdg-grn{% elif mac.stato=='in_corso' %}bdg-gray{% else %}bdg-yel{% endif %}">
+            {% if mac.stato=='completato' %}✓ Verniciata{% elif mac.stato=='in_corso' %}⚙ In corso{% else %}⏳ Da verniciare{% endif %}
+          </div>
+          {% if mac.priorita and mac.priorita<=3 %}<span class="bdg bdg-red">P{{ mac.priorita }}</span>{% endif %}
         </div>
-        {% if mac.priorita and mac.priorita<=3 %}
-        <div><span class="bdg bdg-red">P{{ mac.priorita }}</span></div>
-        {% endif %}
-        <div style="font-size:.6rem;color:var(--muted2);margin-top:4px">{{ mac.num_serie }}</div>
+        <div style="display:flex;gap:5px">
+          <a href="{{ url_for('commessa_detail', mac_id=mac.id) }}" class="btn-out" style="font-size:.68rem;padding:.28rem .65rem">
+            <i class="bi bi-eye"></i> Dettaglio
+          </a>
+          <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}" target="_blank" class="btn-grn" style="font-size:.68rem;padding:.28rem .65rem">
+            <i class="bi bi-grid-3x3-gap"></i> Nesting 2D
+          </a>
+          <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}" class="btn-out" style="font-size:.68rem;padding:.28rem .65rem" download="nesting_{{ mac.commessa }}.png">
+            <i class="bi bi-download"></i> PNG
+          </a>
+        </div>
+        <div style="font-size:.6rem;color:var(--muted2)">{{ mac.num_serie }}</div>
       </div>
     </div>
   </div>
-</a>
+</div>
 {% endfor %}
 {% endif %}
 {% endblock %}

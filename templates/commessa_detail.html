@@ -144,6 +144,42 @@
 {% endif %}
 {% endif %}
 
+
+<!-- NESTING VISIVO 2D -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;background:#050505;color:var(--grn-h)">
+    <span><i class="bi bi-grid-3x3" style="margin-right:6px"></i>Vista Nesting 2D — Silhouette pezzi in scala</span>
+    <div style="display:flex;gap:6px">
+      <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
+         class="btn-grn" style="font-size:.68rem;padding:.25rem .7rem"
+         download="nesting_{{ mac.commessa }}.png">
+        <i class="bi bi-download"></i>Scarica PNG
+      </a>
+      <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
+         target="_blank" class="btn-out" style="font-size:.68rem;padding:.25rem .7rem">
+        <i class="bi bi-arrows-fullscreen"></i>Apri pieno
+      </a>
+    </div>
+  </div>
+  <div class="card-body" style="background:#080808;padding:0;border-radius:0 0 10px 10px;overflow:hidden">
+    <div id="nesting-wrap" style="text-align:center;padding:16px 0">
+      <div style="color:var(--muted);font-size:.78rem;margin-bottom:10px">
+        <i class="bi bi-hourglass-split" style="margin-right:4px"></i>
+        Generazione nesting in corso...
+      </div>
+      <img id="nesting-img"
+           src="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
+           style="max-width:100%;border-radius:0 0 10px 10px;display:none"
+           onload="this.style.display='block';document.getElementById('nesting-loading').style.display='none'"
+           onerror="document.getElementById('nesting-loading').innerHTML='<span style=&quot;color:var(--red)&quot;><i class=&quot;bi bi-exclamation-triangle&quot;></i> Errore generazione nesting — verifica che nesting_catena.py sia presente</span>'"
+           alt="Nesting catena verniciatura">
+      <div id="nesting-loading" style="color:var(--muted);font-size:.78rem;padding:20px 0">
+        <i class="bi bi-hourglass-split" style="margin-right:4px"></i>Calcolo silhouette 3D in corso...
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- LISTA COMPONENTI -->
 <div class="card" style="margin-bottom:14px">
   <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
