@@ -11,55 +11,63 @@
 <div style="width:100vw;height:100vh;background:#07090f;display:flex;flex-direction:column;overflow:hidden">
 
   <!-- TOP NAV -->
-  <div style="height:56px;background:#0D1117;border-bottom:2px solid #00ff88;
-              display:flex;align-items:center;padding:0 20px;gap:14px;flex-shrink:0;z-index:200">
+  <div style="height:52px;background:#0D1117;border-bottom:2px solid #00ff88;
+              display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:200">
     <a href="{{ url_for('cad_ordine_nesting', ordine_id=ordine.id) }}"
-       style="color:#6E7681;text-decoration:none;font-size:.8rem;display:flex;align-items:center;gap:5px">
+       style="color:#6E7681;text-decoration:none;font-size:.78rem;display:flex;align-items:center;gap:4px">
       <i class="bi bi-arrow-left"></i> Nesting
     </a>
-    <div style="width:1px;height:22px;background:rgba(255,255,255,.1)"></div>
-    <span style="font-family:'Orbitron',monospace;font-size:.9rem;font-weight:900;
+    <div style="width:1px;height:20px;background:rgba(255,255,255,.08)"></div>
+    <span style="font-family:'Orbitron',monospace;font-size:.88rem;font-weight:900;
                  letter-spacing:2px;color:#00ff88">VERNICIATURA 3D</span>
-    <span style="font-size:.8rem;color:#aaa">{{ asm.nome }}</span>
-    <span style="font-size:.72rem;color:#00ff88;background:rgba(0,255,136,.08);
-                 border:1px solid rgba(0,255,136,.2);border-radius:4px;padding:2px 8px">
-      x{{ ordine.n_unita }} unita
+    <span style="font-size:.78rem;color:#666">{{ asm.nome }}</span>
+    <span style="font-size:.7rem;color:#00ff88;background:rgba(0,255,136,.08);
+                 border:1px solid rgba(0,255,136,.2);border-radius:4px;padding:2px 7px">
+      ×{{ ordine.n_unita }} unità
     </span>
+
     {% if nesting and nesting.kpi %}
-    <div style="margin-left:auto;display:flex;gap:20px;align-items:center">
+    <div style="margin-left:auto;display:flex;gap:18px;align-items:center">
+      {% set kpi = nesting.kpi %}
       <div style="text-align:center">
-        <div style="font-size:.6rem;color:#444;text-transform:uppercase">Allocati</div>
-        <div style="font-size:.95rem;font-weight:700;color:#00ff88">{{ nesting.kpi.allocate }}</div>
+        <div style="font-size:.58rem;color:#333;text-transform:uppercase">Allocati</div>
+        <div style="font-size:.9rem;font-weight:700;color:#00ff88">{{ kpi.allocate }}</div>
       </div>
       <div style="text-align:center">
-        <div style="font-size:.6rem;color:#444;text-transform:uppercase">Saturazione</div>
-        <div style="font-size:.95rem;font-weight:700;color:#00d4ff">{{ nesting.kpi.saturazione_pct|round|int }}%</div>
+        <div style="font-size:.58rem;color:#333;text-transform:uppercase">Saturazione</div>
+        <div style="font-size:.9rem;font-weight:700;
+                    color:{% if kpi.saturazione_pct > 85 %}#ff4444{% else %}#00d4ff{% endif %}">
+          {{ kpi.saturazione_pct|round|int }}%
+        </div>
       </div>
       <div style="text-align:center">
-        <div style="font-size:.6rem;color:#444;text-transform:uppercase">Peso</div>
-        <div style="font-size:.95rem;font-weight:700;color:#f0883e">{{ nesting.kpi.peso_totale_kg }} kg</div>
+        <div style="font-size:.58rem;color:#333;text-transform:uppercase">Peso tot.</div>
+        <div style="font-size:.9rem;font-weight:700;color:#f0883e">{{ kpi.peso_totale_kg }} kg</div>
       </div>
       <div style="text-align:center">
-        <div style="font-size:.6rem;color:#444;text-transform:uppercase">Momento max</div>
-        <div style="font-size:.95rem;font-weight:700;color:#aaa">{{ nesting.kpi.momento_max_Nm|int }} Nm</div>
+        <div style="font-size:.58rem;color:#333;text-transform:uppercase">Momento</div>
+        <div style="font-size:.9rem;font-weight:700;color:#aaa">{{ kpi.momento_max_Nm|int }} N·m</div>
       </div>
     </div>
+    {% else %}
+    <div style="margin-left:auto"></div>
     {% endif %}
-    <div style="display:flex;gap:6px;{% if not nesting or not nesting.kpi %}margin-left:auto{% endif %}">
+
+    <div style="display:flex;gap:5px">
       <button onclick="toggleWireframe()" id="btn_wire"
-              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
-                     color:#888;border-radius:5px;padding:4px 10px;font-size:.7rem;cursor:pointer">
+              style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
+                     color:#777;border-radius:5px;padding:4px 10px;font-size:.68rem;cursor:pointer">
         Wire
       </button>
       <button onclick="resetCamera()"
-              style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);
-                     color:#00ff88;border-radius:5px;padding:4px 10px;font-size:.7rem;cursor:pointer">
+              style="background:rgba(0,255,136,.07);border:1px solid rgba(0,255,136,.18);
+                     color:#00ff88;border-radius:5px;padding:4px 10px;font-size:.68rem;cursor:pointer">
         Reset
       </button>
       <button onclick="toggleConveyor()" id="btn_conv"
-              style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);
-                     color:#00d4ff;border-radius:5px;padding:4px 10px;font-size:.7rem;cursor:pointer">
-        Conveyor
+              style="background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.18);
+                     color:#00d4ff;border-radius:5px;padding:4px 10px;font-size:.68rem;cursor:pointer">
+        ▶ Conveyor
       </button>
     </div>
   </div>
@@ -67,193 +75,200 @@
   <!-- BODY -->
   <div style="flex:1;display:flex;overflow:hidden">
 
-    <!-- CANVAS -->
+    <!-- CANVAS BABYLON -->
     <div style="flex:1;position:relative">
       <canvas id="renderCanvas" style="width:100%;height:100%;outline:none;display:block"></canvas>
 
       <!-- Hover card -->
-      <div id="hoverCard" style="display:none;position:absolute;top:16px;left:16px;
-           background:rgba(13,17,23,.92);backdrop-filter:blur(12px);
-           border:1px solid rgba(0,255,136,.25);border-radius:8px;
-           padding:12px 16px;pointer-events:none;min-width:210px">
-        <div id="hov_nome" style="font-size:.88rem;font-weight:700;color:#fff;margin-bottom:4px"></div>
-        <div id="hov_cod" style="font-size:.65rem;color:#00d4ff;font-family:monospace;margin-bottom:8px"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.72rem">
-          <div><div style="color:#444;font-size:.6rem">L mm</div><div id="hov_L" style="color:#ccc"></div></div>
-          <div><div style="color:#444;font-size:.6rem">H mm</div><div id="hov_H" style="color:#ccc"></div></div>
-          <div><div style="color:#444;font-size:.6rem">Peso</div><div id="hov_kg" style="color:#f0883e;font-weight:700"></div></div>
-          <div><div style="color:#444;font-size:.6rem">Gancio</div><div id="hov_g" style="color:#00ff88;font-weight:700"></div></div>
+      <div id="hoverCard" style="display:none;position:absolute;top:14px;left:14px;
+           background:rgba(10,13,18,.94);backdrop-filter:blur(14px);
+           border:1px solid rgba(0,255,136,.22);border-radius:8px;
+           padding:11px 15px;pointer-events:none;min-width:200px">
+        <div id="hov_nome" style="font-size:.85rem;font-weight:700;color:#fff;margin-bottom:3px"></div>
+        <div id="hov_cod" style="font-size:.62rem;color:#00d4ff;font-family:monospace;margin-bottom:8px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:.7rem">
+          <div><div style="color:#333;font-size:.58rem">L mm</div><div id="hov_L" style="color:#bbb"></div></div>
+          <div><div style="color:#333;font-size:.58rem">H mm</div><div id="hov_H" style="color:#bbb"></div></div>
+          <div><div style="color:#333;font-size:.58rem">Peso</div><div id="hov_kg" style="color:#f0883e;font-weight:700"></div></div>
+          <div><div style="color:#333;font-size:.58rem">Gancio</div><div id="hov_g" style="color:#00ff88;font-weight:700"></div></div>
         </div>
       </div>
 
-      <!-- Loading -->
+      <!-- Loading overlay -->
       <div id="loadingDiv" style="position:absolute;inset:0;background:#07090f;
            display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100">
-        <div style="font-family:'Orbitron',monospace;font-size:1.3rem;color:#00ff88;
-                    letter-spacing:3px;margin-bottom:20px">CARICAMENTO MESH 3D</div>
-        <div style="width:320px;height:3px;background:#111;border-radius:2px;margin-bottom:14px;overflow:hidden">
-          <div id="prog" style="height:100%;width:0%;background:#00ff88;transition:width .3s;border-radius:2px"></div>
+        <div style="font-family:'Orbitron',monospace;font-size:1.2rem;color:#00ff88;
+                    letter-spacing:3px;margin-bottom:18px">CARICAMENTO MESH 3D</div>
+        <div style="width:300px;height:2px;background:#111;border-radius:2px;margin-bottom:12px;overflow:hidden">
+          <div id="prog" style="height:100%;width:0%;background:#00ff88;transition:width .25s;border-radius:2px"></div>
         </div>
-        <div id="loadMsg" style="font-size:.75rem;color:#555;font-family:monospace"></div>
+        <div id="loadMsg" style="font-size:.72rem;color:#444;font-family:monospace"></div>
       </div>
     </div>
 
-    <!-- PANNELLO -->
-    <div style="width:272px;background:#0D1117;border-left:1px solid rgba(255,255,255,.06);
+    <!-- PANNELLO LATERALE -->
+    <div style="width:265px;background:#0D1117;border-left:1px solid rgba(255,255,255,.055);
                 display:flex;flex-direction:column;overflow:hidden">
-      <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)">
-        <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:#333;margin-bottom:6px">
-          Componenti assembly
+
+      <div style="padding:9px 11px;border-bottom:1px solid rgba(255,255,255,.055)">
+        <div style="font-size:.57rem;text-transform:uppercase;letter-spacing:.12em;color:#2a2a2a;margin-bottom:5px">
+          Componenti
         </div>
-        <input id="searchBox" oninput="filtra(this.value)" placeholder="cerca..."
-               style="width:100%;background:#161B22;border:1px solid rgba(255,255,255,.08);
-                      color:#ccc;border-radius:5px;padding:5px 9px;font-size:.75rem;
+        <input id="searchBox" oninput="filtra(this.value)" placeholder="cerca componente..."
+               style="width:100%;background:#161B22;border:1px solid rgba(255,255,255,.07);
+                      color:#bbb;border-radius:4px;padding:4px 8px;font-size:.72rem;
                       outline:none;box-sizing:border-box">
       </div>
-      <div id="listaPezzi" style="flex:1;overflow-y:auto;padding:5px">
-        <div style="color:#333;font-size:.73rem;padding:10px;text-align:center">Attendere...</div>
-      </div>
+
+      <div id="listaPezzi" style="flex:1;overflow-y:auto;padding:4px"></div>
+
+      <!-- Load balance per gancio -->
       {% if nesting and nesting.ganci %}
-      <div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,.06)">
-        <div style="font-size:.58rem;color:#333;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">
+      <div style="padding:9px 11px;border-top:1px solid rgba(255,255,255,.055)">
+        <div style="font-size:.57rem;color:#2a2a2a;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">
           Carico per gancio
         </div>
-        <div style="display:flex;gap:2px;align-items:flex-end;height:36px">
+        <div style="display:flex;gap:2px;align-items:flex-end;height:32px">
           {% for g in nesting.ganci %}
           {% set pct = [(g.peso_kg / 60 * 100)|int, 100]|min %}
-          <div style="flex:1;background:#111;border-radius:1px;height:100%;
+          <div style="flex:1;background:#0a0c10;border-radius:1px;height:100%;
                       display:flex;align-items:flex-end;cursor:pointer"
-               onclick="focusGancio({{ g.idx }})" title="G{{ g.idx+1 }}: {{ '%.1f'|format(g.peso_kg) }}kg">
-            <div style="width:100%;height:{{ [pct,3]|max }}%;
-                 background:{% if pct > 90 %}#ff4444{% elif pct > 70 %}#f0883e{% else %}#00ff88{% endif %};
-                 border-radius:1px"></div>
+               onclick="focusGancio({{ g.idx }})"
+               title="G{{ g.idx+1 }}: {{ '%.1f'|format(g.peso_kg) }}kg">
+            <div style="width:100%;height:{{ [pct,4]|max }}%;border-radius:1px;
+                 background:{% if pct > 90 %}#ff4444{% elif pct > 70 %}#f0883e{% else %}#00ff88{% endif %}">
+            </div>
           </div>
           {% endfor %}
         </div>
         <div style="display:flex;gap:2px;margin-top:2px">
           {% for g in nesting.ganci %}
-          <div style="flex:1;font-size:.48rem;color:#2a2a2a;text-align:center">G{{ g.idx+1 }}</div>
+          <div style="flex:1;font-size:.46rem;color:#222;text-align:center">G{{ g.idx+1 }}</div>
           {% endfor %}
         </div>
       </div>
       {% endif %}
-      <div style="padding:8px 12px;border-top:1px solid rgba(255,255,255,.06);
-                  font-size:.6rem;color:#2a2a2a;line-height:1.7">
-        Drag: ruota &nbsp;|&nbsp; Scroll: zoom<br>
-        Tasto dx: pan &nbsp;|&nbsp; Click: dettagli
+
+      <div style="padding:8px 11px;border-top:1px solid rgba(255,255,255,.055);
+                  font-size:.58rem;color:#222;line-height:1.8">
+        Drag: ruota &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; Dx: pan<br>Click pezzo → dettagli
       </div>
     </div>
   </div>
 </div>
 
+<!-- Dati dal server -->
 <script>
-const ASM_ID  = {{ asm.id }};
-const NESTING = {{ nesting | tojson | safe }};
-const PASSO   = {{ nesting.bar_config.passo_mm if nesting and nesting.bar_config else 400 }};
-const N_GANCI = {{ nesting.bar_config.n_ganci if nesting and nesting.bar_config else 7 }};
-const L_MAX   = {{ nesting.bar_config.L_max_mm if nesting and nesting.bar_config else 3000 }};
-const Z_MAX   = {{ nesting.bar_config.Z_max_mm if nesting and nesting.bar_config else 2000 }};
-const SC      = 0.001;
+const ASM_ID   = {{ asm.id }};
+const NESTING  = {{ nesting | tojson | safe }};
+const PASSO_MM = {{ nesting.bar_config.passo_mm if nesting and nesting.bar_config else 400 }};
+const N_GANCI  = {{ nesting.bar_config.n_ganci if nesting and nesting.bar_config else 7 }};
+const L_MAX_MM = {{ nesting.bar_config.L_max_mm if nesting and nesting.bar_config else 3000 }};
+const Z_MAX_MM = {{ nesting.bar_config.Z_max_mm if nesting and nesting.bar_config else 2000 }};
+
+// Scala: gli STL sono in mm → Babylon in metri
+const SC = 0.001;
+
+// Gap verticale tra pezzi (mm)
+const GAP_MM = 60;
 </script>
 
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 
 <script>
+// ════════════════════════════════════════════════════════════
+// PALETTE
+// ════════════════════════════════════════════════════════════
 const PALETTE = [
-  '#0D47A1','#1B5E20','#4A148C','#880E4F','#E65100',
+  '#1565C0','#2E7D32','#6A1B9A','#AD1457','#E65100',
   '#37474F','#4E342E','#006064','#F57F17','#BF360C',
-  '#1565C0','#2E7D32','#6A1B9A','#AD1457','#EF6C00'
+  '#0277BD','#558B2F','#4527A0','#880E4F','#EF6C00'
 ];
 
-function hex3(hex) {
+function hex3(h) {
   return new BABYLON.Color3(
-    parseInt(hex.slice(1,3),16)/255,
-    parseInt(hex.slice(3,5),16)/255,
-    parseInt(hex.slice(5,7),16)/255
+    parseInt(h.slice(1,3),16)/255,
+    parseInt(h.slice(3,5),16)/255,
+    parseInt(h.slice(5,7),16)/255
   );
 }
 
-// ── Setup Babylon ─────────────────────────────────────────────
-const canvas  = document.getElementById('renderCanvas');
-const engine  = new BABYLON.Engine(canvas, true);
-let scene, camera, hl, conveyorNode;
-let meshMap   = {};
-let wireMode  = false;
-let conveyorOn= false;
-let convObs;
-let allData   = [];
+// ════════════════════════════════════════════════════════════
+// SETUP BABYLON
+// ════════════════════════════════════════════════════════════
+const canvas = document.getElementById('renderCanvas');
+const engine = new BABYLON.Engine(canvas, true, {antialias:true});
+
+let scene, camera, hl, conveyorNode, shadowGen;
+let meshMap = {};
+let wireMode = false, conveyorOn = false, convObs;
+let allData  = [];
 
 const createScene = () => {
   scene = new BABYLON.Scene(engine);
-  scene.clearColor = new BABYLON.Color4(0.027, 0.035, 0.047, 1);
-  scene.fogMode    = BABYLON.Scene.FOGMODE_EXP2;
-  scene.fogColor   = new BABYLON.Color3(0.02, 0.03, 0.05);
-  scene.fogDensity = 0.035;
+  scene.clearColor = new BABYLON.Color4(0.025, 0.032, 0.044, 1);
 
-  // Camera
-  camera = new BABYLON.ArcRotateCamera('cam',
-    -Math.PI/2, Math.PI/3.5, L_MAX*SC*1.8,
-    new BABYLON.Vector3(L_MAX*SC*0.5, -Z_MAX*SC*0.45, 0), scene);
+  // Nebbia leggera
+  scene.fogMode    = BABYLON.Scene.FOGMODE_LINEAR;
+  scene.fogColor   = new BABYLON.Color3(0.02, 0.028, 0.04);
+  scene.fogStart   = 8;
+  scene.fogEnd     = 30;
+
+  // ── Camera ───────────────────────────────────────────────
+  // Target: centro della barra, a metà altezza
+  const target = new BABYLON.Vector3(
+    L_MAX_MM * SC * 0.5,
+    -Z_MAX_MM * SC * 0.35,
+    0
+  );
+  camera = new BABYLON.ArcRotateCamera('cam', -Math.PI/2, 1.15,
+    L_MAX_MM * SC * 1.6, target, scene);
   camera.attachControl(canvas, true);
-  camera.minZ = 0.01; camera.maxZ = 200;
-  camera.lowerRadiusLimit = 0.2;
-  camera.upperRadiusLimit = 25;
-  camera.wheelPrecision   = 60;
+  camera.minZ  = 0.01;
+  camera.maxZ  = 150;
+  camera.lowerRadiusLimit = 0.3;
+  camera.upperRadiusLimit = 20;
+  camera.wheelPrecision   = 50;
+  camera.panningSensibility = 100;
 
-  // Luci
+  // ── Luci ─────────────────────────────────────────────────
   const amb = new BABYLON.HemisphericLight('amb', new BABYLON.Vector3(0,1,0), scene);
-  amb.intensity   = 0.55;
-  amb.groundColor = new BABYLON.Color3(0.05,0.05,0.08);
-  amb.diffuse     = new BABYLON.Color3(0.75,0.85,1);
+  amb.intensity   = 0.5;
+  amb.groundColor = new BABYLON.Color3(0.04,0.05,0.07);
+  amb.diffuse     = new BABYLON.Color3(0.8,0.88,1.0);
 
-  const dir = new BABYLON.DirectionalLight('dir', new BABYLON.Vector3(-0.5,-1,-0.5), scene);
-  dir.intensity = 1.6;
-  dir.position  = new BABYLON.Vector3(8,12,8);
+  const sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.4,-1,-0.3), scene);
+  sun.intensity = 1.8;
+  sun.position  = new BABYLON.Vector3(6, 14, 6);
+  sun.diffuse   = new BABYLON.Color3(1.0, 0.96, 0.88);
 
-  const back = new BABYLON.DirectionalLight('back', new BABYLON.Vector3(0.5,-0.5,0.5), scene);
-  back.intensity = 0.4;
-  back.diffuse   = new BABYLON.Color3(0.3,0.5,1);
+  const fill = new BABYLON.DirectionalLight('fill', new BABYLON.Vector3(0.3,-0.4,0.5), scene);
+  fill.intensity = 0.35;
+  fill.diffuse   = new BABYLON.Color3(0.4, 0.55, 1.0);
 
   // Ombre
-  const sg = new BABYLON.ShadowGenerator(1024, dir);
-  sg.useExponentialShadowMap = true;
-  sg.darkness = 0.35;
-  window._sg  = sg;
+  shadowGen = new BABYLON.ShadowGenerator(1024, sun);
+  shadowGen.useBlurExponentialShadowMap = true;
+  shadowGen.blurKernel = 32;
 
-  // Highlight
+  // ── Highlight layer ───────────────────────────────────────
   hl = new BABYLON.HighlightLayer('hl', scene);
 
-  // Pavimento
-  const floor = BABYLON.MeshBuilder.CreateBox('floor',
-    {width:28, height:0.04, depth:8}, scene);
-  floor.position.set(L_MAX*SC*0.5, -(Z_MAX*SC+0.18), 0);
-  floor.receiveShadows = true;
-  const fm = new BABYLON.StandardMaterial('fm', scene);
-  fm.diffuseColor  = new BABYLON.Color3(0.04,0.055,0.07);
-  fm.specularColor = new BABYLON.Color3(0.15,0.15,0.2);
-  floor.material = fm;
+  // ── Ambiente ─────────────────────────────────────────────
+  buildEnvironment();
 
-  // Griglia
-  const gm = new BABYLON.StandardMaterial('gm', scene);
-  gm.emissiveColor = new BABYLON.Color3(0,0.06,0.1);
-  gm.wireframe = true;
-  const grid = BABYLON.MeshBuilder.CreateGround('grid',
-    {width:28, height:8, subdivisions:22}, scene);
-  grid.position.set(L_MAX*SC*0.5, -(Z_MAX*SC+0.15), 0);
-  grid.material = gm;
-
-  // Barra + ganci
+  // ── Struttura barra ───────────────────────────────────────
   buildBar();
 
-  // Nodo conveyor (tutti i pezzi sono figli di questo)
-  conveyorNode = new BABYLON.TransformNode('conv', scene);
+  // ── Nodo conveyor (parent di tutti i pezzi) ───────────────
+  conveyorNode = new BABYLON.TransformNode('conveyor', scene);
 
-  // Picking
+  // ── Picking ───────────────────────────────────────────────
   scene.onPointerDown = (evt, pick) => {
     if (pick.hit && pick.pickedMesh?.metadata?.nome) {
       hl.removeAllMeshes();
-      hl.addMesh(pick.pickedMesh, new BABYLON.Color3(0,1,0.5));
+      hl.addMesh(pick.pickedMesh, new BABYLON.Color3(0, 1, 0.5));
       showCard(pick.pickedMesh.metadata);
     }
   };
@@ -261,219 +276,307 @@ const createScene = () => {
   return scene;
 };
 
+function buildEnvironment() {
+  // Pavimento
+  const floor = BABYLON.MeshBuilder.CreateBox('floor',
+    {width:26, height:0.03, depth:7}, scene);
+  floor.position.set(L_MAX_MM*SC*0.5, -(Z_MAX_MM*SC + 0.15), 0);
+  floor.receiveShadows = true;
+  const fm = new BABYLON.StandardMaterial('fm', scene);
+  fm.diffuseColor  = new BABYLON.Color3(0.038, 0.05, 0.065);
+  fm.specularColor = new BABYLON.Color3(0.08, 0.08, 0.12);
+  floor.material = fm;
+
+  // Griglia
+  const grid = BABYLON.MeshBuilder.CreateGround('grid',
+    {width:26, height:7, subdivisions:24}, scene);
+  grid.position.set(L_MAX_MM*SC*0.5, -(Z_MAX_MM*SC + 0.12), 0);
+  const gm = new BABYLON.StandardMaterial('gm', scene);
+  gm.emissiveColor = new BABYLON.Color3(0, 0.055, 0.09);
+  gm.wireframe = true;
+  grid.material = gm;
+}
+
 function buildBar() {
-  // Barra principale
-  const bm = new BABYLON.PBRMaterial('bm', scene);
-  bm.albedoColor   = new BABYLON.Color3(0.12,0.22,0.45);
-  bm.metallic      = 0.92; bm.roughness = 0.22;
-  bm.emissiveColor = new BABYLON.Color3(0.015,0.04,0.12);
+  // ── Barra principale (acciaio IPE) ────────────────────────
+  const bMat = new BABYLON.PBRMaterial('bm', scene);
+  bMat.albedoColor   = new BABYLON.Color3(0.10, 0.20, 0.44);
+  bMat.metallic      = 0.92;
+  bMat.roughness     = 0.22;
+  bMat.emissiveColor = new BABYLON.Color3(0.01, 0.035, 0.12);
 
   const bar = BABYLON.MeshBuilder.CreateBox('bar',
-    {width: L_MAX*SC+0.28, height:0.075, depth:0.075}, scene);
-  bar.position.set(L_MAX*SC*0.5, 0, 0);
-  bar.material = bm;
+    {width: L_MAX_MM*SC + 0.24, height: 0.072, depth: 0.072}, scene);
+  bar.position.set(L_MAX_MM*SC*0.5, 0, 0);
+  bar.material = bMat;
 
-  // LED strip
-  const sm = new BABYLON.StandardMaterial('sm', scene);
-  sm.emissiveColor = new BABYLON.Color3(0.08,0.35,1);
+  // Strip LED blu
+  const led = new BABYLON.StandardMaterial('led', scene);
+  led.emissiveColor = new BABYLON.Color3(0.06, 0.30, 1.0);
   const strip = BABYLON.MeshBuilder.CreateBox('strip',
-    {width: L_MAX*SC+0.28, height:0.009, depth:0.08}, scene);
-  strip.position.set(L_MAX*SC*0.5, 0.042, 0);
-  strip.material = sm;
+    {width: L_MAX_MM*SC + 0.24, height: 0.008, depth: 0.076}, scene);
+  strip.position.set(L_MAX_MM*SC*0.5, 0.040, 0);
+  strip.material = led;
 
   // Montanti laterali
-  const pm = new BABYLON.PBRMaterial('pm', scene);
-  pm.metallic=0.9; pm.roughness=0.25;
-  pm.albedoColor = new BABYLON.Color3(0.28,0.28,0.32);
-  [-1,1].forEach(s => {
-    const m = BABYLON.MeshBuilder.CreateBox('mont'+s,
-      {width:0.055, height:1.1, depth:0.055}, scene);
-    m.position.set(L_MAX*SC*0.5 + s*(L_MAX*SC*0.5+0.1), 0.55, 0);
-    m.material = pm;
-  });
+  const pMat = new BABYLON.PBRMaterial('pm', scene);
+  pMat.metallic = 0.88; pMat.roughness = 0.28;
+  pMat.albedoColor = new BABYLON.Color3(0.25, 0.25, 0.28);
+  for (const side of [-1, 1]) {
+    const m = BABYLON.MeshBuilder.CreateBox('mont'+side,
+      {width:0.05, height:1.0, depth:0.05}, scene);
+    m.position.set(L_MAX_MM*SC*0.5 + side*(L_MAX_MM*SC*0.5 + 0.08), 0.5, 0);
+    m.material = pMat;
+  }
 
-  // Ganci
-  const gm = new BABYLON.PBRMaterial('gm', scene);
-  gm.metallic=0.95; gm.roughness=0.15;
-  gm.albedoColor = new BABYLON.Color3(0.55,0.6,0.65);
+  // ── Ganci ─────────────────────────────────────────────────
+  const gMat = new BABYLON.PBRMaterial('gm', scene);
+  gMat.metallic = 0.96; gMat.roughness = 0.14;
+  gMat.albedoColor = new BABYLON.Color3(0.55, 0.60, 0.65);
 
   for (let i = 0; i < N_GANCI; i++) {
-    const gx = i * PASSO * SC;
-    const gambo = BABYLON.MeshBuilder.CreateCylinder('ga'+i,
-      {height:0.16, diameter:0.013, tessellation:10}, scene);
-    gambo.position.set(gx, -0.08, 0);
-    gambo.material = gm;
+    const gx = i * PASSO_MM * SC;
 
-    const unc = BABYLON.MeshBuilder.CreateTorus('un'+i,
-      {diameter:0.055, thickness:0.011, tessellation:14}, scene);
-    unc.position.set(gx+0.027, -0.20, 0);
+    // Gambo
+    const gambo = BABYLON.MeshBuilder.CreateCylinder('gam'+i,
+      {height:0.14, diameter:0.012, tessellation:10}, scene);
+    gambo.position.set(gx, -0.07, 0);
+    gambo.material = gMat;
+
+    // Uncino (torus semicircolare)
+    const unc = BABYLON.MeshBuilder.CreateTorus('unc'+i,
+      {diameter:0.05, thickness:0.010, tessellation:14}, scene);
+    unc.position.set(gx + 0.025, -0.175, 0);
     unc.rotation.z = Math.PI/2;
-    unc.material = gm;
+    unc.material = gMat;
+
+    // Etichetta posizione (piccolo piano con emissive)
+    const lbl = BABYLON.MeshBuilder.CreatePlane('lbl'+i, {size:0.10}, scene);
+    lbl.position.set(gx, 0.12, 0);
+    lbl.billboardMode = BABYLON.Mesh.BILLBOARDMODE_Y;
+    const lm = new BABYLON.StandardMaterial('lm'+i, scene);
+    lm.emissiveColor = new BABYLON.Color3(0, 0.15, 0.35);
+    lbl.material = lm;
   }
 }
 
-// ── Parser STL ────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// PARSER STL  (binario + ASCII)
+// ════════════════════════════════════════════════════════════
 function parseSTLBin(buf) {
-  const v = new DataView(buf);
-  const n = v.getUint32(80, true);
-  const p = [];
-  let o = 84;
+  const dv = new DataView(buf);
+  const n  = dv.getUint32(80, true);
+  const p  = new Float32Array(n * 9);
+  let off  = 84, pi = 0;
   for (let i = 0; i < n; i++) {
-    o += 12;
-    for (let j = 0; j < 3; j++) {
-      p.push(v.getFloat32(o,true), v.getFloat32(o+4,true), v.getFloat32(o+8,true));
-      o += 12;
+    off += 12;                          // salta normale
+    for (let v = 0; v < 3; v++) {
+      p[pi++] = dv.getFloat32(off,     true);
+      p[pi++] = dv.getFloat32(off + 4, true);
+      p[pi++] = dv.getFloat32(off + 8, true);
+      off += 12;
     }
-    o += 2;
+    off += 2;
   }
-  return p;
+  return Array.from(p);
 }
 
 function parseSTLAsc(txt) {
-  const p=[], re=/vertex\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)/g;
+  const p = [], re = /vertex\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)/g;
   let m;
-  while((m=re.exec(txt))!==null) p.push(+m[1],+m[2],+m[3]);
+  while ((m = re.exec(txt)) !== null) p.push(+m[1], +m[2], +m[3]);
   return p;
 }
 
-function makeMesh(pos, nome) {
-  const idx=[]; for(let i=0;i<pos.length/3;i++) idx.push(i);
-  const nor=[];
-  BABYLON.VertexData.ComputeNormals(pos, idx, nor);
+function buildMesh(positions, name) {
+  const indices = [];
+  for (let i = 0; i < positions.length / 3; i++) indices.push(i);
+  const normals = [];
+  BABYLON.VertexData.ComputeNormals(positions, indices, normals);
   const vd = new BABYLON.VertexData();
-  vd.positions=pos; vd.indices=idx; vd.normals=nor;
-  const mesh = new BABYLON.Mesh(nome, scene);
+  vd.positions = positions;
+  vd.indices   = indices;
+  vd.normals   = normals;
+  const mesh = new BABYLON.Mesh(name, scene);
   vd.applyToMesh(mesh);
   return mesh;
 }
 
+// ════════════════════════════════════════════════════════════
+// CENTRA MESH SUL PROPRIO BOUNDING BOX
+// ════════════════════════════════════════════════════════════
+function centraMesh(mesh) {
+  // Calcola bbox sui vertici grezzi (prima di qualsiasi trasformazione)
+  const pos = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+  let xMin= Infinity, xMax=-Infinity;
+  let yMin= Infinity, yMax=-Infinity;
+  let zMin= Infinity, zMax=-Infinity;
+  for (let i = 0; i < pos.length; i+=3) {
+    if(pos[i]   < xMin) xMin=pos[i];   if(pos[i]   > xMax) xMax=pos[i];
+    if(pos[i+1] < yMin) yMin=pos[i+1]; if(pos[i+1] > yMax) yMax=pos[i+1];
+    if(pos[i+2] < zMin) zMin=pos[i+2]; if(pos[i+2] > zMax) zMax=pos[i+2];
+  }
+  const cx = (xMin+xMax)/2, cy = (yMin+yMax)/2, cz = (zMin+zMax)/2;
+  const shifted = new Float32Array(pos.length);
+  for (let i = 0; i < pos.length; i+=3) {
+    shifted[i]   = pos[i]   - cx;
+    shifted[i+1] = pos[i+1] - cy;
+    shifted[i+2] = pos[i+2] - cz;
+  }
+  mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, shifted);
+  // Restituisce le dimensioni reali del bbox
+  return { W: xMax-xMin, H: yMax-yMin, D: zMax-zMin };
+}
+
+// ════════════════════════════════════════════════════════════
+// TROVA POSIZIONE NESTING
+// ════════════════════════════════════════════════════════════
 function findPos(codice) {
   if (!NESTING?.ganci) return null;
   for (const g of NESTING.ganci)
     for (const p of g.parti)
       if (p.codice === codice)
-        return {x: g.x_mm, z: p.z_offset, rot: p.rot_deg||0};
+        return { x_mm: g.x_mm, z_off_mm: p.z_offset, rot_deg: p.rot_deg||0 };
   return null;
 }
 
-// ── Carica tutto ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// CARICA TUTTI GLI STL
+// ════════════════════════════════════════════════════════════
 async function loadAll() {
-  const r = await fetch(`/api/cad/stl_list/${ASM_ID}`);
-  const d = await r.json();
+  const resp = await fetch(`/api/cad/stl_list/${ASM_ID}`);
+  const data = await resp.json();
 
-  if (!d.disponibile || !d.files.length) {
+  if (!data.disponibile || !data.files.length) {
     document.getElementById('loadMsg').textContent =
-      'Nessun STL trovato — carica il file ZIP su CAD Upload';
+      '⚠ Nessun STL — carica prima il file ZIP su /cad/upload';
     return;
   }
 
-  const files = d.files;
+  const files = data.files;
   allData = files;
   renderList(files);
 
   for (let fi = 0; fi < files.length; fi++) {
     const f = files[fi];
-    document.getElementById('prog').style.width = (fi/files.length*100)+'%';
+    document.getElementById('prog').style.width = (fi / files.length * 100) + '%';
     document.getElementById('loadMsg').textContent = `[${fi+1}/${files.length}] ${f.nome}`;
 
     try {
-      const rb = await (await fetch(f.url)).arrayBuffer();
-      const hd = new TextDecoder().decode(new Uint8Array(rb).slice(0,5));
-      const pos = hd==='solid'
-        ? parseSTLAsc(new TextDecoder().decode(new Uint8Array(rb)))
-        : parseSTLBin(rb);
+      const buf   = await (await fetch(f.url)).arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const head  = new TextDecoder().decode(bytes.slice(0,5));
+      const pos   = head === 'solid'
+        ? parseSTLAsc(new TextDecoder().decode(bytes))
+        : parseSTLBin(buf);
       if (!pos.length) continue;
 
-      const mesh = makeMesh(pos, f.codice);
+      const mesh = buildMesh(pos, f.codice);
+
+      // ── Centra sul bbox PRIMA di scalare ─────────────────
+      const dims = centraMesh(mesh);  // dims in unità originali (mm)
+
+      // ── Scala mm → m ─────────────────────────────────────
       mesh.scaling.setAll(SC);
 
-      // Centra la mesh sul suo bounding box locale
-      // così position.x/y/z corrisponde al centro geometrico del pezzo
-      mesh.bakeCurrentTransformIntoVertices();
-      const bbox = mesh.getBoundingInfo().boundingBox;
-      const cx = (bbox.maximumWorld.x + bbox.minimumWorld.x) / 2;
-      const cy = (bbox.maximumWorld.y + bbox.minimumWorld.y) / 2;
-      const cz = (bbox.maximumWorld.z + bbox.minimumWorld.z) / 2;
-      // Trasla i vertici per centrare sull'origine
-      const positions = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-      for (let vi = 0; vi < positions.length; vi += 3) {
-        positions[vi]   -= cx;
-        positions[vi+1] -= cy;
-        positions[vi+2] -= cz;
-      }
-      mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+      // ── Rotazione asse: Inventor Z=up → Babylon Y=up ────
+      // Rotazione di -90° intorno all'asse X globale
+      mesh.rotation.x = -Math.PI / 2;
 
-      mesh.parent = conveyorNode;
-      mesh.castShadow = true;
-      mesh.receiveShadows = true;
-
-      // Materiale PBR
-      const mat = new BABYLON.PBRMaterial('mat_'+f.codice, scene);
+      // ── Materiale PBR ────────────────────────────────────
+      const mat = new BABYLON.PBRMaterial('m_'+fi, scene);
       mat.backFaceCulling = false;
-      mat.metallic  = 0.3;
-      mat.roughness = 0.65;
+      mat.metallic  = 0.28;
+      mat.roughness = 0.62;
 
+      // ── Posizionamento dalla mappa nesting ───────────────
       const p = findPos(f.codice);
-      // H_mm e L_mm dai metadati server (dimensioni reali in mm)
-      const hh = (f.H_mm||300) * SC;
-      const ll = (f.L_mm||300) * SC;
+
       if (p) {
         mat.albedoColor = hex3(PALETTE[fi % PALETTE.length]);
-        // X: posizione gancio sulla barra
-        // Y: negativo = sotto la barra. z_offset = distanza gancio→top pezzo
-        //    centro pezzo = -(z_offset + H/2) 
-        mesh.position.x =  p.x * SC;
-        mesh.position.y = -(p.z * SC + hh * 0.5);
-        // Z: offset leggero per evitare z-fighting tra pezzi sullo stesso gancio
-        mesh.position.z =  (fi % 3 - 1) * 0.04;
-        if (p.rot) mesh.rotation.z = p.rot * Math.PI / 180;
+
+        // Dopo rotation.x = -PI/2:
+        //   X mesh → X Babylon  (lunghezza lungo la barra)
+        //   Z mesh → Y Babylon  (altezza, verso il basso)
+        //   Y mesh → -Z Babylon (profondità)
+        //
+        // Dimensione "altezza appesa" = Z originale (dopo rotazione diventa Y)
+        const altezza_appesa_m = dims.D * SC;  // D = Z originale = profondità STL = altezza dopo rot
+
+        // Posizione X = gancio X
+        mesh.position.x = p.x_mm * SC;
+
+        // Posizione Y = sotto la barra
+        // z_off_mm = distanza dal gancio al top del pezzo
+        // Centro Y = -(z_off_mm + altezza/2)
+        mesh.position.y = -(p.z_off_mm * SC + altezza_appesa_m * 0.5);
+
+        // Profondità Z: spread leggero per pezzi sullo stesso gancio
+        mesh.position.z = (fi % 3 - 1) * 0.05;
+
+        // Rotazione CoG alignment
+        if (p.rot_deg) mesh.rotation.y = p.rot_deg * Math.PI / 180;
+
       } else {
-        // Non allocato: esponi a lato in grigio
-        mat.albedoColor = new BABYLON.Color3(0.18,0.18,0.20);
-        mesh.position.set(
-          L_MAX*SC + 0.5 + (fi % 3) * (ll + 0.1),
-          -(1.0 + Math.floor(fi/3) * (hh + 0.1)),
-          0
-        );
+        // Non allocato: grigio, a lato della barra
+        mat.albedoColor = new BABYLON.Color3(0.15, 0.15, 0.17);
+        const col = fi % 4;
+        const row = Math.floor(fi / 4);
+        mesh.position.x = L_MAX_MM*SC + 0.6 + col * 0.5;
+        mesh.position.y = -(0.5 + row * 0.4);
+        mesh.position.z = 0;
       }
+
       mesh.material = mat;
+      mesh.parent   = conveyorNode;
+      mesh.castShadow    = true;
+      mesh.receiveShadows = true;
+      shadowGen?.addShadowCaster(mesh);
 
       mesh.metadata = {
-        nome: f.nome, codice: f.codice,
-        peso: f.peso_kg, L: f.L_mm, H: f.H_mm,
-        gancio: p ? Math.round(p.x/PASSO)+1 : null
+        nome:   f.nome,
+        codice: f.codice,
+        peso:   f.peso_kg,
+        L:      f.L_mm,
+        H:      f.H_mm,
+        gancio: p ? Math.round(p.x_mm / PASSO_MM) + 1 : null
       };
 
-      window._sg?.addShadowCaster(mesh);
       meshMap[f.codice] = mesh;
 
-    } catch(e) { console.warn(f.nome, e.message); }
+    } catch(e) {
+      console.warn('Skip STL:', f.nome, e.message);
+    }
   }
 
   document.getElementById('prog').style.width = '100%';
-  setTimeout(()=>{ document.getElementById('loadingDiv').style.display='none'; }, 350);
+  setTimeout(() => {
+    document.getElementById('loadingDiv').style.display = 'none';
+  }, 300);
 }
 
-// ── UI pannello ───────────────────────────────────────────────
-function renderList(data) {
-  document.getElementById('listaPezzi').innerHTML = data.map((f, i) => {
+// ════════════════════════════════════════════════════════════
+// UI — lista componenti
+// ════════════════════════════════════════════════════════════
+function renderList(files) {
+  document.getElementById('listaPezzi').innerHTML = files.map((f, i) => {
     const col  = PALETTE[i % PALETTE.length];
     const p    = findPos(f.codice);
-    const gNum = p ? Math.round(p.x/PASSO)+1 : null;
+    const gNum = p ? Math.round(p.x_mm / PASSO_MM) + 1 : null;
     return `
-    <div onclick="focus3D('${f.codice}')"
-         style="display:flex;align-items:center;gap:7px;padding:6px 7px;
-                border-radius:5px;cursor:pointer;margin-bottom:2px;
-                background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04)"
+    <div onclick="focusMesh('${f.codice}')"
+         style="display:flex;align-items:center;gap:7px;padding:5px 7px;
+                border-radius:4px;cursor:pointer;margin-bottom:1px;
+                background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.035)"
          onmouseover="this.style.background='rgba(255,255,255,.05)'"
          onmouseout="this.style.background='rgba(255,255,255,.02)'">
-      <div style="width:9px;height:9px;border-radius:2px;background:${col};flex-shrink:0"></div>
+      <div style="width:8px;height:8px;border-radius:2px;background:${col};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:.72rem;font-weight:600;color:#ccc;
+        <div style="font-size:.70rem;font-weight:600;color:#ccc;
                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.nome}</div>
-        <div style="font-size:.6rem;color:#444">
-          x${f.qty} · ${f.peso_kg.toFixed(1)}kg
-          <span style="color:${gNum?'#00ff88':'#333'};margin-left:3px">
+        <div style="font-size:.58rem;color:#3a3a3a;margin-top:1px">
+          ×${f.qty} · ${f.peso_kg.toFixed(1)}kg
+          <span style="color:${gNum?'#00ff88':'#2a2a2a'};margin-left:4px">
             ${gNum ? '● G'+gNum : '○ n/a'}
           </span>
         </div>
@@ -483,14 +586,16 @@ function renderList(data) {
 }
 
 window.filtra = q => {
-  const f = q ? allData.filter(d=>d.nome.toLowerCase().includes(q.toLowerCase())) : allData;
-  renderList(f);
+  const r = q
+    ? allData.filter(d => d.nome.toLowerCase().includes(q.toLowerCase()))
+    : allData;
+  renderList(r);
 };
 
 function showCard(d) {
   if (!d) { document.getElementById('hoverCard').style.display='none'; return; }
-  document.getElementById('hov_nome').textContent = d.nome;
-  document.getElementById('hov_cod').textContent  = d.codice;
+  document.getElementById('hov_nome').textContent = d.nome || '';
+  document.getElementById('hov_cod').textContent  = d.codice || '';
   document.getElementById('hov_L').textContent    = d.L ? d.L.toFixed(0)+' mm' : '—';
   document.getElementById('hov_H').textContent    = d.H ? d.H.toFixed(0)+' mm' : '—';
   document.getElementById('hov_kg').textContent   = d.peso ? d.peso.toFixed(2)+' kg' : '—';
@@ -498,36 +603,43 @@ function showCard(d) {
   document.getElementById('hoverCard').style.display = 'block';
 }
 
-window.focus3D = cod => {
+// ════════════════════════════════════════════════════════════
+// CONTROLLI
+// ════════════════════════════════════════════════════════════
+window.focusMesh = cod => {
   const m = meshMap[cod];
   if (!m) return;
   hl.removeAllMeshes();
-  hl.addMesh(m, new BABYLON.Color3(0,1,0.5));
-  BABYLON.Animation.CreateAndStartAnimation('fly', camera, 'target',
-    60, 40, camera.target, m.getAbsolutePosition(), 0);
+  hl.addMesh(m, new BABYLON.Color3(0, 1, 0.5));
+  BABYLON.Animation.CreateAndStartAnimation(
+    'fly', camera, 'target', 60, 45,
+    camera.target.clone(), m.getAbsolutePosition(), 0
+  );
   showCard(m.metadata);
-  setTimeout(()=>hl.removeAllMeshes(), 2500);
+  setTimeout(() => hl.removeAllMeshes(), 2800);
 };
 
 window.focusGancio = idx => {
-  BABYLON.Animation.CreateAndStartAnimation('fg', camera, 'target', 60, 40,
-    camera.target,
-    new BABYLON.Vector3(idx*PASSO*SC, -Z_MAX*SC*0.45, 0), 0);
+  const tx = new BABYLON.Vector3(idx * PASSO_MM * SC, -Z_MAX_MM*SC*0.35, 0);
+  BABYLON.Animation.CreateAndStartAnimation(
+    'fg', camera, 'target', 60, 40, camera.target.clone(), tx, 0
+  );
 };
 
 window.toggleWireframe = () => {
   wireMode = !wireMode;
-  Object.values(meshMap).forEach(m => { if(m.material) m.material.wireframe = wireMode; });
-  document.getElementById('btn_wire').style.color = wireMode ? '#00ff88' : '#888';
+  Object.values(meshMap).forEach(m => { if (m.material) m.material.wireframe = wireMode; });
+  document.getElementById('btn_wire').style.color = wireMode ? '#00ff88' : '#777';
 };
 
 window.toggleConveyor = () => {
   conveyorOn = !conveyorOn;
-  document.getElementById('btn_conv').style.color = conveyorOn ? '#00d4ff' : '#888';
+  document.getElementById('btn_conv').style.color = conveyorOn ? '#00d4ff' : '#777';
   if (conveyorOn) {
     convObs = scene.onBeforeRenderObservable.add(() => {
-      conveyorNode.position.x += 0.0018;
-      if (conveyorNode.position.x > L_MAX*SC+3) conveyorNode.position.x = -3;
+      conveyorNode.position.x += 0.0015;
+      if (conveyorNode.position.x > L_MAX_MM*SC + 2.5)
+        conveyorNode.position.x = -2.5;
     });
   } else {
     scene.onBeforeRenderObservable.remove(convObs);
@@ -536,13 +648,17 @@ window.toggleConveyor = () => {
 };
 
 window.resetCamera = () => {
-  camera.alpha  = -Math.PI/2;
-  camera.beta   = Math.PI/3.5;
-  camera.radius = L_MAX*SC*1.8;
-  camera.target = new BABYLON.Vector3(L_MAX*SC*0.5, -Z_MAX*SC*0.45, 0);
+  camera.alpha  = -Math.PI / 2;
+  camera.beta   = 1.15;
+  camera.radius = L_MAX_MM * SC * 1.6;
+  camera.setTarget(new BABYLON.Vector3(
+    L_MAX_MM*SC*0.5, -Z_MAX_MM*SC*0.35, 0
+  ));
 };
 
-// ── Avvio ─────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// AVVIO
+// ════════════════════════════════════════════════════════════
 const s = createScene();
 engine.runRenderLoop(() => s.render());
 window.addEventListener('resize', () => engine.resize());
