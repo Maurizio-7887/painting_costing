@@ -1685,8 +1685,59 @@ def api_storico_kpi():
 
 @app.route('/initdb')
 def initdb():
-    db.create_all()
-    return 'DB inizializzato OK!'
+    try:
+        db.create_all()
+        # Segna migration come applicate
+        ultima_rev = 'd4e5f6g7h8i9'
+        try:
+            db.session.execute(
+                db.text("INSERT INTO alembic_version (version_num) VALUES (:v) ON CONFLICT DO NOTHING"),
+                {"v": ultima_rev}
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        # Seed prodotti
+        seeded = 0
+        if Prodotto.query.count() == 0:
+            _seed = [
+                ("FALC-TF280","Trincia TF280","Trinciatrici",2850,980,700,185,3.20,0.80),
+                ("FALC-TF320","Trincia TF320","Trinciatrici",3250,1000,720,220,3.80,0.80),
+                ("FALC-FN300","Falciatrice FN300","Falciatrici",3050,460,420,98,2.10,0.40),
+                ("PRES-RB100","Rotopresse RB100","Rotopresse",2000,1800,1600,310,4.50,2.40),
+                ("PRES-RB120","Rotopresse RB120","Rotopresse",2200,1900,1700,380,5.20,2.40),
+                ("VEND-VN500","Vendemmiatrice VN500","Vendemmiatrici",4800,1600,2100,580,9.20,2.40),
+                ("ENOD-780","ENODUO 780","ENODUO",3200,1200,1400,280,4.80,2.00),
+                ("BTRN-150","Barra Traino 150","Traino",1550,250,160,38,0.48,0.40),
+                ("CART-LAT-M","Carter Laterale M","Carter",680,520,280,12,0.58,0.40),
+                ("COPR-VAL-S","Coperchio Valvola S","Coperchi",280,220,60,1.1,0.12,0.40),
+                ("STAF-UNI-S","Staffa Universale S","Staffaggi",250,200,80,0.8,0.06,0.40),
+                ("BRACC-TL-M","Braccio Telescopico M","Bracci",980,150,140,5.8,0.32,0.40),
+                ("ROTA-STD","Ruota Standard","Carrello",220,220,180,8.5,0.25,0.40),
+                ("PIAS-AGG-M","Piastra Aggancio M","Staffaggi",280,200,25,1.1,0.08,0.40),
+            ]
+            for r in _seed:
+                g = round(r[9]/0.4)
+                db.session.add(Prodotto(
+                    codice=r[0], nome=r[1], descrizione=r[1], famiglia=r[2],
+                    lunghezza_mm=r[3], larghezza_mm=r[4], altezza_mm=r[5],
+                    peso_kg=r[6], superficie_m2=r[7], passo_gancio_m=r[9],
+                    complessita_aggancio=3 if g>=4 else (2 if g>=2 else 1)
+                ))
+            db.session.commit()
+            seeded = len(_seed)
+        if Configurazione.query.count() == 0:
+            db.session.add(Configurazione())
+            db.session.commit()
+        tabelle = db.inspect(db.engine).get_table_names()
+        return (f"<h2 style='font-family:monospace'>✅ DB inizializzato OK</h2>"
+                f"<p><b>{len(tabelle)} tabelle:</b> {', '.join(sorted(tabelle))}</p>"
+                f"<p><b>Prodotti seed:</b> {seeded}</p>"
+                f"<p><b>Alembic:</b> {ultima_rev}</p>"
+                f"<hr><a href='/'>→ Dashboard</a>")
+    except Exception as e:
+        db.session.rollback()
+        return f"<h2>Errore: {e}</h2>", 500
 
 # ── ENTRY POINT ─────────────────────────────────────────────────
 
