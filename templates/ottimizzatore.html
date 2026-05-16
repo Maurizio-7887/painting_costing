@@ -1,100 +1,83 @@
 {% extends "base.html" %}
 {% block title %}Carico Giornaliero — ENOROSSI{% endblock %}
-{% block page_title %}Ottimizzatore Carico Tunnel v5{% endblock %}
+{% block page_title %}Ottimizzatore Carico Tunnel{% endblock %}
 {% block content %}
 <style>
-.tunnel-svg{width:100%;height:auto;display:block}
-.zona-rect{transition:fill .3s}
-.zona-rect:hover{opacity:.85}
 .prod-row{transition:background .15s}
-.prod-row:hover{background:rgba(200,16,46,.06)!important}
-.sat-ring{width:90px;height:90px}
+.prod-row:hover{background:rgba(200,16,46,.04)!important}
 </style>
 
-{% set cfg_ganci = config.n_ganci_totali if config.n_ganci_totali else 70 %}
-{% set cfg_zone  = config.n_zone if config.n_zone else 10 %}
-{% set cfg_lung  = config.lunghezza_tunnel_m if config.lunghezza_tunnel_m else 30 %}
+{% set cfg_ganci = config.n_ganci_totali if config.n_ganci_totali else 425 %}
+{% set cfg_zone  = config.n_zone if config.n_zone else 17 %}
+{% set cfg_lung  = config.lunghezza_tunnel_m if config.lunghezza_tunnel_m else 170 %}
 
-<!-- Banner stato tunnel -->
+<!-- Banner tunnel -->
 <div style="background:rgba(28,110,46,.08);border:1px solid rgba(28,110,46,.2);border-radius:10px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
   <span style="font-size:.7rem;font-weight:700;color:var(--grn-h);text-transform:uppercase;letter-spacing:.1em">
-    <i class="bi bi-arrow-repeat" style="margin-right:5px"></i>TUNNEL LOOP {{ cfg_lung }}M · {{ cfg_zone }} ZONE · {{ cfg_ganci }} GANCI
+    <i class="bi bi-arrow-repeat" style="margin-right:5px"></i>TUNNEL LOOP {{ cfg_lung }}M · {{ cfg_zone }} ZONE
   </span>
-  {% if result and result.kb_regole_applicate %}
-  <span style="font-size:.68rem;color:var(--yel)"><i class="bi bi-lightbulb" style="margin-right:4px"></i>Knowledge Base attiva</span>
-  {% endif %}
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1.8fr;gap:18px">
-  <!-- Pannello sinistra: parametri + prodotti -->
+<div style="display:grid;grid-template-columns:340px 1fr;gap:18px">
+
+  <!-- ── PANNELLO SINISTRA: form ── -->
   <div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-hdr"><i class="bi bi-sliders" style="margin-right:6px"></i>Parametri ottimizzazione</div>
+    <div class="card">
+      <div class="card-hdr"><i class="bi bi-sliders" style="margin-right:6px"></i>Parametri</div>
       <div class="card-body">
         <form method="POST" id="fOtt">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <div>
-              <label class="form-label">Velocità catena (m/min)</label>
-              <input name="velocita" type="number" step="0.1" class="form-control"
-                     value="{{ selezione.velocita if selezione else config.velocita_default }}"
-                     id="inpVel" {% if selezione and selezione.vel_auto %}readonly{% endif %}>
+              <label class="form-label">Velocità (m/min)</label>
+              <input name="velocita" type="number" step="0.1" min="0.5" max="2.5"
+                     class="form-control" value="{{ config.velocita_default }}">
             </div>
             <div>
               <label class="form-label">Operatore</label>
-              <input name="operatore" type="text" class="form-control"
-                     value="{{ selezione.operatore if selezione else '' }}" placeholder="Nome operatore...">
+              <input name="operatore" type="text" class="form-control" placeholder="Nome...">
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-            <input type="checkbox" name="vel_auto" id="chkAuto" value="1"
-                   {% if selezione and selezione.vel_auto %}checked{% endif %}
-                   onchange="document.getElementById('inpVel').readOnly=this.checked"
-                   style="accent-color:var(--grn);width:15px;height:15px">
-            <label for="chkAuto" style="font-size:.75rem;color:var(--muted);cursor:pointer">
-              Velocità automatica (calcolata da saturazione)
-            </label>
-          </div>
 
-          <!-- Prodotti -->
           <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">Prodotti da caricare</div>
           <div id="prodList">
-            {% if selezione and selezione.righe %}
-              {% for r in selezione.righe %}
-              <div class="prod-row" style="display:grid;grid-template-columns:1fr 80px 50px 28px;gap:6px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
-                <select name="prodotto_id[]" class="form-select" style="font-size:.75rem" onchange="aggiornaPasso(this)">
+            {% if selezione %}
+              {% for cod, qty in selezione %}
+              <div class="prod-row" style="display:grid;grid-template-columns:1fr 70px 26px;gap:5px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
+                <select name="codice[]" class="form-select" style="font-size:.74rem">
                   <option value="">— Seleziona —</option>
                   {% for p in prodotti %}
-                  <option value="{{ p.id }}"
-                    data-passo="{{ p.passo_gancio_m }}"
-                    data-peso="{{ p.peso_kg }}"
-                    {% if p.id == r.prodotto_id %}selected{% endif %}>
-                    {{ p.codice }} — {{ p.nome[:25] }}
+                  <option value="{{ p.codice }}" {% if p.codice == cod %}selected{% endif %}>
+                    {{ p.codice }} — {{ p.nome[:28] }}
                   </option>
                   {% endfor %}
                 </select>
-                <input name="quantita[]" type="number" min="1" class="form-control" style="font-size:.78rem" value="{{ r.quantita }}">
-                <div style="font-size:.68rem;color:var(--muted);text-align:center" id="passo_{{ loop.index0 }}">{{ r.passo_mm|default('—') }}</div>
-                <button type="button" onclick="this.closest('.prod-row').remove()" style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.85rem">×</button>
+                <input name="quantita[]" type="number" min="1" class="form-control"
+                       style="font-size:.78rem" value="{{ qty }}">
+                <button type="button" onclick="this.closest('.prod-row').remove()"
+                        style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.9rem;line-height:1">×</button>
               </div>
               {% endfor %}
             {% else %}
-              <div class="prod-row" style="display:grid;grid-template-columns:1fr 80px 50px 28px;gap:6px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
-                <select name="prodotto_id[]" class="form-select" style="font-size:.75rem" onchange="aggiornaPasso(this)">
+              <div class="prod-row" style="display:grid;grid-template-columns:1fr 70px 26px;gap:5px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
+                <select name="codice[]" class="form-select" style="font-size:.74rem">
                   <option value="">— Seleziona prodotto —</option>
                   {% for p in prodotti %}
-                  <option value="{{ p.id }}" data-passo="{{ p.passo_gancio_m }}" data-peso="{{ p.peso_kg }}">{{ p.codice }} — {{ p.nome[:25] }}</option>
+                  <option value="{{ p.codice }}">{{ p.codice }} — {{ p.nome[:28] }}</option>
                   {% endfor %}
                 </select>
                 <input name="quantita[]" type="number" min="1" value="1" class="form-control" style="font-size:.78rem">
-                <div style="font-size:.68rem;color:var(--muted);text-align:center">—</div>
-                <button type="button" onclick="this.closest('.prod-row').remove()" style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.85rem">×</button>
+                <button type="button" onclick="this.closest('.prod-row').remove()"
+                        style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.9rem;line-height:1">×</button>
               </div>
             {% endif %}
           </div>
-          <button type="button" onclick="addRow()" class="btn-out" style="width:100%;justify-content:center;margin-top:8px;margin-bottom:14px;font-size:.78rem">
+
+          <button type="button" onclick="addRow()" class="btn-out"
+                  style="width:100%;justify-content:center;margin-top:8px;margin-bottom:12px;font-size:.78rem">
             <i class="bi bi-plus"></i>Aggiungi prodotto
           </button>
-          <button type="submit" class="btn-grn" style="width:100%;justify-content:center;padding:.6rem">
+          <button type="submit" class="btn-grn"
+                  style="width:100%;justify-content:center;padding:.6rem;font-size:.88rem">
             <i class="bi bi-play-fill"></i>Ottimizza Carico
           </button>
         </form>
@@ -102,155 +85,130 @@
     </div>
   </div>
 
-  <!-- Pannello destra: tunnel + risultato -->
+  <!-- ── PANNELLO DESTRA: risultati ── -->
   <div>
-    <!-- Visualizzatore tunnel SVG -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-hdr"><i class="bi bi-arrow-repeat" style="margin-right:6px"></i>Tunnel Loop — {{ cfg_lung }}m · {{ cfg_zone }} Zone · {{ cfg_ganci }} Ganci (passo 400mm)</div>
-      <div class="card-body" style="background:#060606;border-radius:0 0 10px 10px;padding:16px">
-        <div style="text-align:center;font-size:.72rem;font-weight:700;color:var(--yel);letter-spacing:.08em;margin-bottom:12px">
-          FORNO TUNNEL {{ cfg_lung }}m · 200°C · CATENA LOOP
-        </div>
-        <svg viewBox="0 0 760 200" class="tunnel-svg">
-          <!-- Zone rettangoli -->
-          {% for i in range(cfg_zone) %}
-          {% set x = 60 + i * 64 %}
-          {% set z_num = i + 1 %}
-          {% set is_hot = (i >= 3 and i <= 6) %}
-          {% set fill = '#2d1010' if (i==0 or i==cfg_zone-1) else ('#1a3a18' if is_hot else '#0e220e') %}
-          {% set stroke = '#c8102e' if (i==0 or i==cfg_zone-1) else ('#2d9c47' if is_hot else '#1c6e2e') %}
-          <rect x="{{ x }}" y="30" width="60" height="90" rx="4"
-                fill="{{ fill }}" stroke="{{ stroke }}" stroke-width="1.5" class="zona-rect"/>
-          <text x="{{ x+30 }}" y="52" text-anchor="middle" fill="{{ '#c8102e' if (i==0 or i==cfg_zone-1) else '#2d9c47' }}"
-                font-size="11" font-weight="bold">Z{{ z_num }}</text>
-          {% if result and result.zone_items %}
-            {% set z = result.zone_items[i] if i < result.zone_items|length else none %}
-            {% if z %}
-            <text x="{{ x+30 }}" y="70" text-anchor="middle" fill="#7a9a7e" font-size="8">{{ z.n_ganci }}g</text>
-            <text x="{{ x+30 }}" y="82" text-anchor="middle" fill="#5a7a5e" font-size="7">{{ '%.0f'%(z.peso_kg) }}kg</text>
-            <!-- barra saturazione zona -->
-            {% set sw = 52 * [z.saturazione_pct/100, 1]|min %}
-            <rect x="{{ x+4 }}" y="90" width="{{ sw }}" height="6" rx="2"
-                  fill="{{ '#c8102e' if z.saturazione_pct > 90 else '#1c6e2e' }}"/>
-            <rect x="{{ x+4 }}" y="90" width="52" height="6" rx="2"
-                  fill="none" stroke="#1c3a1c" stroke-width="1"/>
-            {% endif %}
-          {% endif %}
-          {% endfor %}
-          <!-- Frecce direzione -->
-          {% for ax in [200, 430, 640] %}
-          <text x="{{ ax }}" y="22" text-anchor="middle" fill="#1c6e2e" font-size="14">→</text>
-          {% endfor %}
-          <text x="400" y="112" text-anchor="middle" fill="#2d4a2d" font-size="9">▶▶▶  CATENA FORNO ATTIVO (200°C)  ▶▶▶</text>
-          <!-- Curve -->
-          <ellipse cx="55" cy="75" rx="32" ry="55" fill="none" stroke="#c8102e" stroke-width="2" stroke-dasharray="6 4"/>
-          <text x="20" y="140" fill="#c8102e" font-size="8" font-weight="bold" text-anchor="middle">CURVA</text>
-          <text x="20" y="150" fill="#c8102e" font-size="8" text-anchor="middle">CARICO</text>
-          <ellipse cx="705" cy="75" rx="32" ry="55" fill="none" stroke="#c8102e" stroke-width="2" stroke-dasharray="6 4"/>
-          <text x="740" y="140" fill="#c8102e" font-size="8" font-weight="bold" text-anchor="middle">CURVA</text>
-          <text x="740" y="150" fill="#c8102e" font-size="8" text-anchor="middle">RINVIO</text>
-          <!-- Catena (ganci mobili) -->
-          {% if result %}
-          {% for j in range([result.n_ganci_usati, cfg_ganci]|min) %}
-          {% set gx = 65 + (j % cfg_ganci) * (576 / cfg_ganci) %}
-          <rect x="{{ gx }}" y="60" width="5" height="14" rx="1"
-                fill="{{ '#e8a020' if j < result.n_ganci_usati else '#0d1a0d' }}" opacity=".7"/>
-          {% endfor %}
-          {% endif %}
-        </svg>
-        {% if result %}
-        <!-- Legenda -->
-        <div style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:.65rem;color:var(--muted)">
-          <span><span style="display:inline-block;width:10px;height:8px;background:var(--yel);border-radius:1px;margin-right:4px"></span>Gancio occupato</span>
-          <span><span style="display:inline-block;width:10px;height:8px;background:#0d1a0d;border:1px solid #1c3a1c;border-radius:1px;margin-right:4px"></span>Gancio libero</span>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Risultato ottimizzazione -->
     {% if result %}
+    <!-- KPI -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       {% set sat = result.saturazione_pct %}
-      <div class="kpi" style="border-bottom-color:{% if sat>85 %}var(--grn){% elif sat>60 %}var(--yel){% else %}var(--red){% endif %}">
-        <div class="kpi-num" style="color:{% if sat>85 %}var(--grn-h){% elif sat>60 %}var(--yel){% else %}var(--red){% endif %}">{{ sat }}%</div>
+      <div class="kpi" style="border-bottom-color:{% if sat>80 %}var(--grn){% elif sat>50 %}var(--yel){% else %}var(--red){% endif %}">
+        <i class="bi bi-speedometer2 kpi-ico"></i>
+        <div class="kpi-num" style="color:{% if sat>80 %}var(--grn-h){% elif sat>50 %}var(--yel){% else %}var(--red){% endif %}">{{ sat }}%</div>
         <div class="kpi-lbl">Saturazione</div>
       </div>
       <div class="kpi" style="border-bottom-color:var(--grn)">
-        <div class="kpi-num" style="color:var(--grn-h)">{{ result.n_ganci_usati }}/{{ cfg_ganci }}</div>
-        <div class="kpi-lbl">Ganci usati</div>
-      </div>
-      <div class="kpi" style="border-bottom-color:var(--yel)">
-        <div class="kpi-num" style="color:var(--yel)">{{ result.n_pezzi_totali }}</div>
+        <i class="bi bi-people kpi-ico"></i>
+        <div class="kpi-num" style="color:var(--grn-h)">{{ result.n_pezzi_totali }}</div>
         <div class="kpi-lbl">Pezzi totali</div>
       </div>
+      <div class="kpi" style="border-bottom-color:var(--yel)">
+        <i class="bi bi-clock kpi-ico"></i>
+        <div class="kpi-num" style="color:var(--yel)">{{ result.tempo_totale_min }} min</div>
+        <div class="kpi-lbl">Ciclo tunnel</div>
+      </div>
       <div class="kpi" style="border-bottom-color:#7c3aed">
-        <div class="kpi-num" style="color:#a78bfa">€ {{ '%.2f'%result.costo_totale }}</div>
+        <i class="bi bi-currency-euro kpi-ico"></i>
+        <div class="kpi-num" style="color:#a78bfa">€ {{ '%.2f'|format(result.costo_totale) }}</div>
         <div class="kpi-lbl">Costo stimato</div>
       </div>
     </div>
 
-    <!-- Tabella piani per prodotto -->
+    <!-- Tabella piano di carico -->
     <div class="card" style="margin-bottom:14px">
       <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-        <span><i class="bi bi-table" style="margin-right:6px"></i>Piano di carico ottimizzato</span>
-        <form method="POST" action="{{ url_for('api_lotto_crea') }}" style="display:inline">
-          <input type="hidden" name="result_json" value='{{ result | tojson | e }}'>
-          <button type="submit" class="btn-grn" style="font-size:.72rem;padding:.3rem .7rem"><i class="bi bi-floppy"></i>Salva come lotto</button>
-        </form>
+        <span><i class="bi bi-table" style="margin-right:6px"></i>Piano di carico — Lotto #{{ result.lotto_id }}</span>
+        <a href="{{ url_for('lotto_detail', lotto_id=result.lotto_id) }}" class="btn-grn" style="font-size:.72rem;padding:.3rem .7rem">
+          <i class="bi bi-eye"></i>Dettaglio lotto
+        </a>
       </div>
       <div class="card-body" style="padding:0">
         <table class="tbl">
-          <thead><tr><th>Prodotto</th><th>Codice</th><th>Qtà</th><th>Passo (mm)</th><th>Peso (kg)</th><th>Ganci</th><th>Note KB</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Prodotto</th>
+              <th>Codice</th>
+              <th>Qtà</th>
+              <th>Zona</th>
+              <th>Ganci</th>
+              <th>C.Vernice</th>
+              <th>C.Processo</th>
+              <th>C.Totale</th>
+            </tr>
+          </thead>
           <tbody>
           {% for item in result.items %}
-          <tr style="{% if item.avvertimento %}background:rgba(232,160,32,.06){% endif %}">
-            <td><strong>{{ item.nome }}</strong></td>
-            <td><code>{{ item.codice }}</code></td>
+          <tr>
+            <td><strong>{{ item.prodotto.nome }}</strong></td>
+            <td><code>{{ item.prodotto.codice }}</code></td>
             <td>{{ item.quantita }}</td>
-            <td>{{ (item.passo_m * 1000)|int }}</td>
-            <td>{{ '%.1f'%(item.peso_totale_kg) }}</td>
-            <td><strong style="color:var(--grn-h)">{{ item.n_ganci }}</strong></td>
-            <td style="font-size:.7rem;color:var(--yel)">{{ item.avvertimento or '' }}</td>
+            <td><span class="bdg bdg-grn">Z{{ item.zona_assegnata }}</span></td>
+            <td>{{ item.n_ganci_occupati }}</td>
+            <td>€ {{ '%.3f'|format(item.costo_materiale_unitario) }}</td>
+            <td>€ {{ '%.3f'|format(item.costo_processo_unitario) }}</td>
+            <td><strong>€ {{ '%.3f'|format(item.costo_unitario_totale) }}</strong></td>
           </tr>
           {% endfor %}
           </tbody>
+          <tfoot>
+            <tr style="background:rgba(255,255,255,.03)">
+              <td colspan="5"><strong>TOTALE</strong></td>
+              <td>€ {{ '%.2f'|format(result.costo_totale_materiale) }}</td>
+              <td>€ {{ '%.2f'|format(result.costo_totale_processo) }}</td>
+              <td><strong style="color:var(--grn-h)">€ {{ '%.2f'|format(result.costo_totale) }}</strong></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
 
-    {% if result.saturazione_pct > 85 %}
-    <div class="alert alert-ok">
-      <i class="bi bi-check-circle" style="margin-right:6px"></i>
-      Ottimo! Saturazione {{ result.saturazione_pct }}% — tunnel ben utilizzato.
+    <!-- Zone catena -->
+    <div class="card">
+      <div class="card-hdr"><i class="bi bi-diagram-3" style="margin-right:6px"></i>Distribuzione zone</div>
+      <div class="card-body" style="padding:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px">
+          {% for z in result.zone %}
+          <div style="background:{% if z.ganci > 0 %}rgba(28,110,46,.15){% else %}rgba(255,255,255,.03){% endif %};
+                      border:1px solid {% if z.ganci > 0 %}rgba(28,110,46,.3){% else %}var(--bdr){% endif %};
+                      border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:.58rem;color:var(--muted);margin-bottom:2px">Z{{ z.zona }}</div>
+            <div style="font-size:.9rem;font-weight:700;color:{% if z.ganci > 0 %}var(--grn-h){% else %}var(--muted2){% endif %}">{{ z.ganci }}</div>
+            <div style="font-size:.55rem;color:var(--muted2)">ganci</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
-    {% elif result.saturazione_pct < 50 %}
-    <div class="alert alert-warn">
-      <i class="bi bi-exclamation-triangle" style="margin-right:6px"></i>
-      Saturazione bassa ({{ result.saturazione_pct }}%) — considera di aggiungere più prodotti.
+
+    {% if result.avvisi_kb %}
+    <div class="alert alert-warn" style="margin-top:14px">
+      {% for a in result.avvisi_kb %}<div>{{ a }}</div>{% endfor %}
     </div>
     {% endif %}
+
+    {% else %}
+    <!-- Stato vuoto -->
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;color:var(--muted2)">
+      <i class="bi bi-diagram-3" style="font-size:3rem;margin-bottom:16px;opacity:.3"></i>
+      <div style="font-size:.9rem;font-weight:600;margin-bottom:6px">Nessun carico ottimizzato</div>
+      <div style="font-size:.78rem">Seleziona i prodotti e clicca <strong style="color:var(--grn-h)">Ottimizza Carico</strong></div>
+    </div>
     {% endif %}
   </div>
 </div>
 
 <script>
-const prodotti = {{ prodotti | tojson }};
-function aggiornaPasso(sel){
-  const opt = sel.selectedOptions[0];
-  const passoM = parseFloat(opt.dataset.passo)||0;
-  const div = sel.closest('.prod-row').querySelector('div');
-  if(div) div.textContent = passoM ? (passoM*1000).toFixed(0)+' mm' : '—';
-}
+const optsHtml = `{% for p in prodotti %}<option value="{{ p.codice }}">{{ p.codice }} — {{ p.nome[:28]|replace("'","\\'")|replace('"','\\"') }}</option>{% endfor %}`;
 function addRow(){
-  const opts = prodotti.map(p=>`<option value="${p.id}" data-passo="${p.passo_gancio_m}" data-peso="${p.peso_kg}">${p.codice} — ${p.nome.substring(0,25)}</option>`).join('');
   const row = document.createElement('div');
-  row.className='prod-row';
-  row.style.cssText='display:grid;grid-template-columns:1fr 80px 50px 28px;gap:6px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)';
-  row.innerHTML=`<select name="prodotto_id[]" class="form-select" style="font-size:.75rem" onchange="aggiornaPasso(this)"><option value="">— Seleziona —</option>${opts}</select>
+  row.className = 'prod-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 70px 26px;gap:5px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)';
+  row.innerHTML = `
+    <select name="codice[]" class="form-select" style="font-size:.74rem">
+      <option value="">— Seleziona —</option>${optsHtml}
+    </select>
     <input name="quantita[]" type="number" min="1" value="1" class="form-control" style="font-size:.78rem">
-    <div style="font-size:.68rem;color:var(--muted);text-align:center">—</div>
-    <button type="button" onclick="this.closest('.prod-row').remove()" style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.85rem">×</button>`;
+    <button type="button" onclick="this.closest('.prod-row').remove()"
+            style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.9rem;line-height:1">×</button>`;
   document.getElementById('prodList').appendChild(row);
 }
 </script>
