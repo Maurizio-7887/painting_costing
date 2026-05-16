@@ -56,7 +56,7 @@
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span class="bdg {% if r.tipo=='velocita' %}bdg-yel{% elif r.tipo=='zona' %}bdg-gray{% else %}bdg-grn{% endif %}">{{ r.tipo }}</span>
             {% if r.prodotto_ref %}<code style="font-size:.7rem">{{ r.prodotto_ref.codice }}</code>{% endif %}
-            {% if r.velocita_delta_pct %}<span class="bdg bdg-yel">Δvel {{ r.velocita_delta_pct:+.0f }}%</span>{% endif %}
+            {% if r.velocita_delta_pct %}<span class="bdg bdg-yel">Δvel {{ '%+.0f' | format(r.velocita_delta_pct) }}%</span>{% endif %}
           </div>
           <div style="font-size:.82rem;color:var(--txt)">{{ r.descrizione }}</div>
           <div style="font-size:.65rem;color:var(--muted);margin-top:4px">Priorità {{ r.priorita }} · {{ r.creata_il.strftime('%d/%m/%Y') if r.creata_il else '' }}</div>
