@@ -16,6 +16,9 @@
     </div>
     {% if nesting %}
     <div style="margin-left:auto;display:flex;gap:8px">
+      <a href="{{ url_for('cad_viewer3d', ordine_id=ordine.id) }}" class="btn-grn">
+        <i class="bi bi-box"></i> Viewer 3D
+      </a>
       <a href="{{ url_for('cad_nesting_png', ordine_id=ordine.id) }}" class="btn-out" target="_blank">
         <i class="bi bi-image"></i> PNG
       </a>
