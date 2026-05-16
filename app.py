@@ -1890,18 +1890,18 @@ def cad_upload():
         f = request.files.get('file_step')
         if not f or not f.filename:
             errore = "Nessun file selezionato."
-        elif not f.filename.lower().endswith(('.stp', '.step')):
-            errore = "Il file deve essere in formato STEP (.stp o .step)."
+        elif not f.filename.lower().endswith(('.stp', '.step', '.stl', '.zip')):
+            errore = "Formati supportati: .stp, .step, .stl, .zip (con STL dentro)"
         else:
             import tempfile
             try:
-                from cad_parser import analizza_step, scrivi_bom_nel_db, parse_result_to_dict
+                from cad_parser import analizza_file_automatico, scrivi_bom_nel_db, parse_result_to_dict
 
                 with tempfile.NamedTemporaryFile(
                     suffix=os.path.splitext(f.filename)[1], delete=False
                 ) as tmp:
                     f.save(tmp.name)
-                    parse_result = analizza_step(tmp.name)
+                    parse_result = analizza_file_automatico(tmp.name)
                 os.unlink(tmp.name)
 
                 if parse_result.errori and not parse_result.parti:

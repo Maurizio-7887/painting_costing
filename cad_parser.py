@@ -565,3 +565,237 @@ if __name__ == "__main__":
         print("\nERRORI:", result.errori)
     if result.warning:
         print("\nWARNING:", result.warning[:3])
+
+
+# ═══════════════════════════════════════════════════════════════
+# ANALISI STL — singolo file o ZIP con più STL
+# ═══════════════════════════════════════════════════════════════
+
+SCALA_STL = 1000.0   # cascadio/trimesh carica STEP-derived STL in METRI → mm
+
+def _analizza_stl_file(path_stl: str, nome_override: str = None) -> Optional[PartGeometry]:
+    """
+    Carica un singolo file STL con trimesh ed estrae le proprietà geometriche.
+    Gestisce auto-scaling da metri a mm (output di cascadio).
+    """
+    try:
+        import trimesh
+        mesh = trimesh.load(path_stl, force='mesh', process=True)
+        if mesh is None or len(mesh.faces) == 0:
+            return None
+
+        nome = nome_override or os.path.splitext(os.path.basename(path_stl))[0]
+        # Rimuovi prefisso numerico tipo "01_nome" → "nome"
+        nome = re.sub(r'^\d+_', '', nome)
+
+        bb = mesh.bounding_box.extents
+        L, W, H = float(bb[0]), float(bb[1]), float(bb[2])
+
+        # Auto-scala: se dimensioni < 5 → probabilmente in metri
+        scala = 1.0
+        if max(L, W, H) < 5.0:
+            scala = SCALA_STL
+            mesh = mesh.copy()
+            mesh.apply_scale(scala)
+            bb = mesh.bounding_box.extents
+            L, W, H = float(bb[0]), float(bb[1]), float(bb[2])
+
+        # Repair
+        trimesh.repair.fix_normals(mesh)
+        trimesh.repair.fill_holes(mesh)
+
+        # Volume
+        if mesh.is_watertight and abs(mesh.volume) > 0:
+            vol_m3 = abs(float(mesh.volume)) / 1e9   # mm³ → m³
+        else:
+            vol_m3 = (L * W * H * 0.30) / 1e9       # stima 30% fill
+
+        # Superficie
+        sup_m2 = float(mesh.area) / 1e6              # mm² → m²
+        if sup_m2 < 1e-4:
+            sup_m2 = 2.0 * (L*W + L*H + W*H) / 1e6 * 1.4
+
+        # CoG
+        cog = mesh.center_mass if mesh.is_watertight else mesh.centroid
+        cog_x, cog_y, cog_z = float(cog[0]), float(cog[1]), float(cog[2])
+
+        peso_kg = vol_m3 * DENSITA_ACCIAIO_KG_M3
+
+        dim_max_m = max(L, W, H) / 1000.0
+        passo_m = round(max(0.4, min(math.ceil(dim_max_m * 1.2 * 20) / 20, 4.0)), 2)
+        n_g = round(passo_m / 0.4)
+        comp = 3 if n_g >= 4 else (2 if n_g >= 2 else 1)
+
+        codice = genera_codice_art(nome, vol_m3, sup_m2, (L, W, H))
+
+        return PartGeometry(
+            nome=nome,
+            codice_art=codice,
+            volume_m3=round(vol_m3, 6),
+            superficie_m2=round(sup_m2, 4),
+            lunghezza_mm=round(L, 1),
+            larghezza_mm=round(W, 1),
+            altezza_mm=round(H, 1),
+            peso_kg=round(peso_kg, 3),
+            cog_x_mm=round(cog_x, 2),
+            cog_y_mm=round(cog_y, 2),
+            cog_z_mm=round(cog_z, 2),
+            n_facce=len(mesh.faces),
+            n_vertici=len(mesh.vertices),
+            is_watertight=mesh.is_watertight,
+            passo_gancio_m=passo_m,
+            complessita_aggancio=comp,
+            hash_geom=codice.split('-')[-1],
+            mesh_presente=True,
+        )
+    except Exception as e:
+        return None
+
+
+def analizza_stl_singolo(path_stl: str, assembly_nome: str = None) -> ParseResult:
+    """
+    Analizza un singolo file STL.
+    Crea un assembly con una sola parte.
+    """
+    nome_file = os.path.basename(path_stl)
+    asm_nome = assembly_nome or os.path.splitext(nome_file)[0]
+
+    result = ParseResult(
+        file_nome=nome_file,
+        assembly_nome=asm_nome,
+        n_parti_uniche=0,
+        n_parti_totali=0,
+        peso_totale_kg=0.0,
+        superficie_totale_m2=0.0,
+    )
+
+    geom = _analizza_stl_file(path_stl)
+    if geom is None:
+        result.errori.append(f"Impossibile caricare STL: {nome_file}")
+        return result
+
+    result.parti = [geom]
+    result.bom = [BOMItem(
+        livello=1,
+        nome_parent=asm_nome,
+        nome_part=geom.nome,
+        codice_art=geom.codice_art,
+        qty=1,
+        geom=geom,
+    )]
+    result.n_parti_uniche = 1
+    result.n_parti_totali = 1
+    result.peso_totale_kg = round(geom.peso_kg, 2)
+    result.superficie_totale_m2 = round(geom.superficie_m2, 4)
+    return result
+
+
+def analizza_zip_stl(path_zip: str) -> ParseResult:
+    """
+    Analizza un file ZIP contenente uno o più STL.
+    Ogni STL = un componente della BOM.
+    Gestisce:
+      - ZIP flat (tutti STL in root)
+      - ZIP con sottocartella
+      - Nomi tipo "01_nome_pezzo.stl" → nome pulito "nome_pezzo"
+      - Deduplicazione automatica per codice ART deterministico
+        (stessa geometria → stesso codice → qty incrementata)
+    """
+    import zipfile, tempfile
+
+    nome_zip = os.path.basename(path_zip)
+    asm_nome = os.path.splitext(nome_zip)[0]
+
+    result = ParseResult(
+        file_nome=nome_zip,
+        assembly_nome=asm_nome,
+        n_parti_uniche=0,
+        n_parti_totali=0,
+        peso_totale_kg=0.0,
+        superficie_totale_m2=0.0,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Estrai ZIP
+        try:
+            with zipfile.ZipFile(path_zip, 'r') as zf:
+                stl_names = [n for n in zf.namelist()
+                             if n.lower().endswith('.stl') and not n.startswith('__')]
+                if not stl_names:
+                    result.errori.append("Nessun file STL trovato nel ZIP.")
+                    return result
+                zf.extractall(tmpdir)
+        except Exception as e:
+            result.errori.append(f"Errore apertura ZIP: {e}")
+            return result
+
+        result.warning.append(f"ZIP: trovati {len(stl_names)} file STL")
+
+        # Analizza ogni STL
+        parti_uniche: Dict[str, PartGeometry] = {}   # codice → geom
+        qty_counter:  Dict[str, int] = {}
+
+        for stl_rel in sorted(stl_names):
+            path_stl = os.path.join(tmpdir, stl_rel)
+            nome_raw = os.path.splitext(os.path.basename(stl_rel))[0]
+            # Pulisci prefisso numerico "01_nome" → "nome"
+            nome = re.sub(r'^\d+_', '', nome_raw).replace('_', ' ').strip()
+
+            geom = _analizza_stl_file(path_stl, nome_override=nome)
+            if geom is None:
+                result.warning.append(f"Skip (mesh vuota): {stl_rel}")
+                continue
+
+            if geom.codice_art in parti_uniche:
+                # Stessa geometria → incrementa qty
+                qty_counter[geom.codice_art] += 1
+            else:
+                parti_uniche[geom.codice_art] = geom
+                qty_counter[geom.codice_art] = 1
+
+        # Costruisci BOM
+        bom: List[BOMItem] = []
+        for codice, geom in parti_uniche.items():
+            bom.append(BOMItem(
+                livello=1,
+                nome_parent=asm_nome,
+                nome_part=geom.nome,
+                codice_art=codice,
+                qty=qty_counter[codice],
+                geom=geom,
+            ))
+
+    n_tot = sum(b.qty for b in bom)
+    peso_tot = sum(b.geom.peso_kg * b.qty for b in bom if b.geom)
+    sup_tot  = sum(b.geom.superficie_m2 * b.qty for b in bom if b.geom)
+
+    result.parti = list(parti_uniche.values())
+    result.bom   = bom
+    result.n_parti_uniche   = len(parti_uniche)
+    result.n_parti_totali   = n_tot
+    result.peso_totale_kg   = round(peso_tot, 2)
+    result.superficie_totale_m2 = round(sup_tot, 4)
+    return result
+
+
+def analizza_file_automatico(path: str) -> ParseResult:
+    """
+    Router automatico: scegli il parser giusto in base all'estensione.
+      .stp / .step → analizza_step()
+      .stl          → analizza_stl_singolo()
+      .zip          → analizza_zip_stl()
+    """
+    ext = os.path.splitext(path)[1].lower()
+    if ext in ('.stp', '.step'):
+        return analizza_step(path)
+    elif ext == '.stl':
+        return analizza_stl_singolo(path)
+    elif ext == '.zip':
+        return analizza_zip_stl(path)
+    else:
+        r = ParseResult(file_nome=os.path.basename(path),
+                        assembly_nome='', n_parti_uniche=0,
+                        n_parti_totali=0, peso_totale_kg=0,
+                        superficie_totale_m2=0)
+        r.errori.append(f"Formato non supportato: {ext}. Usa .stp, .step, .stl o .zip")
+        return r
