@@ -1696,9 +1696,12 @@ def fix_storico_lotti():
     return (f'✅ Recuperati {recuperati} lotti · {pezzi_tot} codici · '
             f'Storico popolato. <a href="/storico">Vai allo storico</a>')
 
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+
 
 
 
@@ -2149,3 +2152,14 @@ def api_commessa_piano(mac_id):
         piano = ottimizza_slot_commessa(comp_list, mac.ganci_slot)
     return jsonify(piano)
 
+
+# ── SAFETY NET: crea tabelle mancanti all'avvio ──────────────────────────
+def _ensure_tables():
+    """Crea tutte le tabelle mancanti. db.create_all() è idempotente."""
+    try:
+        with app.app_context():
+            db.create_all()
+    except Exception as e:
+        app.logger.warning(f'_ensure_tables: {e}')
+
+_ensure_tables()

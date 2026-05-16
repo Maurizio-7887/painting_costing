@@ -25,6 +25,8 @@ if DATABASE_URL.startswith("postgres://"):
 
 # Tables to drop, ordered to satisfy foreign-key constraints
 TABLES = [
+    "componente_macchina",
+    "macchina_commessa",
     "kb_regola",
     "storico_costo",
     "lotto_item",
