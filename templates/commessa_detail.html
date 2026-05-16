@@ -82,7 +82,20 @@
 
 <!-- SLOT VISUALIZER -->
 <div class="card" style="margin-bottom:14px">
-  <div class="card-hdr" style="background:#050505;color:var(--grn-h)"><i class="bi bi-grid" style="margin-right:6px"></i>Piano slot — {{ mac.slot_catena }} — {{ piano.ganci_tot }} ganci × 400mm = {{ (piano.ganci_tot*0.4)|round(1) }}m</div>
+  <div class="card-hdr" style="background:#050505;color:var(--grn-h);display:flex;justify-content:space-between;align-items:center">
+    <span><i class="bi bi-grid" style="margin-right:6px"></i>Piano slot — {{ mac.slot_catena }} — {{ piano.ganci_tot }} ganci × 400mm = {{ (piano.ganci_tot*0.4)|round(1) }}m</span>
+    <div style="display:flex;gap:6px">
+      <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}" target="_blank"
+         class="btn-grn" style="font-size:.68rem;padding:.25rem .75rem">
+        <i class="bi bi-grid-3x3-gap"></i> Vista Nesting 2D
+      </a>
+      <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
+         class="btn-out" style="font-size:.68rem;padding:.25rem .75rem"
+         download="nesting_{{ mac.commessa }}.png">
+        <i class="bi bi-download"></i> Scarica PNG
+      </a>
+    </div>
+  </div>
   <div class="card-body" style="background:#080808;border-radius:0 0 10px 10px">
     <div class="slot-rail">
       {% for g in piano.ganci %}
@@ -100,6 +113,24 @@
       </div>
       {% endfor %}
     </div>
+
+    <!-- Nesting 2D inline -->
+    <div style="border-top:1px solid var(--bdr);margin-top:10px;padding:10px 0 0">
+      <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;padding:0 8px">
+        <i class="bi bi-grid-3x3-gap" style="margin-right:4px"></i>Nesting silhouette 2D — scala proporzionale
+      </div>
+      <div id="nesting-container" style="padding:0 8px 8px">
+        <img id="nesting-img"
+             src="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
+             style="width:100%;border-radius:6px;display:none"
+             onload="this.style.display='block';document.getElementById('nesting-spin').style.display='none'"
+             onerror="document.getElementById('nesting-spin').innerHTML='<span style=\'color:var(--muted);font-size:.72rem\'><i class=\'bi bi-exclamation-triangle\'></i> Nesting non disponibile — aggiorna nesting_catena.py</span>'"
+             alt="Nesting catena">
+        <div id="nesting-spin" style="color:var(--muted);font-size:.75rem;padding:12px 0;text-align:center">
+          <i class="bi bi-hourglass-split" style="margin-right:4px"></i>Generazione nesting in corso...
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -112,42 +143,6 @@
 </div>
 {% endif %}
 {% endif %}
-
-
-<!-- NESTING VISIVO 2D -->
-<div class="card" style="margin-bottom:14px">
-  <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;background:#050505;color:var(--grn-h)">
-    <span><i class="bi bi-grid-3x3" style="margin-right:6px"></i>Vista Nesting 2D — Silhouette pezzi in scala</span>
-    <div style="display:flex;gap:6px">
-      <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
-         class="btn-grn" style="font-size:.68rem;padding:.25rem .7rem"
-         download="nesting_{{ mac.commessa }}.png">
-        <i class="bi bi-download"></i>Scarica PNG
-      </a>
-      <a href="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
-         target="_blank" class="btn-out" style="font-size:.68rem;padding:.25rem .7rem">
-        <i class="bi bi-arrows-fullscreen"></i>Apri pieno
-      </a>
-    </div>
-  </div>
-  <div class="card-body" style="background:#080808;padding:0;border-radius:0 0 10px 10px;overflow:hidden">
-    <div id="nesting-wrap" style="text-align:center;padding:16px 0">
-      <div style="color:var(--muted);font-size:.78rem;margin-bottom:10px">
-        <i class="bi bi-hourglass-split" style="margin-right:4px"></i>
-        Generazione nesting in corso...
-      </div>
-      <img id="nesting-img"
-           src="{{ url_for('commessa_nesting', mac_id=mac.id) }}"
-           style="max-width:100%;border-radius:0 0 10px 10px;display:none"
-           onload="this.style.display='block';document.getElementById('nesting-loading').style.display='none'"
-           onerror="document.getElementById('nesting-loading').innerHTML='<span style=&quot;color:var(--red)&quot;><i class=&quot;bi bi-exclamation-triangle&quot;></i> Errore generazione nesting — verifica che nesting_catena.py sia presente</span>'"
-           alt="Nesting catena verniciatura">
-      <div id="nesting-loading" style="color:var(--muted);font-size:.78rem;padding:20px 0">
-        <i class="bi bi-hourglass-split" style="margin-right:4px"></i>Calcolo silhouette 3D in corso...
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- LISTA COMPONENTI -->
 <div class="card" style="margin-bottom:14px">
