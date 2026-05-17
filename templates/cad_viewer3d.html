@@ -684,18 +684,53 @@ let isOrtho = true;
 function makeOrthoCam() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   const aspect = w / h;
-  const VIEW = L_MAX_MM * 0.65;
+  // VIEW più larga: mostra tutta la barra + pezzi in profondità (Z-stagger)
+  const VIEW = L_MAX_MM * 0.85;
   const cam = new THREE.OrthographicCamera(
-    -VIEW * aspect, VIEW * aspect, VIEW * 0.6, -VIEW * 0.6, -50000, 50000
+    -VIEW * aspect, VIEW * aspect,
+     VIEW * 0.55, -VIEW * 0.55,
+    -50000, 50000
   );
-  cam.position.set(L_MAX_MM * 0.9, Z_MAX_MM * 0.5, L_MAX_MM * 0.9);
+  // Camera quasi frontale: leggermente sollevata e inclinata per vedere i ganci
+  cam.position.set(L_MAX_MM * 0.5, Z_MAX_MM * 0.15, L_MAX_MM * 1.8);
   return cam;
 }
 
 function makePerspCam() {
-  const cam = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 1, 100000);
-  cam.position.set(L_MAX_MM * 0.9, Z_MAX_MM * 0.5, L_MAX_MM * 0.9);
+  const cam = new THREE.PerspectiveCamera(50, canvas.clientWidth / canvas.clientHeight, 1, 200000);
+  cam.position.set(L_MAX_MM * 0.5, Z_MAX_MM * 0.15, L_MAX_MM * 1.8);
   return cam;
+}
+
+// ── AUTO-FIT: dopo caricamento parti, regola la camera per mostrare tutto ──
+function fitCameraToScene() {
+  const sceneBbox = new THREE.Box3();
+  scene.traverse(obj => {
+    if (obj.isMesh) sceneBbox.expandByObject(obj);
+  });
+  if (sceneBbox.isEmpty()) return;
+
+  const sizeScene   = sceneBbox.getSize(new THREE.Vector3());
+  const centerScene = sceneBbox.getCenter(new THREE.Vector3());
+  const maxDim      = Math.max(sizeScene.x, sizeScene.y, sizeScene.z);
+
+  controls.target.set(centerScene.x, centerScene.y, 0);
+
+  if (camera.isOrthographicCamera) {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const aspect = w / h;
+    const pad    = maxDim * 0.55;
+    camera.left   = -pad * aspect;
+    camera.right  =  pad * aspect;
+    camera.top    =  pad * 0.55;
+    camera.bottom = -pad * 0.55;
+    camera.position.set(centerScene.x, centerScene.y, L_MAX_MM * 2);
+    camera.updateProjectionMatrix();
+  } else {
+    camera.position.set(centerScene.x, centerScene.y, maxDim * 2.2);
+    camera.updateProjectionMatrix();
+  }
+  controls.update();
 }
 
 let camera = makeOrthoCam();
@@ -706,7 +741,7 @@ let camera = makeOrthoCam();
 let controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping  = true;
 controls.dampingFactor  = 0.06;
-controls.target.set(L_MAX_MM / 2, -Z_MAX_MM * 0.25, 0);
+controls.target.set(L_MAX_MM / 2, -Z_MAX_MM * 0.35, 0);
 controls.update();
 
 // ═══════════════════════════════════════════════════════════
@@ -782,6 +817,8 @@ function setProgress(n) {
   const pct = totalParts > 0 ? Math.round(n / totalParts * 100) : 100;
   document.getElementById('progBar').style.width = pct + '%';
   if (pct >= 100) {
+    // ── Tutti i pezzi caricati: auto-fit camera alla scena reale ──
+    setTimeout(() => { fitCameraToScene(); }, 150);
     setTimeout(() => {
       const d = document.getElementById('loadDiv');
       if (d) d.style.opacity = '0';
@@ -939,12 +976,27 @@ function loadPart(parte, gancio, colorHex) {
       // ── GLB caricato con successo ──
       const raw = gltf.scene;
 
-      // ── CENTER: il GLB porta le coordinate STEP originali (es. x=5000mm).
-      //    Calcoliamo la bbox e spostiamo il raw scene in modo che il suo
-      //    centro bounding-box coincida con l'origine del pivot group.
-      const bbox   = new THREE.Box3().setFromObject(raw);
-      const center = bbox.getCenter(new THREE.Vector3());
-      raw.position.set(-center.x, -center.y, -center.z);
+      // ── SCALE + CENTER ──────────────────────────────────────────
+      //  1) Leggiamo bbox in coordinate STEP originali
+      const bboxRaw  = new THREE.Box3().setFromObject(raw);
+      const sizeRaw  = bboxRaw.getSize(new THREE.Vector3());
+      const centerRaw = bboxRaw.getCenter(new THREE.Vector3());
+
+      //  2) Scala uniforme: facciamo coincidere la dimensione max
+      //     del GLB con quella attesa dal nesting (L_mm / H_mm / W_mm).
+      //     Questo corregge sia la conversione unità mm→m del GLTF
+      //     sia differenze di rappresentazione CAD.
+      const maxGlb     = Math.max(sizeRaw.x, sizeRaw.y, sizeRaw.z);
+      const maxNesting  = Math.max(parte.L_mm || 200, parte.H_mm || 300, parte.W_mm || 60);
+      const scaleFactor = (maxGlb > 0 && maxNesting > 0) ? (maxNesting / maxGlb) : 1;
+      raw.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+      //  3) Centra: dopo la scala, spostiamo raw di -center*scale
+      raw.position.set(
+        -centerRaw.x * scaleFactor,
+        -centerRaw.y * scaleFactor,
+        -centerRaw.z * scaleFactor
+      );
 
       // ── Pivot group: positionPart opererà su questo, non su raw ──
       const obj = new THREE.Group();
@@ -1048,10 +1100,13 @@ function buildScene() {
       scene.add(border);
     }
 
-    // Carica parti
-    parti.forEach(parte => {
-      const col = PALETTE_HEX[gi % PALETTE_HEX.length];
-      loadPart(parte, g, col);
+    // Carica parti — Z-stagger: ogni parte al gancio è sfalsata in Z
+    // per evitare sovrapposizioni e rendere ogni pezzo visibile
+    parti.forEach((parte, pi) => {
+      const col    = PALETTE_HEX[gi % PALETTE_HEX.length];
+      const zStep  = (parte.W_mm || 80) + 40;   // spessore pezzo + gap 40mm
+      const parteZ = Object.assign({}, parte, { z_offset: pi * zStep });
+      loadPart(parteZ, g, col);
     });
   });
 }
