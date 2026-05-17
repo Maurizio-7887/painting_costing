@@ -16,6 +16,37 @@ from typing import List, Optional, Dict, Tuple
 import numpy as np
 warnings.filterwarnings("ignore")
 
+# ── INTEGRAZIONE physics_hanging: rilevamento fori di aggancio ──────────────
+try:
+    from physics_hanging import detect_hanging_holes as _detect_hanging_holes
+    def _rileva_fori_aggancio(mesh, n_sections: int = 25, z_scan_pct: float = 0.65):
+        """
+        Rileva i fori di aggancio fisicamente validi durante il parsing STL.
+        Integra physics_hanging.detect_hanging_holes() — senza secondo passaggio.
+        Restituisce lista di dict JSON-serializzabili, [] se nessun foro trovato.
+        """
+        try:
+            holes = _detect_hanging_holes(mesh, n_sections=n_sections, z_scan_pct=z_scan_pct)
+            return [
+                {
+                    'x_mm':        round(h.x_mm, 1),
+                    'y_mm':        round(h.y_mm, 1),
+                    'z_mm':        round(h.z_mm, 1),
+                    'diameter_mm': round(h.diameter_mm, 1),
+                    'confidence':  round(h.confidence, 3),
+                    'source':      h.source,
+                    'normal':      list(h.normal),
+                }
+                for h in holes
+            ]
+        except Exception:
+            return []
+except ImportError:
+    def _rileva_fori_aggancio(mesh, **kw):
+        """Stub: physics_hanging non disponibile."""
+        return []
+
+
 
 # ── Densità materiale default (acciaio) ────────────────────────
 DENSITA_ACCIAIO_KG_M3 = 7850.0
@@ -46,6 +77,12 @@ class PartGeometry:
     complessita_aggancio: int = 1      # 1/2/3
     hash_geom: str = ""                # hash invariante geometrico
     mesh_presente: bool = False        # True se trimesh è riuscito
+
+    # Punti di aggancio rilevati dalla mesh STL (physics_hanging integration)
+    hanging_holes: list = field(default_factory=list)  # List[dict] con x,y,z,diameter_mm
+    n_hanging_holes: int = 0                            # contatore fori validi
+    stl_path: str = ''                                  # path locale al file STL per viewer 3D
+    mesh_obj: object = field(default=None, repr=False)  # trimesh.Trimesh in memoria (STEP→no file)
 
 
 @dataclass
@@ -220,6 +257,9 @@ def _analizza_mesh(mesh, nome: str) -> PartGeometry:
     codice = genera_codice_art(nome, vol_m3, sup_m2, (L, W, H))
     hash_g = codice.split('-')[-1]
 
+    # ── GAP 1 FIX: rilevamento fori di aggancio per mesh STEP ──────────────
+    hanging_holes = _rileva_fori_aggancio(mesh)
+
     return PartGeometry(
         nome=nome,
         codice_art=codice,
@@ -239,6 +279,10 @@ def _analizza_mesh(mesh, nome: str) -> PartGeometry:
         complessita_aggancio=complessita,
         hash_geom=hash_g,
         mesh_presente=True,
+        hanging_holes=hanging_holes,
+        n_hanging_holes=len(hanging_holes),
+        stl_path='',          # non su disco per STEP (mesh in memoria)
+        mesh_obj=mesh,        # GAP2: trimesh in memoria per silhouette
     )
 
 
@@ -531,7 +575,11 @@ def parse_result_to_dict(result: ParseResult) -> dict:
                 'cog_z_mm':      p.cog_z_mm,
                 'passo_gancio_m':p.passo_gancio_m,
                 'complessita':   p.complessita_aggancio,
-                'mesh_presente': p.mesh_presente,
+                'mesh_presente':   p.mesh_presente,
+                'hanging_holes':   getattr(p, 'hanging_holes', []),
+                'n_hanging_holes': getattr(p, 'n_hanging_holes', 0),
+                'stl_path':        getattr(p, 'stl_path', ''),
+                # mesh_obj non serializzato in JSON (oggetto in memoria)
             }
             for p in result.parti
         ],
@@ -628,6 +676,9 @@ def _analizza_stl_file(path_stl: str, nome_override: str = None) -> Optional[Par
 
         codice = genera_codice_art(nome, vol_m3, sup_m2, (L, W, H))
 
+        # ── Rilevamento fori di aggancio (physics_hanging) ──────────────────
+        hanging_holes = _rileva_fori_aggancio(mesh)
+
         return PartGeometry(
             nome=nome,
             codice_art=codice,
@@ -647,6 +698,9 @@ def _analizza_stl_file(path_stl: str, nome_override: str = None) -> Optional[Par
             complessita_aggancio=comp,
             hash_geom=codice.split('-')[-1],
             mesh_presente=True,
+            hanging_holes=hanging_holes,
+            n_hanging_holes=len(hanging_holes),
+            stl_path=path_stl,
         )
     except Exception as e:
         return None

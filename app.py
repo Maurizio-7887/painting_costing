@@ -1973,6 +1973,126 @@ def cad_viewer3d(ordine_id):
     return render_template('cad_viewer3d.html',
                            ordine=ordine, asm=asm, nesting=nesting_data)
 
+
+# ══════════════════════════════════════════════════════════════════
+# ROUTE: Serve GLB per Three.js viewer (Phase 2)
+# ══════════════════════════════════════════════════════════════════
+
+@app.route('/api/cad/glb/<int:asm_id>/<codice_safe>')
+def api_serve_glb(asm_id, codice_safe):
+    """Serve file GLB per Three.js viewer — generato da export_glb_for_viewer()."""
+    # Sicurezza: blocca path traversal
+    codice_safe = codice_safe.replace('/', '').replace('..', '')
+    glb_dir = os.path.join(app.static_folder, 'glb', str(asm_id))
+    glb_path = os.path.join(glb_dir, f"{codice_safe}.glb")
+    if not os.path.exists(glb_path):
+        return jsonify({'error': 'GLB non trovato'}), 404
+    return send_file(glb_path, mimetype='model/gltf-binary',
+                     download_name=f"{codice_safe}.glb")
+
+
+@app.route('/api/nesting/validate_drop', methods=['POST'])
+def api_nesting_validate_drop():
+    """
+    Fase 3 — valida drop interattivo di un pezzo su un gancio.
+
+    Request JSON:
+      {
+        "asm_id":   5,
+        "hook_idx": 2,
+        "x_mm":     800,
+        "Z_max_mm": 2000,
+        "new_part": {"codice": "ART-001", "L_mm": 800, "H_mm": 350, "W_mm": 75, "peso_kg": 12.5},
+        "existing_parts": [
+          {"codice": "ART-002", "L_mm": 400, "H_mm": 300, "W_mm": 60,
+           "peso_kg": 8.0, "z_offset_mm": 0}
+        ]
+      }
+
+    Response:
+      {"ok": true,  "z_offset_mm": 400, "message": "OK — aggiunto a G3", "collision": false}
+      {"ok": false, "collision": true,  "message": "FAIL — ..."}
+    """
+    try:
+        d = request.get_json(force=True) or {}
+        new_part     = d.get('new_part', {})
+        existing     = d.get('existing_parts', [])
+        Z_max        = float(d.get('Z_max_mm', 2000))
+
+        # Larghezza effettiva del nuovo pezzo lungo l'asse Z della barra
+        new_W = float(new_part.get('W_mm') or new_part.get('L_mm') or 200)
+        new_H = float(new_part.get('H_mm') or 300)
+        new_peso = float(new_part.get('peso_kg') or 0)
+
+        # Intervalli z già occupati dalle parti esistenti sullo stesso gancio
+        used_intervals = []
+        total_peso = new_peso
+        for ep in existing:
+            z0 = float(ep.get('z_offset_mm') or 0)
+            w  = float(ep.get('W_mm') or ep.get('L_mm') or 200)
+            used_intervals.append((z0, z0 + w))
+            total_peso += float(ep.get('peso_kg') or 0)
+
+        # Calcola z_offset disponibile (first-fit)
+        GAP = 15.0  # gap di sicurezza tra pezzi (mm)
+        candidate_z = 0.0
+
+        # Prova a infilare il nuovo pezzo dopo l'ultimo occupato
+        used_intervals.sort()
+        for (z0, z1) in used_intervals:
+            if candidate_z + new_W + GAP > z0:
+                candidate_z = max(candidate_z, z1 + GAP)
+
+        if candidate_z + new_W > Z_max:
+            return jsonify({
+                'ok': False,
+                'collision': True,
+                'message': (
+                    f"FAIL — spazio insufficiente sul gancio "
+                    f"(serve {new_W:.0f}mm, disponibile "
+                    f"{max(0, Z_max - candidate_z):.0f}mm su {Z_max:.0f}mm totali)"
+                ),
+            })
+
+        # Peso totale: verifica limite gancio (default 60kg)
+        MAX_KG_PER_HOOK = float(d.get('max_kg_per_hook', 60))
+        if total_peso > MAX_KG_PER_HOOK:
+            return jsonify({
+                'ok': False,
+                'collision': False,
+                'message': (
+                    f"FAIL — peso gancio superato "
+                    f"({total_peso:.1f}kg > {MAX_KG_PER_HOOK:.0f}kg limite)"
+                ),
+            })
+
+        return jsonify({
+            'ok': True,
+            'collision': False,
+            'z_offset_mm': round(candidate_z, 1),
+            'message': (
+                f"OK — {new_part.get('codice','?')} allocato "
+                f"(z={candidate_z:.0f}mm, peso totale gancio {total_peso:.1f}kg)"
+            ),
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'collision': False, 'message': f'Errore server: {e}'}), 500
+
+
+@app.route('/api/cad/glb_list/<int:asm_id>')
+def api_glb_list(asm_id):
+    """Lista GLB disponibili per un assembly."""
+    glb_dir = os.path.join(app.static_folder, 'glb', str(asm_id))
+    if not os.path.exists(glb_dir):
+        return jsonify({'disponibile': False, 'files': []})
+    files = [
+        {'codice_safe': fn[:-4], 'url': f'/api/cad/glb/{asm_id}/{fn[:-4]}'}
+        for fn in sorted(os.listdir(glb_dir)) if fn.endswith('.glb')
+    ]
+    return jsonify({'disponibile': bool(files), 'files': files})
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
@@ -2055,6 +2175,25 @@ def cad_upload():
                         safe = codice.replace('-','_')
                         shutil.copy(tmp_path, os.path.join(stl_dir, f"{safe}.stl"))
                     os.unlink(tmp_path)
+
+                    # ── Esporta GLB per Three.js viewer ───────────────────
+                    try:
+                        from physics_hanging import export_glb_for_viewer
+                        glb_dir = os.path.join(app.static_folder, 'glb', str(asm.id))
+                        os.makedirs(glb_dir, exist_ok=True)
+                        glb_count = 0
+                        for parte in parse_result.parti:
+                            _mesh = getattr(parte, 'mesh_obj', None)
+                            if _mesh is not None and hasattr(_mesh, 'export'):
+                                _safe = parte.codice_art.replace('-', '_')
+                                _glb_path = os.path.join(glb_dir, f"{_safe}.glb")
+                                export_glb_for_viewer(_mesh, _glb_path)
+                                glb_count += 1
+                        if glb_count:
+                            app.logger.info(f"GLB: {glb_count} mesh esportate per asm {asm.id}")
+                    except Exception as _glb_err:
+                        app.logger.warning(f"GLB export skipped: {_glb_err}")
+                    # ──────────────────────────────────────────────────────
 
                     flash(
                         f"✅ '{parse_result.assembly_nome}' analizzato: "
