@@ -1985,15 +1985,141 @@ def cad_viewer3d(ordine_id):
 
 @app.route('/api/cad/glb/<int:asm_id>/<codice_safe>')
 def api_serve_glb(asm_id, codice_safe):
-    """Serve file GLB per Three.js viewer — generato da export_glb_for_viewer()."""
-    # Sicurezza: blocca path traversal
+    """
+    Serve file GLB per Three.js viewer.
+    Se il file reale esiste su disco → lo serve direttamente.
+    Altrimenti → genera al volo un GLB procedurale con le dimensioni reali
+    dal DB (ItemMasterCAD), così il viewer 3D mostra sempre mesh con
+    le proporzioni corrette invece di rettangoli anonimi.
+    """
     codice_safe = codice_safe.replace('/', '').replace('..', '')
-    glb_dir = os.path.join(GLB_DIR, str(asm_id))
+    glb_dir  = os.path.join(GLB_DIR, str(asm_id))
     glb_path = os.path.join(glb_dir, f"{codice_safe}.glb")
-    if not os.path.exists(glb_path):
-        return jsonify({'error': 'GLB non trovato'}), 404
-    return send_file(glb_path, mimetype='model/gltf-binary',
-                     download_name=f"{codice_safe}.glb")
+
+    # ── 1. File reale su disco → serve diretto ────────────────────
+    if os.path.exists(glb_path):
+        return send_file(glb_path, mimetype='model/gltf-binary',
+                         download_name=f"{codice_safe}.glb")
+
+    # ── 2. Nessun file reale → genera GLB procedurale dal DB ─────
+    try:
+        import trimesh, numpy as np
+
+        # Ricostruisci il codice articolo (safe ha - sostituiti con _)
+        codice_art = codice_safe.replace('_', '-')
+        item = ItemMasterCAD.query.filter_by(codice_art=codice_art).first()
+        # Prova anche match diretto nel caso il codice non abbia trattini
+        if not item:
+            item = ItemMasterCAD.query.filter(
+                ItemMasterCAD.codice_art.ilike(f'%{codice_safe.replace("_","%")}%')
+            ).first()
+
+        # Dimensioni: usa dati DB se disponibili, altrimenti placeholder visibili
+        if item and (item.lunghezza_mm or item.altezza_mm):
+            L = float(item.lunghezza_mm or 400)
+            H = float(item.altezza_mm   or 300)
+            W = float(item.larghezza_mm or max(40, min(L, H) * 0.18))
+            cog_x = float(item.cog_x_mm or L / 2)
+            cog_z = float(item.cog_z_mm or H * 0.4)
+        else:
+            L, H, W = 400.0, 300.0, 60.0
+            cog_x, cog_z = L / 2, H * 0.4
+
+        # ── Corpo principale del pezzo (box con proporzioni reali) ──
+        corpo = trimesh.creation.box(extents=[L, H, W])
+        # Centro sul CoG stimato
+        corpo.apply_translation([-cog_x, -cog_z, 0])
+
+        # ── Foro di aggancio (cilindro sottratto) ──────────────────
+        foro_r  = min(12.0, W * 0.18)
+        foro_h  = W * 1.6
+        foro    = trimesh.creation.cylinder(radius=foro_r, height=foro_h,
+                                            sections=16)
+        foro.apply_transform(trimesh.transformations.rotation_matrix(
+            math.pi / 2, [1, 0, 0]))
+        foro.apply_translation([0, H * 0.5 - cog_z - foro_r * 0.5, 0])
+
+        # Operazione booleana: sottrai foro dal corpo
+        try:
+            mesh = trimesh.boolean.difference([corpo, foro], engine='blender')
+            if mesh is None or len(mesh.faces) == 0:
+                raise ValueError("boolean failed")
+        except Exception:
+            mesh = corpo  # fallback: box senza foro
+
+        mesh = trimesh.util.concatenate([mesh]) if not isinstance(mesh, trimesh.Trimesh) else mesh
+
+        # ── Smusso visuale: leggero smooth shading ─────────────────
+        try:
+            mesh = mesh.smoothed(angle=math.radians(30))
+        except Exception:
+            pass
+
+        # ── Esporta GLB in memoria ─────────────────────────────────
+        scene   = trimesh.Scene()
+        scene.add_geometry(mesh, node_name='pezzo')
+        glb_bytes = scene.export(file_type='glb')
+
+        # Cache su disco per la prossima richiesta
+        try:
+            os.makedirs(glb_dir, exist_ok=True)
+            with open(glb_path, 'wb') as fh:
+                fh.write(glb_bytes)
+        except Exception:
+            pass
+
+        return send_file(
+            io.BytesIO(glb_bytes),
+            mimetype='model/gltf-binary',
+            download_name=f"{codice_safe}.glb"
+        )
+
+    except Exception as exc:
+        # Ultimo fallback: box minimale hand-crafted in GLTF JSON embedded
+        # (funziona senza trimesh)
+        import struct, base64
+        L, H, W = 400.0, 300.0, 60.0
+        verts = np.array([
+            [-L/2,-H/2,-W/2],[ L/2,-H/2,-W/2],[ L/2, H/2,-W/2],[-L/2, H/2,-W/2],
+            [-L/2,-H/2, W/2],[ L/2,-H/2, W/2],[ L/2, H/2, W/2],[-L/2, H/2, W/2],
+        ], dtype=np.float32)
+        faces = np.array([
+            [0,2,1],[0,3,2],[4,5,6],[4,6,7],
+            [0,1,5],[0,5,4],[2,3,7],[2,7,6],
+            [0,4,7],[0,7,3],[1,2,6],[1,6,5],
+        ], dtype=np.uint16)
+        vbuf = verts.tobytes()
+        ibuf = faces.tobytes()
+        combined = vbuf + ibuf
+        b64 = base64.b64encode(combined).decode()
+        gltf = {
+            "asset": {"version": "2.0"},
+            "scene": 0, "scenes": [{"nodes": [0]}],
+            "nodes": [{"mesh": 0}],
+            "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+            "accessors": [
+                {"bufferView": 0, "componentType": 5126, "count": 8, "type": "VEC3",
+                 "min": [-L/2,-H/2,-W/2], "max": [L/2,H/2,W/2]},
+                {"bufferView": 1, "componentType": 5123, "count": 36, "type": "SCALAR"},
+            ],
+            "bufferViews": [
+                {"buffer": 0, "byteOffset": 0,             "byteLength": len(vbuf)},
+                {"buffer": 0, "byteOffset": len(vbuf),     "byteLength": len(ibuf)},
+            ],
+            "buffers": [{"uri": f"data:application/octet-stream;base64,{b64}",
+                         "byteLength": len(combined)}],
+        }
+        import struct
+        json_str  = json.dumps(gltf).encode()
+        # GLTF binary container (GLB)
+        chunk0_len = (len(json_str) + 3) & ~3
+        json_pad   = json_str + b' ' * (chunk0_len - len(json_str))
+        header = struct.pack('<III', 0x46546C67, 2, 12 + 8 + chunk0_len)
+        chunk0 = struct.pack('<II', chunk0_len, 0x4E4F534A) + json_pad
+        glb_bytes = header + chunk0
+        return send_file(io.BytesIO(glb_bytes),
+                         mimetype='model/gltf-binary',
+                         download_name=f"{codice_safe}.glb")
 
 
 @app.route('/api/nesting/validate_drop', methods=['POST'])
