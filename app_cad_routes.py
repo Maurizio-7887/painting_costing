@@ -491,18 +491,7 @@ def api_cad_esplodi(ordine_id):
         'peso_totale_kg':     round(sum(e['peso_kg_tot'] for e in esplosa), 2),
     }
     return jsonify({'ordine_id': ordine_id, 'totali': totali, 'righe': esplosa})
-
-from flask import send_from_directory, safe_join
-
-@app.route('/api/cad/mesh/<path:filename>')
-def serve_cad_mesh(filename):
-    """
-    Ritorna il vero file STL o GLB della parte Enorossi 
-    memorizzato nella cartella dei caricamenti del server.
-    """
-    upload_dir = app.config.get('UPLOAD_FOLDER', 'uploads/meshes')
-    # Protegge da directory traversal e invia il file reale
-    return send_from_directory(upload_dir, filename, as_attachment=False)
+'''
 
 if __name__ == "__main__":
     print("app_cad_routes.py — Contiene codice da integrare in app.py")
