@@ -263,6 +263,7 @@ const Z_MAX_MM = {{ nesting.bar_config.Z_max_mm if nesting and nesting.bar_confi
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
 import {
   computeBoundsTree, disposeBoundsTree, acceleratedRaycast, MeshBVH
@@ -667,7 +668,15 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace   = THREE.SRGBColorSpace;
 renderer.toneMapping        = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.25;
+
+// ── IBL: environment map per materiali PBR realistici ──────
+// Genera una env map sintetica (studio lighting) senza file HDR esterni
+const pmremGen = new THREE.PMREMGenerator(renderer);
+pmremGen.compileEquirectangularShader();
+const envScene = new THREE.RoomEnvironment();
+const envTexture = pmremGen.fromScene(envScene).texture;
+// scene.environment viene impostato in buildScene() dopo la scena base
 
 // ═══════════════════════════════════════════════════════════
 // SCENE
@@ -899,25 +908,70 @@ function addHook(x, hookLeftMm, hookRightMm, L_mm) {
 function addBoxPart(parte, gancio, color) {
   const L = parte.L_mm || 200;
   const H = parte.H_mm || 300;
-  const D = Math.min(L, H) * 0.3;  // profondità stimata
+  const D = parte.W_mm || Math.min(L, H) * 0.22;
 
-  const geo = new THREE.BoxGeometry(L, H, D);
-  const mat = new THREE.MeshPhongMaterial({
-    color:     color,
-    specular:  0x888888,
-    shininess: 30,
-    transparent: true,
-    opacity:   0.88,
+  // Corpo principale con materiale metallico industriale
+  const geo = new THREE.BoxGeometry(L, H, D, 1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({
+    color:        color,
+    metalness:    0.55,
+    roughness:    0.40,
   });
+  const body = new THREE.Mesh(geo, mat);
+  body.castShadow    = true;
+  body.receiveShadow = true;
 
-  // Bordo wireframe visibile
-  const edges = new THREE.EdgesGeometry(geo);
-  const lineMat = new THREE.LineBasicMaterial({ color: color, opacity: 0.5, transparent: true });
-  const wireFrame = new THREE.LineSegments(edges, lineMat);
+  // Foro di aggancio (cilindro passante in cima)
+  const holeR = Math.min(10, D * 0.18);
+  const holeGeo = new THREE.CylinderGeometry(holeR, holeR, D * 1.5, 12);
+  const holeMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.2 });
+  const hole = new THREE.Mesh(holeGeo, holeMat);
+  hole.rotation.x = Math.PI / 2;
+  hole.position.set(0, H / 2 - holeR * 2.5, 0);
+
+  // Bordi netti per leggibilita
+  const edgeGeo = new THREE.EdgesGeometry(geo, 15);
+  const hexStr = '#' + color.getHexString();
+  const edgeColor = new THREE.Color(hexStr).multiplyScalar(1.5);
+  const edgeMat = new THREE.LineBasicMaterial({ color: edgeColor, opacity: 0.4, transparent: true });
+  const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+
+  // Etichetta 3D con nome reale del pezzo
+  const labelCanvas = document.createElement('canvas');
+  labelCanvas.width  = 512;
+  labelCanvas.height = 128;
+  const lctx = labelCanvas.getContext('2d');
+  lctx.clearRect(0, 0, 512, 128);
+  lctx.fillStyle = 'rgba(0,0,0,0.65)';
+  lctx.fillRect(0, 0, 512, 128);
+  lctx.fillStyle = hexStr;
+  lctx.fillRect(0, 0, 7, 128);
+  lctx.font = 'bold 28px monospace';
+  lctx.fillStyle = '#ffffff';
+  lctx.textAlign = 'left';
+  lctx.fillText((parte.nome || parte.codice || '').substring(0, 24), 18, 44);
+  lctx.font = '20px monospace';
+  lctx.fillStyle = '#88bbff';
+  lctx.fillText(parte.codice || '', 18, 74);
+  lctx.fillStyle = '#f0883e';
+  lctx.textAlign = 'right';
+  lctx.fillText((parte.peso_kg || 0).toFixed(1) + ' kg', 504, 74);
+  lctx.font = '17px monospace';
+  lctx.fillStyle = '#556677';
+  lctx.textAlign = 'left';
+  lctx.fillText(Math.round(L)+'x'+Math.round(H)+'x'+Math.round(D)+' mm', 18, 106);
+
+  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  const labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthWrite: false }));
+  const ls = Math.max(L * 1.05, 280);
+  labelSprite.scale.set(ls, ls * 0.25, 1);
+  labelSprite.position.set(0, -(H / 2) - 44, 0);
 
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(geo, mat));
-  group.add(wireFrame);
+  group.add(body);
+  group.add(hole);
+  group.add(edges);
+  group.add(labelSprite);
   group.userData = buildUserData(parte, gancio);
   positionPart(group, parte, gancio);
   scene.add(group);
@@ -1005,10 +1059,11 @@ function loadPart(parte, gancio, colorHex) {
       // Applica colore a tutti i mesh figli
       obj.traverse(child => {
         if (child.isMesh) {
-          child.material = new THREE.MeshPhongMaterial({
-            color:     color,
-            specular:  0x666666,
-            shininess: 25,
+          child.material = new THREE.MeshStandardMaterial({
+            color:      color,
+            metalness:  0.50,
+            roughness:  0.38,
+            envMapIntensity: 1.0,
           });
           child.castShadow    = true;
           child.receiveShadow = true;
@@ -1364,6 +1419,9 @@ buildNonAllocatePalette();
 
 if (ganci.length > 0) {
   buildScene();
+  // Applica env map IBL a tutta la scena (fa sembrare i metalli veri)
+  scene.environment = envTexture;
+  scene.environmentIntensity = 0.8;
 } else {
   // Nessun nesting: mostra barra vuota con messaggio
   const msgEl = document.getElementById('loadMsg');
