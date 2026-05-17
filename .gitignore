@@ -1,60 +1,13 @@
-# Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.hypothesis/
-
-# Flask
-instance/
-.webassets-cache
-
-# SQLite
 *.db
-*.sqlite3
-
-# Upload e generati runtime
-uploads/*
-!uploads/.gitkeep
-static/glb/*
-!static/glb/.gitkeep
-
-# Segreti
+*.sqlite
 .env
-*.pem
-*.key
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V8
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# STEP/STL (pesanti)
-*.stp
-*.STEP
-*.stl
-*.STL
+venv/
+env/
+static/glb/*/
+!static/glb/.gitkeep
+uploads/*.step
+uploads/*.stp
+uploads/*.stl

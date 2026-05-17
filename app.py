@@ -48,6 +48,11 @@ elif _db_url.startswith('postgresql://') and '+psycopg2' not in _db_url:
 
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# ── GLB STORAGE (Railway Volume o static/glb locale) ────────────
+# Su Railway: crea un Volume montato su /data e imposta GLB_DIR=/data/glb
+GLB_DIR = os.environ.get('GLB_DIR', os.path.join(os.path.dirname(__file__), 'static', 'glb'))
+os.makedirs(GLB_DIR, exist_ok=True)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'enorossi-dev-key-2026')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB per file 3D
 
@@ -1983,7 +1988,7 @@ def api_serve_glb(asm_id, codice_safe):
     """Serve file GLB per Three.js viewer — generato da export_glb_for_viewer()."""
     # Sicurezza: blocca path traversal
     codice_safe = codice_safe.replace('/', '').replace('..', '')
-    glb_dir = os.path.join(app.static_folder, 'glb', str(asm_id))
+    glb_dir = os.path.join(GLB_DIR, str(asm_id))
     glb_path = os.path.join(glb_dir, f"{codice_safe}.glb")
     if not os.path.exists(glb_path):
         return jsonify({'error': 'GLB non trovato'}), 404
@@ -2083,7 +2088,7 @@ def api_nesting_validate_drop():
 @app.route('/api/cad/glb_list/<int:asm_id>')
 def api_glb_list(asm_id):
     """Lista GLB disponibili per un assembly."""
-    glb_dir = os.path.join(app.static_folder, 'glb', str(asm_id))
+    glb_dir = os.path.join(GLB_DIR, str(asm_id))
     if not os.path.exists(glb_dir):
         return jsonify({'disponibile': False, 'files': []})
     files = [
@@ -2179,7 +2184,7 @@ def cad_upload():
                     # ── Esporta GLB per Three.js viewer ───────────────────
                     try:
                         from physics_hanging import export_glb_for_viewer
-                        glb_dir = os.path.join(app.static_folder, 'glb', str(asm.id))
+                        glb_dir = os.path.join(GLB_DIR, str(asm.id))
                         os.makedirs(glb_dir, exist_ok=True)
                         glb_count = 0
                         for parte in parse_result.parti:
