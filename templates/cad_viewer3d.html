@@ -791,6 +791,8 @@ function setProgress(n) {
 }
 
 if (totalParts === 0) setProgress(1); // nessun pezzo → chiudi subito
+// Fallback: se dopo 8s i GLB non arrivano mostra i box placeholder e sblocca il viewer
+setTimeout(() => setProgress(totalParts), 8000);
 
 // ═══════════════════════════════════════════════════════════
 // HOOK CONNECTOR
