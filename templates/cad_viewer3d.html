@@ -937,7 +937,18 @@ function loadPart(parte, gancio, colorHex) {
     glbUrl,
     (gltf) => {
       // ── GLB caricato con successo ──
-      const obj = gltf.scene;
+      const raw = gltf.scene;
+
+      // ── CENTER: il GLB porta le coordinate STEP originali (es. x=5000mm).
+      //    Calcoliamo la bbox e spostiamo il raw scene in modo che il suo
+      //    centro bounding-box coincida con l'origine del pivot group.
+      const bbox   = new THREE.Box3().setFromObject(raw);
+      const center = bbox.getCenter(new THREE.Vector3());
+      raw.position.set(-center.x, -center.y, -center.z);
+
+      // ── Pivot group: positionPart opererà su questo, non su raw ──
+      const obj = new THREE.Group();
+      obj.add(raw);
 
       // Applica colore a tutti i mesh figli
       obj.traverse(child => {
