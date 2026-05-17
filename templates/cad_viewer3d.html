@@ -243,6 +243,7 @@ const ASM_ID        = {{ asm.id }};
 const NESTING       = {{ nesting | tojson | safe }};
 const NON_ALLOCATE  = (NESTING && NESTING.non_allocate) ? NESTING.non_allocate : [];
 const PASSO_MM = {{ nesting.bar_config.passo_mm if nesting and nesting.bar_config else 400 }};
+const canvas   = document.getElementById('c');
 const N_GANCI  = {{ nesting.bar_config.n_ganci  if nesting and nesting.bar_config else 7 }};
 const L_MAX_MM = {{ nesting.bar_config.L_max_mm if nesting and nesting.bar_config else 3000 }};
 const Z_MAX_MM = {{ nesting.bar_config.Z_max_mm if nesting and nesting.bar_config else 2000 }};
@@ -660,7 +661,6 @@ function hexColor(h) {
 // ═══════════════════════════════════════════════════════════
 // RENDERER
 // ═══════════════════════════════════════════════════════════
-const canvas   = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
