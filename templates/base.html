@@ -117,6 +117,8 @@ code{background:rgba(255,255,255,.07);color:#f0a0b0;padding:1px 5px;border-radiu
       <i class="bi bi-truck"></i>Macchine da Consegnare</a></li>
     <li><a href="{{ url_for('cad_upload') }}" class="{% if 'cad' in request.endpoint %}act{% endif %}">
       <i class="bi bi-cpu"></i>CAD &rarr; BOM &rarr; 3D Nesting</a></li>
+    <li><a href="{{ url_for('nesting_page') }}" class="{% if request.endpoint=='nesting_page' %}act{% endif %}">
+      <i class="bi bi-link-45deg"></i> Nesting Catena CAD</a></li>
 
     <li class="sb-sec">Costi &amp; Analisi</li>
     <li><a href="{{ url_for('storico') }}" class="{% if 'storico' in request.endpoint %}act{% endif %}">
