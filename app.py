@@ -2296,35 +2296,66 @@ def api_nesting_analizza():
             else:
                 meshes = []
 
-            for i, mesh in enumerate(meshes):
-                try:
-                    bounds = mesh.bounds  # [[xmin,ymin,zmin],[xmax,ymax,zmax]]
-                    L = float(bounds[1][0] - bounds[0][0])
-                    H = float(bounds[1][1] - bounds[0][1])
-                    D = float(bounds[1][2] - bounds[0][2])
-                    # Orienta: dimensione maggiore = larghezza
-                    dims = sorted([L, H, D], reverse=True)
-                    L_mm = round(dims[0])
-                    H_mm = round(dims[1])
-                    D_mm = round(dims[2])
-                    vol  = float(mesh.volume)
-                    area = float(mesh.area)
-                    # Peso stimato acciaio 7850 kg/m³
+            # ── MERGE: un solo pezzo per file STEP ──────────────
+            try:
+                import numpy as np
+                valid_meshes = [m for m in meshes if hasattr(m, 'vertices') and len(m.vertices) > 0]
+                if not valid_meshes:
+                    raise ValueError('Nessuna mesh valida')
+
+                # Combina tutti i vertici per calcolare bounding box globale
+                all_verts = np.vstack([m.vertices for m in valid_meshes])
+                bbox_min = all_verts.min(axis=0)
+                bbox_max = all_verts.max(axis=0)
+                L = float(bbox_max[0] - bbox_min[0])
+                H = float(bbox_max[1] - bbox_min[1])
+                D = float(bbox_max[2] - bbox_min[2])
+                dims = sorted([L, H, D], reverse=True)
+                L_mm = max(round(dims[0]), 10)
+                H_mm = max(round(dims[1]), 10)
+                D_mm = max(round(dims[2]), 10)
+
+                # Crea mesh combinata per SVG e volume
+                all_v_list = []
+                all_f_list = []
+                offset = 0
+                for m in valid_meshes:
+                    all_v_list.append(m.vertices)
+                    all_f_list.append(m.faces + offset)
+                    offset += len(m.vertices)
+                import trimesh as tr_mod
+                combined = tr_mod.Trimesh(
+                    vertices=np.vstack(all_v_list),
+                    faces=np.vstack(all_f_list),
+                    process=False
+                )
+
+                # Peso: volume se watertight, altrimenti bbox * fill_factor
+                vol = float(combined.volume) if combined.is_watertight else 0.0
+                if vol > 0:
                     peso = round(vol * 7850 / 1e9, 2)
-                    # SVG profilo (vista frontale = proiezione XY)
-                    svg_uri = _genera_svg_profilo_trimesh(mesh, L_mm, H_mm)
-                    part_nome = f"{nome}" if len(meshes) == 1 else f"{nome}_{i+1}"
-                    all_parts.append({
-                        'nome':      part_nome,
-                        'largh_mm':  L_mm,
-                        'alt_mm':    H_mm,
-                        'D_mm':      max(D_mm, 20),
-                        'peso_kg':   peso,
-                        'area_m2':   round(area / 1e6, 4),
-                        'svg_uri':   svg_uri,
-                    })
-                except Exception as e:
-                    errors.append(f'{nome}[{i}]: {e}')
+                else:
+                    # Stima con 15% fill factor (parte strutturale tipica)
+                    bbox_vol_mm3 = L_mm * H_mm * D_mm
+                    peso = round(bbox_vol_mm3 * 0.15 * 7850 / 1e9, 2)
+
+                # Area superficiale totale
+                area = sum(float(m.area) for m in valid_meshes)
+
+                # SVG del profilo combinato
+                svg_uri = _genera_svg_profilo_trimesh(combined, L_mm, H_mm)
+
+                all_parts.append({
+                    'nome':     nome,
+                    'largh_mm': L_mm,
+                    'alt_mm':   H_mm,
+                    'D_mm':     max(D_mm, 20),
+                    'peso_kg':  peso,
+                    'area_m2':  round(area / 1e6, 4),
+                    'svg_uri':  svg_uri,
+                })
+            except Exception as e:
+                errors.append(f'{nome}: {e}')
             os.unlink(tmp_path)
         except Exception as e:
             errors.append(f'{nome}: {e}')
