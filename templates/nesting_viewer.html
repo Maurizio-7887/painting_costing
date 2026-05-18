@@ -197,6 +197,7 @@ canvas.rotating{cursor:crosshair}
     <!-- Toolbar vista -->
     <div id="ctb">
       <button class="cb cbo on" id="btn-iso"  onclick="setView('iso')">⬡ ISO</button>
+      <button class="cb cbo"    id="btn-piece" onclick="setView('piece')">📦 Pezzo</button>
       <button class="cb cbo"    id="btn-front" onclick="setView('front')">↔ Frontale</button>
       <button class="cb cbo"    id="btn-top"   onclick="setView('top')">↕ Top</button>
       <button class="cb cbo"    id="btn-rot"   onclick="toggleRotMode()" title="Modalità rotazione CAD">⟳ Ruota</button>
@@ -500,10 +501,14 @@ function resetView() {
 
 function setView(v) {
   viewMode = v;
-  ['iso','front','top'].forEach(vv =>
-    document.getElementById('btn-'+vv).classList.toggle('on', vv===v)
-  );
-  if (v !== 'iso') { azimuth=30; elevation=25; }
+  ['iso','front','top','piece'].forEach(vv => {
+    const btn = document.getElementById('btn-'+vv);
+    if (btn) btn.classList.toggle('on', vv===v);
+  });
+  if(v==='iso')   { azimuth=30;  elevation=25; }
+  if(v==='front') { azimuth=0;   elevation=0;  }
+  if(v==='top')   { azimuth=0;   elevation=90; }
+  if (v === 'piece') { drawSinglePiece(); return; }
   resetView();
 }
 
@@ -815,6 +820,88 @@ function drawColumn(col, PASSO, Z_MAX) {
 
     curY -= H + GAP;
   });
+}
+
+function drawSinglePiece() {
+  clearCanvas();
+  if (!currentData || !currentData.columns || currentData.columns.length === 0) {
+    ctx.fillStyle = '#1a2530';
+    ctx.font = '14px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nessun pezzo caricato', canvas.width/2, canvas.height/2);
+    return;
+  }
+  // Prendi il primo pezzo disponibile
+  let part = null, col = null;
+  for (const c of currentData.columns) {
+    if (c.pezzi && c.pezzi.length > 0) { part = c.pezzi[0]; col = c; break; }
+  }
+  if (!part) { ctx.fillStyle='#1a2530'; ctx.font='14px Courier New'; ctx.textAlign='center'; ctx.fillText('Nessun pezzo', canvas.width/2, canvas.height/2); return; }
+
+  const W = canvas.width, H_c = canvas.height;
+  const pw = part.largh_mm, ph = part.alt_mm;
+  const margin = 80;
+  const scaleX = (W - margin*2) / pw;
+  const scaleY = (H_c - margin*2 - 80) / ph;
+  const sc = Math.min(scaleX, scaleY, 3.0);
+
+  const rw = pw * sc, rh = ph * sc;
+  const rx = (W - rw) / 2, ry = (H_c - rh) / 2 + 20;
+
+  // Sfondo pezzo
+  const color = col.color || '#00b8d4';
+  ctx.fillStyle = color + '22';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(rx, ry, rw, rh, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  // SVG silhouette
+  if (part.svg_uri) {
+    if (!svgCache[part.svg_uri]) {
+      const img = new Image();
+      img.onload = () => { svgCache[part.svg_uri] = img; drawSinglePiece(); };
+      img.src = part.svg_uri;
+      svgCache[part.svg_uri] = null;
+    } else if (svgCache[part.svg_uri]) {
+      const m = 8;
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(rx+m, ry+m, rw-m*2, rh-m*2, 4); ctx.clip();
+      ctx.drawImage(svgCache[part.svg_uri], rx+m, ry+m, rw-m*2, rh-m*2);
+      ctx.restore();
+    }
+  }
+
+  // Bordo e dimensioni
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(rx, ry, rw, rh, 6); ctx.stroke();
+
+  // Quota larghezza (sotto)
+  ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(rx, ry+rh+18); ctx.lineTo(rx+rw, ry+rh+18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rx,    ry+rh+12); ctx.lineTo(rx,    ry+rh+24); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rx+rw, ry+rh+12); ctx.lineTo(rx+rw, ry+rh+24); ctx.stroke();
+  ctx.fillStyle = '#90a4ae'; ctx.font = '11px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText(pw + ' mm', rx+rw/2, ry+rh+34);
+
+  // Quota altezza (sinistra)
+  ctx.beginPath(); ctx.moveTo(rx-18, ry); ctx.lineTo(rx-18, ry+rh); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rx-12, ry);    ctx.lineTo(rx-24, ry);    ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rx-12, ry+rh); ctx.lineTo(rx-24, ry+rh); ctx.stroke();
+  ctx.save(); ctx.translate(rx-34, ry+rh/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center'; ctx.fillText(ph + ' mm', 0, 0); ctx.restore();
+
+  // Info box in alto
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.roundRect(rx, ry-50, rw, 42, 6); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.font = 'bold 13px Courier New'; ctx.textAlign = 'left';
+  ctx.fillText('📦 ' + part.nome, rx+10, ry-30);
+  ctx.fillStyle = '#90a4ae'; ctx.font = '11px Courier New';
+  ctx.fillText(part.peso_kg.toFixed(2) + ' kg  |  ' + pw + '×' + ph + '×' + (part.D_mm||'?') + ' mm', rx+10, ry-12);
 }
 
 function drawSVGInFace(uri, TL,TR,BL,BR, fw, fh) {
