@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Ordini — ENOROSSI{% endblock %}
+{% block page_title %}Ordini in attesa{% endblock %}
+{% block content %}
+<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select name="stato" class="form-select" style="width:140px" onchange="this.form.submit()">
+      {% for s in stati %}<option value="{{ s }}" {% if s==stato_sel %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </form>
+  <button class="btn-grn" data-bs-toggle="modal" data-bs-target="#mNuovo" style="margin-left:auto">
+    <i class="bi bi-plus-circle"></i>Nuovo ordine
+  </button>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>N. Ordine</th><th>Codice</th><th>Colore</th><th>Qtà</th><th>Priorità</th><th>Stato</th><th>Centro</th><th></th></tr></thead>
+      <tbody>
+      {% for o in ordini %}
+      <tr>
+        <td><code>{{ o.numero_ordine }}</code></td>
+        <td><strong>{{ o.codice_prodotto }}</strong></td>
+        <td style="font-size:.72rem;color:var(--muted)">{{ o.colore[:16] }}</td>
+        <td>{{ o.quantita }}</td>
+        <td><span class="bdg {% if o.priorita<=2 %}bdg-red{% elif o.priorita<=4 %}bdg-yel{% else %}bdg-grn{% endif %}">P{{ o.priorita }}</span></td>
+        <td><span class="bdg bdg-gray">{{ o.stato }}</span></td>
+        <td style="font-size:.72rem;color:var(--muted)">{{ o.centro_lavoro }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('ordine_delete', ordine_id=o.id) }}" onsubmit="return confirm('Eliminare?')" style="display:inline">
+            <button class="btn-out" style="font-size:.7rem;padding:.2rem .4rem;color:var(--red);border-color:rgba(200,16,46,.2)"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="text-align:center;padding:36px;color:var(--muted)">Nessun ordine</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal nuovo ordine -->
+<div class="modal fade" id="mNuovo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="background:var(--bg2);border:1px solid var(--bdr);color:var(--txt)">
+      <div class="modal-header" style="border-color:var(--bdr)">
+        <h5 class="modal-title">Nuovo Ordine</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter:invert(1)"></button>
+      </div>
+      <form method="POST" action="{{ url_for('ordine_nuovo') }}">
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            {% for lbl,name,type,placeholder in [
+              ('N. Ordine *','numero_ordine','text','es. 100842'),
+              ('Codice Prodotto *','codice_prodotto','text','es. FALC-TF280'),
+              ('Colore','colore','text','VERDE RAL 6005'),
+              ('Quantità','quantita','number','1'),
+              ('Centro lavoro','centro_lavoro','text','VERN-01'),
+              ('Priorità (1-10)','priorita','number','5'),
+            ] %}
+            <div>
+              <label class="form-label">{{ lbl }}</label>
+              <input name="{{ name }}" type="{{ type }}" class="form-control" placeholder="{{ placeholder }}" {% if name=='quantita' or name=='priorita' %}min="1"{% endif %}>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="modal-footer" style="border-color:var(--bdr)">
+          <button type="button" class="btn-out" data-bs-dismiss="modal">Annulla</button>
+          <button type="submit" class="btn-grn"><i class="bi bi-plus"></i>Crea ordine</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

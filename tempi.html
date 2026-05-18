@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Tempi Standard — ENOROSSI{% endblock %}
+{% block page_title %}Tempi Standard Aggancio{% endblock %}
+{% block content %}
+<div style="display:flex;gap:10px;margin-bottom:14px">
+  <form method="GET" style="display:flex;gap:8px">
+    <select name="fam" class="form-select" style="width:160px" onchange="this.form.submit()">
+      <option value="">Tutte le famiglie</option>
+      {% for f in famiglie %}<option value="{{ f }}" {% if f==fam_sel %}selected{% endif %}>{{ f }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+<div class="card">
+  <div class="card-body" style="padding:0">
+    <table class="tbl">
+      <thead><tr><th>Codice</th><th>Nome</th><th>Complessità</th><th>T. aggancio (min)</th><th>Ganci/pz</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for r in lista %}
+      <tr>
+        <td><code>{{ r.codice }}</code></td>
+        <td>{{ r.nome }}</td>
+        <td><span class="bdg {% if r.complessita==3 %}bdg-red{% elif r.complessita==2 %}bdg-yel{% else %}bdg-grn{% endif %}">
+          {{ ['','Semplice','Medio','Complesso'][r.complessita or 1] }}</span></td>
+        <td><strong>{{ '%.1f'%r.tempo_aggancio_min }}</strong></td>
+        <td>{{ '%.2f'%r.ganci_per_pezzo }}</td>
+        <td style="font-size:.72rem;color:var(--muted)">{{ r.note or '' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

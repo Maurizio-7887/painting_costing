@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Carico Giornaliero — ENOROSSI{% endblock %}
+{% block page_title %}Ottimizzatore Carico Tunnel{% endblock %}
+{% block content %}
+<style>
+.prod-row{transition:background .15s}
+.prod-row:hover{background:rgba(200,16,46,.04)!important}
+</style>
+
+{% set cfg_ganci = config.n_ganci_totali if config.n_ganci_totali else 425 %}
+{% set cfg_zone  = config.n_zone if config.n_zone else 17 %}
+{% set cfg_lung  = config.lunghezza_tunnel_m if config.lunghezza_tunnel_m else 170 %}
+
+<!-- Banner tunnel -->
+<div style="background:rgba(28,110,46,.08);border:1px solid rgba(28,110,46,.2);border-radius:10px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+  <span style="font-size:.7rem;font-weight:700;color:var(--grn-h);text-transform:uppercase;letter-spacing:.1em">
+    <i class="bi bi-arrow-repeat" style="margin-right:5px"></i>TUNNEL LOOP {{ cfg_lung }}M · {{ cfg_zone }} ZONE
+  </span>
+</div>
+
+<div style="display:grid;grid-template-columns:340px 1fr;gap:18px">
+
+  <!-- ── PANNELLO SINISTRA: form ── -->
+  <div>
+    <div class="card">
+      <div class="card-hdr"><i class="bi bi-sliders" style="margin-right:6px"></i>Parametri</div>
+      <div class="card-body">
+        <form method="POST" id="fOtt">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+            <div>
+              <label class="form-label">Velocità (m/min)</label>
+              <input name="velocita" type="number" step="0.1" min="0.5" max="2.5"
+                     class="form-control" value="{{ config.velocita_default }}">
+            </div>
+            <div>
+              <label class="form-label">Operatore</label>
+              <input name="operatore" type="text" class="form-control" placeholder="Nome...">
+            </div>
+          </div>
+
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">Prodotti da caricare</div>
+          <div id="prodList">
+            {% if selezione %}
+              {% for cod, qty in selezione %}
+              <div class="prod-row" style="display:grid;grid-template-columns:1fr 70px 26px;gap:5px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
+                <select name="codice[]" class="form-select" style="font-size:.74rem">
+                  <option value="">— Seleziona —</option>
+                  {% for p in prodotti %}
+                  <option value="{{ p.codice }}" {% if p.codice == cod %}selected{% endif %}>
+                    {{ p.codice }} — {{ p.nome[:28] }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <input name="quantita[]" type="number" min="1" class="form-control"
+                       style="font-size:.78rem" value="{{ qty }}">
+                <button type="button" onclick="this.closest('.prod-row').remove()"
+                        style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.9rem;line-height:1">×</button>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="prod-row" style="display:grid;grid-template-columns:1fr 70px 26px;gap:5px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)">
+                <select name="codice[]" class="form-select" style="font-size:.74rem">
+                  <option value="">— Seleziona prodotto —</option>
+                  {% for p in prodotti %}
+                  <option value="{{ p.codice }}">{{ p.codice }} — {{ p.nome[:28] }}</option>
+                  {% endfor %}
+                </select>
+                <input name="quantita[]" type="number" min="1" value="1" class="form-control" style="font-size:.78rem">
+                <button type="button" onclick="this.closest('.prod-row').remove()"
+                        style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.9rem;line-height:1">×</button>
+              </div>
+            {% endif %}
+          </div>
+
+          <button type="button" onclick="addRow()" class="btn-out"
+                  style="width:100%;justify-content:center;margin-top:8px;margin-bottom:12px;font-size:.78rem">
+            <i class="bi bi-plus"></i>Aggiungi prodotto
+          </button>
+          <button type="submit" class="btn-grn"
+                  style="width:100%;justify-content:center;padding:.6rem;font-size:.88rem">
+            <i class="bi bi-play-fill"></i>Ottimizza Carico
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PANNELLO DESTRA: risultati ── -->
+  <div>
+    {% if result %}
+    <!-- KPI -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      {% set sat = result.saturazione_pct %}
+      <div class="kpi" style="border-bottom-color:{% if sat>80 %}var(--grn){% elif sat>50 %}var(--yel){% else %}var(--red){% endif %}">
+        <i class="bi bi-speedometer2 kpi-ico"></i>
+        <div class="kpi-num" style="color:{% if sat>80 %}var(--grn-h){% elif sat>50 %}var(--yel){% else %}var(--red){% endif %}">{{ sat }}%</div>
+        <div class="kpi-lbl">Saturazione</div>
+      </div>
+      <div class="kpi" style="border-bottom-color:var(--grn)">
+        <i class="bi bi-people kpi-ico"></i>
+        <div class="kpi-num" style="color:var(--grn-h)">{{ result.n_pezzi_totali }}</div>
+        <div class="kpi-lbl">Pezzi totali</div>
+      </div>
+      <div class="kpi" style="border-bottom-color:var(--yel)">
+        <i class="bi bi-clock kpi-ico"></i>
+        <div class="kpi-num" style="color:var(--yel)">{{ result.tempo_totale_min }} min</div>
+        <div class="kpi-lbl">Ciclo tunnel</div>
+      </div>
+      <div class="kpi" style="border-bottom-color:#7c3aed">
+        <i class="bi bi-currency-euro kpi-ico"></i>
+        <div class="kpi-num" style="color:#a78bfa">€ {{ '%.2f'|format(result.costo_totale) }}</div>
+        <div class="kpi-lbl">Costo stimato</div>
+      </div>
+    </div>
+
+    <!-- Tabella piano di carico -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="bi bi-table" style="margin-right:6px"></i>Piano di carico — Lotto #{{ result.lotto_id }}</span>
+        <a href="{{ url_for('lotto_detail', lotto_id=result.lotto_id) }}" class="btn-grn" style="font-size:.72rem;padding:.3rem .7rem">
+          <i class="bi bi-eye"></i>Dettaglio lotto
+        </a>
+      </div>
+      <div class="card-body" style="padding:0">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Prodotto</th>
+              <th>Codice</th>
+              <th>Qtà</th>
+              <th>Zona</th>
+              <th>Ganci</th>
+              <th>C.Vernice</th>
+              <th>C.Processo</th>
+              <th>C.Totale</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for item in result.items %}
+          <tr>
+            <td><strong>{{ item.prodotto.nome }}</strong></td>
+            <td><code>{{ item.prodotto.codice }}</code></td>
+            <td>{{ item.quantita }}</td>
+            <td><span class="bdg bdg-grn">Z{{ item.zona_assegnata }}</span></td>
+            <td>{{ item.n_ganci_occupati }}</td>
+            <td>€ {{ '%.3f'|format(item.costo_materiale_unitario) }}</td>
+            <td>€ {{ '%.3f'|format(item.costo_processo_unitario) }}</td>
+            <td><strong>€ {{ '%.3f'|format(item.costo_unitario_totale) }}</strong></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr style="background:rgba(255,255,255,.03)">
+              <td colspan="5"><strong>TOTALE</strong></td>
+              <td>€ {{ '%.2f'|format(result.costo_totale_materiale) }}</td>
+              <td>€ {{ '%.2f'|format(result.costo_totale_processo) }}</td>
+              <td><strong style="color:var(--grn-h)">€ {{ '%.2f'|format(result.costo_totale) }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Zone catena -->
+    <div class="card">
+      <div class="card-hdr"><i class="bi bi-diagram-3" style="margin-right:6px"></i>Distribuzione zone</div>
+      <div class="card-body" style="padding:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px">
+          {% for z in result.zone %}
+          <div style="background:{% if z.ganci > 0 %}rgba(28,110,46,.15){% else %}rgba(255,255,255,.03){% endif %};
+                      border:1px solid {% if z.ganci > 0 %}rgba(28,110,46,.3){% else %}var(--bdr){% endif %};
+                      border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:.58rem;color:var(--muted);margin-bottom:2px">Z{{ z.zona }}</div>
+            <div style="font-size:.9rem;font-weight:700;color:{% if z.ganci > 0 %}var(--grn-h){% else %}var(--muted2){% endif %}">{{ z.ganci }}</div>
+            <div style="font-size:.55rem;color:var(--muted2)">ganci</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if result.avvisi_kb %}
+    <div class="alert alert-warn" style="margin-top:14px">
+      {% for a in result.avvisi_kb %}<div>{{ a }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Stato vuoto -->
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;color:var(--muted2)">
+      <i class="bi bi-diagram-3" style="font-size:3rem;margin-bottom:16px;opacity:.3"></i>
+      <div style="font-size:.9rem;font-weight:600;margin-bottom:6px">Nessun carico ottimizzato</div>
+      <div style="font-size:.78rem">Seleziona i prodotti e clicca <strong style="color:var(--grn-h)">Ottimizza Carico</strong></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+const optsHtml = `{% for p in prodotti %}<option value="{{ p.codice }}">{{ p.codice }} — {{ p.nome[:28]|replace("'","\\'")|replace('"','\\"') }}</option>{% endfor %}`;
+function addRow(){
+  const row = document.createElement('div');
+  row.className = 'prod-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 70px 26px;gap:5px;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--bdr)';
+  row.innerHTML = `
+    <select name="codice[]" class="form-select" style="font-size:.74rem">
+      <option value="">— Seleziona —</option>${optsHtml}
+    </select>
+    <input name="quantita[]" type="number" min="1" value="1" class="form-control" style="font-size:.78rem">
+    <button type="button" onclick="this.closest('.prod-row').remove()"
+            style="background:rgba(200,16,46,.15);border:none;color:var(--red);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:.9rem;line-height:1">×</button>`;
+  document.getElementById('prodList').appendChild(row);
+}
+</script>
+{% endblock %}

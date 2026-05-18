@@ -1,0 +1,734 @@
+{% extends "base.html" %}
+{% block title %}Nesting Catena CAD{% endblock %}
+{% block content %}
+<style>
+/* ═══════════════════════════════════════════════ */
+/* LAYOUT */
+/* ═══════════════════════════════════════════════ */
+body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
+#app { display:flex; height:calc(100vh - 60px); }
+
+/* SIDEBAR */
+#sidebar {
+  width:220px; min-width:180px; background:#0d1117; border-right:1px solid #1a2633;
+  display:flex; flex-direction:column; padding:12px 8px; overflow-y:auto; flex-shrink:0;
+}
+#sidebar h3 { color:#00e676; font-size:11px; margin:0 0 10px; text-transform:uppercase; letter-spacing:1px; }
+.kpi { background:#111b27; border-radius:6px; padding:8px 10px; margin-bottom:6px; }
+.kpi .kl { font-size:9px; color:#4a6070; text-transform:uppercase; }
+.kv { font-size:18px; font-weight:bold; color:#00e676; }
+.kv.warn { color:#ff9800; }
+.kv.danger { color:#f44336; }
+#clist { margin-top:10px; }
+.ci { display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:4px;
+       cursor:pointer; margin-bottom:3px; transition:background 0.15s; }
+.ci:hover { background:#1a2633; }
+.cdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.cn { font-size:10px; flex:1; }
+.ck { font-size:10px; color:#80cbc4; white-space:nowrap; }
+
+/* CANVAS AREA */
+#canvaswrap { flex:1; position:relative; overflow:hidden; background:#080c0e; }
+#c { display:block; width:100%; height:100%; cursor:grab; }
+
+/* TOOLBAR */
+#toolbar {
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  display:flex; gap:6px; z-index:10;
+}
+.tbtn {
+  background:#0d1117; border:1px solid #1a2633; color:#b0bec5;
+  padding:6px 14px; border-radius:20px; cursor:pointer; font-size:12px;
+  font-family:'Courier New',monospace; transition:all 0.2s;
+}
+.tbtn:hover { border-color:#00e676; color:#00e676; }
+.tbtn.active { background:#00e676; color:#080c0e; border-color:#00e676; font-weight:bold; }
+.tbtn.danger { background:#c62828; color:#fff; border-color:#f44336; }
+
+/* UPLOAD OVERLAY */
+#upload-overlay {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; background:#080c0e; z-index:20;
+}
+#dropzone {
+  border:2px dashed #1a2633; border-radius:16px; padding:60px 80px;
+  text-align:center; cursor:pointer; transition:all 0.2s;
+  max-width:500px;
+}
+#dropzone:hover, #dropzone.drag-over { border-color:#00e676; background:#0a1a12; }
+#dropzone h2 { color:#00e676; margin:0 0 8px; font-size:22px; }
+#dropzone p { color:#4a6070; margin:4px 0; font-size:13px; }
+#file-input { display:none; }
+#upload-btn {
+  margin-top:20px; background:#00e676; color:#080c0e; border:none;
+  padding:10px 28px; border-radius:20px; cursor:pointer; font-size:14px;
+  font-family:'Courier New',monospace; font-weight:bold;
+}
+#upload-btn:hover { background:#00c853; }
+
+/* LOADING */
+#loading {
+  position:absolute; inset:0; display:none; flex-direction:column;
+  align-items:center; justify-content:center; background:#080c0e; z-index:20;
+}
+.spinner {
+  width:48px; height:48px; border:4px solid #1a2633;
+  border-top:4px solid #00e676; border-radius:50%;
+  animation:spin 0.8s linear infinite; margin-bottom:20px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+#loading p { color:#4a6070; font-size:14px; }
+
+/* TOOLTIP */
+#tooltip {
+  position:fixed; background:#0d1117; border:1px solid #1a2633;
+  border-radius:8px; padding:12px; min-width:200px; display:none; z-index:100;
+  pointer-events:none; font-size:11px;
+}
+.tn { font-size:13px; font-weight:bold; color:#00e676; margin-bottom:8px; }
+.tcol { font-size:10px; margin-bottom:8px; }
+.timg { margin-bottom:8px; }
+.timg img { max-width:160px; max-height:120px; border-radius:4px; }
+.tr { display:flex; justify-content:space-between; gap:16px; margin-bottom:3px; }
+.tl { color:#4a6070; }
+.tv { color:#80cbc4; font-weight:bold; }
+
+/* SCALE RULER */
+#ruler {
+  position:absolute; bottom:16px; left:16px; font-size:10px;
+  color:#4a6070; display:none;
+}
+</style>
+
+<div id="app">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <h3>⛓ Nesting Catena</h3>
+    <div class="kpi">
+      <div class="kl">Peso totale</div>
+      <div class="kv" id="kpi-peso">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kl">N° ganci</div>
+      <div class="kv" id="kpi-ganci">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kl">Catena usata</div>
+      <div class="kv" id="kpi-catena">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kl">Max kg/gancio</div>
+      <div class="kv" id="kpi-maxkg">—</div>
+    </div>
+
+    <!-- Upload nuovo file -->
+    <div style="margin-top:12px;">
+      <button class="tbtn" style="width:100%;font-size:11px;" onclick="showUpload()">📁 Nuovo file STEP</button>
+    </div>
+
+    <div id="clist"></div>
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div id="canvaswrap">
+    <!-- UPLOAD OVERLAY (visibile all'inizio) -->
+    <div id="upload-overlay">
+      <div id="dropzone" onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)">
+        <h2>⛓ Nesting Catena CAD</h2>
+        <p>Carica un file STEP/STP per analizzare i componenti</p>
+        <p style="font-size:11px;margin-top:16px;">Supporta assemblaggi multi-parte</p>
+        <button id="upload-btn">📁 Seleziona file STEP</button>
+      </div>
+      <input type="file" id="file-input" accept=".stp,.step,.STP,.STEP" onchange="handleFileSelect(this.files[0])">
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <p id="loading-text">Analisi STEP in corso...</p>
+    </div>
+
+    <!-- TOOLBAR (visibile dopo caricamento) -->
+    <div id="toolbar" style="display:none;">
+      <button class="tbtn active" onclick="setView('iso');setActive(this)">○ ISO</button>
+      <button class="tbtn" onclick="setView('front');setActive(this)">↔ Frontale</button>
+      <button class="tbtn" onclick="setView('top');setActive(this)">↕ Top</button>
+      <button class="tbtn" onclick="zoom(1.3)">+</button>
+      <button class="tbtn" onclick="zoom(0.77)">-</button>
+      <button class="tbtn danger" onclick="showUpload()">↺ Reset</button>
+    </div>
+
+    <!-- CANVAS -->
+    <canvas id="c"></canvas>
+
+    <!-- RULER -->
+    <div id="ruler" id="ruler">scala: 1 gancio = 400mm</div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// UPLOAD & FETCH
+// ═══════════════════════════════════════════════
+let NDATA = null;
+
+function showUpload() {
+  document.getElementById('upload-overlay').style.display = 'flex';
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('toolbar').style.display = 'none';
+  document.getElementById('ruler').style.display = 'none';
+  NDATA = null;
+  document.getElementById('clist').innerHTML = '';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+}
+
+function handleFileSelect(file) {
+  if (!file) return;
+  document.getElementById('upload-overlay').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('loading-text').textContent = 'Analisi STEP: ' + file.name + '...';
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  fetch('/api/nesting/analizza', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('Errore: ' + data.error);
+        showUpload();
+        return;
+      }
+      NDATA = data;
+      initViewer();
+    })
+    .catch(err => {
+      alert('Errore di rete: ' + err);
+      showUpload();
+    });
+}
+
+function initViewer() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('ruler').style.display = 'block';
+
+  // KPI
+  const totalPeso = NDATA.columns.reduce((s,c) => s+c.peso, 0);
+  const maxKgG = Math.max(...NDATA.columns.map(c=>c.peso));
+  document.getElementById('kpi-peso').textContent = totalPeso.toFixed(1) + ' kg';
+  document.getElementById('kpi-ganci').textContent = NDATA.columns.length;
+  document.getElementById('kpi-catena').textContent = (NDATA.total_slots * NDATA.passo_mm / 1000).toFixed(1) + ' m';
+  const mkv = document.getElementById('kpi-maxkg');
+  mkv.textContent = maxKgG.toFixed(1) + ' kg';
+  mkv.className = 'kv' + (maxKgG > 55 ? ' danger' : maxKgG > 40 ? ' warn' : '');
+
+  // Sidebar lista ganci
+  const clistEl = document.getElementById('clist');
+  clistEl.innerHTML = '';
+  NDATA.columns.forEach(col => {
+    const d = document.createElement('div');
+    d.className = 'ci';
+    d.innerHTML =
+      '<div class="cdot" style="background:'+col.color+'"></div>'+
+      '<div class="cn">G'+(col.start_slot+1)+
+      (col.n_slots>1 ? '–'+(col.start_slot+col.n_slots) : '')+
+      ' · '+col.pezzi.length+' pz</div>'+
+      '<div class="ck">'+col.peso.toFixed(1)+' kg</div>';
+    d.onclick = () => {
+      const x = col.start_slot * PASSO_MM;
+      const p = projFn(x, -Z_MAX_MM/2, 0);
+      offX = canvas.width/2 - p.sx * scale;
+      offY = canvas.height/2 - p.sy * scale;
+      draw();
+    };
+    clistEl.appendChild(d);
+  });
+
+  window.addEventListener('resize', resize);
+  resize();
+  setTimeout(resetView, 100);
+}
+
+function setActive(btn) {
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+// SCALA E COORDINATE
+// ═══════════════════════════════════════════════
+// Tutto in mm reali, poi proiezione isometrica
+const PASSO_MM  = 400;
+const Z_MAX_MM  = 2000;
+const GAP_MM    = 30;    // gap verticale tra pezzi
+const HOOK_LEN  = 120;   // lunghezza gambo gancio mm
+
+// Proiezione isometrica standard
+// x_iso = (x - z) * cos30
+// y_iso = (x + z) * sin30 - y
+// (x=destra sulla catena, y=altezza, z=profondità)
+
+const COS30 = Math.cos(Math.PI/6);
+const SIN30 = Math.sin(Math.PI/6);
+
+function iso(x, y, z) {
+    return {
+        sx: (x - z) * COS30,
+        sy: (x + z) * SIN30 - y
+    };
+}
+
+function front(x, y, z) {
+    return { sx: x * 0.5, sy: -y * 0.5 };
+}
+
+function top_proj(x, y, z) {
+    return { sx: x * 0.5, sy: -z * 0.5 };
+}
+
+let projFn = iso;
+let scale  = 1.0;
+let offX   = 0, offY = 0;
+let viewMode = 'iso';
+
+// Canvas
+const cw = document.getElementById('canvaswrap');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width  = cw.clientWidth;
+    canvas.height = cw.clientHeight;
+    if (NDATA) draw();
+}
+
+// ═══════════════════════════════════════════════
+// PAN & ZOOM
+// ═══════════════════════════════════════════════
+let dragging = false, dragX = 0, dragY = 0;
+
+canvas.addEventListener('mousedown', e => {
+    dragging = true; dragX = e.clientX; dragY = e.clientY;
+});
+canvas.addEventListener('mousemove', e => {
+    if (dragging) {
+        offX += e.clientX - dragX;
+        offY += e.clientY - dragY;
+        dragX = e.clientX; dragY = e.clientY;
+        if (NDATA) draw();
+    }
+    handleHover(e);
+});
+canvas.addEventListener('mouseup',   () => dragging = false);
+canvas.addEventListener('mouseleave',() => dragging = false);
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.12 : 0.89;
+    scale *= f;
+    scale = Math.max(0.05, Math.min(8, scale));
+    if (NDATA) draw();
+}, { passive: false });
+
+function zoom(f) { scale *= f; scale = Math.max(0.05,Math.min(8,scale)); if(NDATA) draw(); }
+
+// ═══════════════════════════════════════════════
+// VISTE
+// ═══════════════════════════════════════════════
+function setView(v) {
+    viewMode = v;
+    if (v==='iso')   projFn = iso;
+    if (v==='front') projFn = front;
+    if (v==='top')   projFn = top_proj;
+    resetView();
+}
+
+function resetView() {
+    if (!NDATA) return;
+    const totalX = NDATA.total_slots * PASSO_MM;
+    const p = projFn(totalX/2, Z_MAX_MM/2, 0);
+    scale = viewMode==='iso' ? 0.28 : 0.38;
+    offX  = canvas.width/2  - p.sx * scale;
+    offY  = canvas.height/2 - p.sy * scale;
+    draw();
+}
+
+// Trasforma mm→pixel
+function px(x, y, z) {
+    const p = projFn(x, y, z);
+    return {
+        x: p.sx * scale + offX,
+        y: p.sy * scale + offY
+    };
+}
+
+// ═══════════════════════════════════════════════
+// DRAW
+// ═══════════════════════════════════════════════
+const hitBoxes = []; // per click detection
+
+function draw() {
+    if (!NDATA) return;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Sfondo
+    ctx.fillStyle = '#080c0e';
+    ctx.fillRect(0, 0, W, H);
+
+    hitBoxes.length = 0;
+
+    // ── Griglia a terra ────────────────────────
+    ctx.strokeStyle = 'rgba(13,19,24,0.8)';
+    ctx.lineWidth = 0.5;
+    const totalX = NDATA.total_slots * PASSO_MM;
+    for (let gx = 0; gx <= totalX + PASSO_MM; gx += PASSO_MM) {
+        const a = px(gx, -Z_MAX_MM-100, -200);
+        const b = px(gx, -Z_MAX_MM-100,  200);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    for (let gz = -200; gz <= 200; gz += 100) {
+        const a = px(0,         -Z_MAX_MM-100, gz);
+        const b = px(totalX+PASSO_MM, -Z_MAX_MM-100, gz);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+
+    // ── Linea Z max (limite altezza) ──────────
+    ctx.strokeStyle = 'rgba(255,61,61,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8,6]);
+    const za = px(0,           -Z_MAX_MM, -150);
+    const zb = px(totalX+PASSO_MM, -Z_MAX_MM, -150);
+    ctx.beginPath(); ctx.moveTo(za.x,za.y); ctx.lineTo(zb.x,zb.y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ── CATENA ─────────────────────────────────
+    drawChain();
+
+    // ── Ordine depth: disegna colonne da lontano a vicino ──
+    const sortedCols = [...NDATA.columns].sort((a,b) =>
+        viewMode === 'iso' ? b.start_slot - a.start_slot : a.start_slot - b.start_slot
+    );
+    sortedCols.forEach(col => drawColumn(col));
+}
+
+function drawChain() {
+    const totalX = NDATA.total_slots * PASSO_MM;
+    const fullX  = totalX + PASSO_MM * 3;
+
+    // Barra catena completa (grigio)
+    drawBeam(0, 0, fullX, 0, 0, 40, '#37474F', '#263545', '#4a6070');
+
+    // Parte occupata (verde semitrasparente)
+    drawBeamTinted(0, 0, totalX, 0, 0, 40, 'rgba(0,230,118,0.15)', 'rgba(0,230,118,0.08)');
+
+    // Tick ogni 5 ganci
+    for (let g = 0; g <= NDATA.total_slots + 3; g += 5) {
+        const x = g * PASSO_MM;
+        const a = px(x, 20, 0);
+        const b = px(x, -30, 0);
+        ctx.strokeStyle = '#263545';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+
+        // Label numero gancio
+        ctx.fillStyle = '#263545';
+        ctx.font = `${Math.max(8,10*scale)}px 'Courier New'`;
+        ctx.textAlign = 'center';
+        ctx.fillText('G'+g, a.x, a.y - 5*scale);
+    }
+
+    // Label "CATENA" e lunghezza
+    const la = px(-PASSO_MM*0.5, 50, 0);
+    ctx.fillStyle = '#4a6070';
+    ctx.font = `bold ${Math.max(7,9*scale)}px 'Courier New'`;
+    ctx.textAlign = 'left';
+    ctx.fillText('↑ CATENA — PITCH '+NDATA.passo_mm+'mm — '+NDATA.total_slots+' GANCI', la.x, la.y);
+
+    const lb = px(totalX + PASSO_MM*0.2, 50, 0);
+    ctx.fillStyle = '#00e676';
+    ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
+    ctx.fillText((NDATA.total_slots * NDATA.passo_mm / 1000).toFixed(1)+' m usati', lb.x, lb.y);
+}
+
+// Disegna una trave/parallelepipedo isometrico
+function drawBeam(x1, y, x2, y2, z, depth, faceColor, topColor, sideColor) {
+    const H = 24; // spessore catena mm
+
+    const p1 = px(x1, y+H/2, -depth/2);
+    const p2 = px(x2, y+H/2, -depth/2);
+    const p3 = px(x2, y-H/2, -depth/2);
+    const p4 = px(x1, y-H/2, -depth/2);
+    const p5 = px(x1, y+H/2,  depth/2);
+    const p6 = px(x2, y+H/2,  depth/2);
+
+    // Top
+    ctx.fillStyle = topColor;
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p6.x,p6.y); ctx.lineTo(p5.x,p5.y);
+    ctx.closePath(); ctx.fill();
+
+    // Front face
+    ctx.fillStyle = faceColor;
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
+    ctx.closePath(); ctx.fill();
+
+    // Right side
+    ctx.fillStyle = sideColor;
+    ctx.beginPath();
+    ctx.moveTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
+    ctx.lineTo(px(x2,y-H/2,depth/2).x, px(x2,y-H/2,depth/2).y);
+    ctx.lineTo(p6.x,p6.y);
+    ctx.closePath(); ctx.fill();
+}
+
+function drawBeamTinted(x1, y, x2, y2, z, depth, col1, col2) {
+    const H = 26;
+    const p1 = px(x1, y+H/2, -depth/2);
+    const p2 = px(x2, y+H/2, -depth/2);
+    const p3 = px(x2, y-H/2, -depth/2);
+    const p4 = px(x1, y-H/2, -depth/2);
+    ctx.fillStyle = col1;
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
+    ctx.closePath(); ctx.fill();
+}
+
+function drawColumn(col) {
+    const x = col.start_slot * PASSO_MM;
+    const color = col.color;
+
+    // ── Gancio fisico ──────────────────────────
+    drawHook(x, color);
+
+    // Label gancio sopra catena
+    const lp = px(x, 80, 0);
+    ctx.fillStyle = color;
+    ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.fillText('G'+(col.start_slot+1)+'·'+col.peso.toFixed(1)+'kg', lp.x, lp.y);
+
+    // ── Pezzi in colonna ───────────────────────
+    let curY = -(HOOK_LEN + 10); // parte da sotto il gancio
+
+    col.pezzi.forEach((part, pi) => {
+        const altH = part.alt_mm;
+        const W    = Math.max(part.largh_mm, 30);
+        const D    = Math.max(part.D_mm || 60, 20);
+
+        drawPart(x, curY - altH, W, altH, D, color, part, col, pi);
+
+        curY -= altH + GAP_MM;
+    });
+
+    // Linea Z_MAX
+    const zm1 = px(x - PASSO_MM*0.4, -Z_MAX_MM, -100);
+    const zm2 = px(x + PASSO_MM*0.4, -Z_MAX_MM, -100);
+    ctx.strokeStyle = 'rgba(255,61,61,0.18)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(zm1.x,zm1.y); ctx.lineTo(zm2.x,zm2.y); ctx.stroke();
+}
+
+function drawHook(x, color) {
+    // Gambo verticale
+    const ga = px(x, 0, 0);
+    const gb = px(x, -HOOK_LEN, 0);
+    ctx.strokeStyle = '#b0bec5';
+    ctx.lineWidth = Math.max(2, 3*scale);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ga.x,ga.y); ctx.lineTo(gb.x,gb.y); ctx.stroke();
+
+    // Curva gancio (arco)
+    const hc = px(x + 60, -HOOK_LEN - 60, 0);
+    ctx.strokeStyle = '#90a4ae';
+    ctx.lineWidth = Math.max(2, 3*scale);
+    ctx.beginPath();
+    ctx.arc(hc.x, hc.y, 40*scale*COS30, Math.PI*0.5, Math.PI*1.5);
+    ctx.stroke();
+
+    // Pallina alla catena
+    const ball = px(x, 0, 0);
+    ctx.fillStyle = '#b0bec5';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, Math.max(3, 5*scale), 0, Math.PI*2);
+    ctx.fill();
+}
+
+function drawPart(x, yTop, W, H, D, color, part, col, pi) {
+    // Centra il pezzo sull'asse X del gancio
+    const xL = x - W/2;
+    const xR = x + W/2;
+    const yB = yTop;
+    const yT = yTop + H;
+
+    // Calcola i 8 vertici del box in proiezione
+    const TLF = px(xL, yT, -D/2);  // top-left-front
+    const TRF = px(xR, yT, -D/2);  // top-right-front
+    const BRF = px(xR, yB, -D/2);  // bottom-right-front
+    const BLF = px(xL, yB, -D/2);  // bottom-left-front
+    const TLB = px(xL, yT,  D/2);  // top-left-back
+    const TRB = px(xR, yT,  D/2);  // top-right-back
+
+    // Colori facce con shading
+    const rgb = hexToRgb(color);
+    const topC  = `rgba(${Math.min(255,rgb.r+40)},${Math.min(255,rgb.g+40)},${Math.min(255,rgb.b+40)},0.9)`;
+    const frontC= `rgba(${rgb.r},${rgb.g},${rgb.b},0.82)`;
+    const rightC= `rgba(${Math.max(0,rgb.r-40)},${Math.max(0,rgb.g-40)},${Math.max(0,rgb.b-40)},0.78)`;
+
+    // Faccia superiore (top)
+    ctx.fillStyle = topC;
+    ctx.beginPath();
+    ctx.moveTo(TLF.x,TLF.y); ctx.lineTo(TRF.x,TRF.y);
+    ctx.lineTo(TRB.x,TRB.y); ctx.lineTo(TLB.x,TLB.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth=0.8; ctx.stroke();
+
+    // Faccia frontale
+    ctx.fillStyle = frontC;
+    ctx.beginPath();
+    ctx.moveTo(TLF.x,TLF.y); ctx.lineTo(TRF.x,TRF.y);
+    ctx.lineTo(BRF.x,BRF.y); ctx.lineTo(BLF.x,BLF.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth=0.8; ctx.stroke();
+
+    // Faccia destra
+    const BRB = px(xR, yB, D/2);
+    ctx.fillStyle = rightC;
+    ctx.beginPath();
+    ctx.moveTo(TRF.x,TRF.y); ctx.lineTo(TRB.x,TRB.y);
+    ctx.lineTo(BRB.x,BRB.y); ctx.lineTo(BRF.x,BRF.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth=0.8; ctx.stroke();
+
+    // Thumbnail SVG nella faccia frontale (se c'è spazio)
+    const facW = Math.abs(TRF.x - TLF.x);
+    const facH = Math.abs(BLF.y - TLF.y);
+    if (part.svg_uri && facW > 20 && facH > 15) {
+        loadSVGInFace(part.svg_uri, TLF, TRF, BLF, BRF, facW, facH);
+    }
+
+    // Testo nome (solo se faccia abbastanza grande)
+    if (facH > 14) {
+        const cx2 = (TLF.x + TRF.x) / 2;
+        const cy2 = BLF.y - 5;
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.font = `${Math.max(7, Math.min(11, facH*0.15))}px 'Courier New'`;
+        ctx.textAlign = 'center';
+        const nome = ((part.rotated ? '🔄 ' : '') + part.nome || '').substring(0, 18);
+        ctx.fillText(nome, cx2, cy2);
+    }
+
+    // Salva hitbox per click
+    const minX = Math.min(TLF.x,TRF.x,BLF.x,BRF.x,TLB.x,TRB.x);
+    const maxX = Math.max(TLF.x,TRF.x,BLF.x,BRF.x,TLB.x,TRB.x);
+    const minY = Math.min(TLF.y,TRF.y,BLF.y,BRF.y,TLB.y,TRB.y);
+    const maxY = Math.max(TLF.y,TRF.y,BLF.y,BRF.y,TLB.y,TRB.y);
+    hitBoxes.push({ minX,maxX,minY,maxY, part, col });
+}
+
+// Cache immagini SVG
+const svgCache = {};
+function loadSVGInFace(uri, TL, TR, BL, BR, fw, fh) {
+    if (!svgCache[uri]) {
+        const img = new Image();
+        img.onload = () => { svgCache[uri] = img; if(NDATA) draw(); };
+        img.src = uri;
+        svgCache[uri] = null;
+        return;
+    }
+    const img = svgCache[uri];
+    if (!img) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(TL.x,TL.y); ctx.lineTo(TR.x,TR.y);
+    ctx.lineTo(BR.x,BR.y); ctx.lineTo(BL.x,BL.y);
+    ctx.closePath();
+    ctx.clip();
+
+    const margin = 3;
+    ctx.drawImage(img,
+        TL.x + margin, TL.y + margin,
+        Math.abs(TR.x-TL.x) - margin*2,
+        Math.abs(BL.y-TL.y) - margin*2
+    );
+    ctx.restore();
+}
+
+function hexToRgb(hex) {
+    const h = hex.replace('#','');
+    return {
+        r: parseInt(h.substring(0,2),16),
+        g: parseInt(h.substring(2,4),16),
+        b: parseInt(h.substring(4,6),16)
+    };
+}
+
+// ═══════════════════════════════════════════════
+// TOOLTIP + CLICK
+// ═══════════════════════════════════════════════
+const tip = document.getElementById('tooltip');
+
+function handleHover(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    for (const hb of hitBoxes) {
+        if (mx >= hb.minX && mx <= hb.maxX && my >= hb.minY && my <= hb.maxY) {
+            canvas.style.cursor = 'pointer';
+            return;
+        }
+    }
+    canvas.style.cursor = dragging ? 'grabbing' : 'grab';
+}
+
+canvas.addEventListener('click', e => {
+    if (Math.abs(e.clientX-dragX)>5 || Math.abs(e.clientY-dragY)>5) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let found = false;
+    for (const hb of [...hitBoxes].reverse()) {
+        if (mx >= hb.minX && mx <= hb.maxX && my >= hb.minY && my <= hb.maxY) {
+            showTip(e, hb.part, hb.col);
+            found = true;
+            break;
+        }
+    }
+    if (!found) tip.style.display = 'none';
+});
+
+function showTip(e, part, col) {
+    tip.innerHTML =
+        '<div class="tn">'+part.nome+'</div>'+
+        '<div class="tcol" style="color:'+col.color+'">Gancio G'+(col.start_slot+1)+'</div>'+
+        (part.svg_uri?'<div class="timg"><img src="'+part.svg_uri+'"></div>':'')+
+        '<div class="tr"><span class="tl">Altezza</span><span class="tv">'+part.alt_mm.toFixed(0)+' mm</span></div>'+
+        '<div class="tr"><span class="tl">Larghezza</span><span class="tv">'+part.largh_mm.toFixed(0)+' mm</span></div>'+
+        '<div class="tr"><span class="tl">Peso</span><span class="tv">'+part.peso_kg.toFixed(2)+' kg</span></div>'+
+        '<div class="tr"><span class="tl">Orientamento</span><span class="tv">'+(part.orientamento||'standard')+'</span></div>';
+    tip.style.left = (e.clientX+14)+'px';
+    tip.style.top  = (e.clientY-20)+'px';
+    tip.style.display = 'block';
+}
+
+// Init canvas size
+resize();
+</script>
+{% endblock %}

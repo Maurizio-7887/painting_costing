@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Piano di Carico — ENOROSSI{% endblock %}
+{% block page_title %}Piano di Carico{% endblock %}
+{% block content %}
+<div style="text-align:center;padding:60px;color:var(--muted)">
+  <i class="bi bi-layout-three-columns" style="font-size:3rem;display:block;margin-bottom:16px"></i>
+  <div style="font-size:.9rem;margin-bottom:8px">Piano di carico avanzato</div>
+  <div style="font-size:.75rem;color:var(--muted2);margin-bottom:20px">Usa il <a href="{{ url_for('ottimizzatore') }}" style="color:var(--grn-h)">Carico Giornaliero</a> per ottimizzare il tunnel</div>
+  <a href="{{ url_for('ottimizzatore') }}" class="btn-grn"><i class="bi bi-diagram-3"></i>Vai all'ottimizzatore</a>
+</div>
+{% endblock %}

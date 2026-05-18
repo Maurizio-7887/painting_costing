@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ prodotto.codice }} — Storico ENOROSSI{% endblock %}
+{% block page_title %}Storico: {{ prodotto.codice }} — {{ prodotto.nome }}{% endblock %}
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 2fr;gap:18px">
+  <!-- Info prodotto -->
+  <div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr"><i class="bi bi-box-seam" style="margin-right:6px"></i>Prodotto</div>
+      <div class="card-body">
+        <div style="margin-bottom:8px"><code style="font-size:1rem">{{ prodotto.codice }}</code></div>
+        <div style="font-weight:700;font-size:.9rem;margin-bottom:6px">{{ prodotto.nome }}</div>
+        <div style="font-size:.75rem;color:var(--muted)">Famiglia: <strong style="color:var(--txt)">{{ prodotto.famiglia }}</strong></div>
+        <div style="font-size:.75rem;color:var(--muted);margin-top:4px">
+          Dimensioni: {{ prodotto.lunghezza_mm|int }}×{{ prodotto.larghezza_mm|int }}×{{ prodotto.altezza_mm|int }} mm
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Peso: {{ prodotto.peso_kg }} kg</div>
+        <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Superficie: {{ '%.3f'%prodotto.superficie_m2 }} m²</div>
+      </div>
+    </div>
+    <!-- KPI sintetica -->
+    {% if storico %}
+    <div class="card">
+      <div class="card-hdr"><i class="bi bi-graph-up" style="margin-right:6px"></i>Riepilogo</div>
+      <div class="card-body">
+        {% set n_lotti = storico|length %}
+        {% set costo_tot = storico|sum(attribute='costo_unitario') %}
+        {% set costo_med = costo_tot / n_lotti if n_lotti else 0 %}
+        {% for lbl,val in [
+          ('Lotti totali', n_lotti),
+          ('Costo medio/pz', '€ %.4f'%costo_med),
+          ('Costo min/pz', '€ %.4f'%(storico|min(attribute='costo_unitario')).costo_unitario),
+          ('Costo max/pz', '€ %.4f'%(storico|max(attribute='costo_unitario')).costo_unitario),
+        ] %}
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr);font-size:.8rem">
+          <span style="color:var(--muted)">{{ lbl }}</span>
+          <strong>{{ val }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Storico lotti -->
+  <div>
+    <div class="card">
+      <div class="card-hdr"><i class="bi bi-clock-history" style="margin-right:6px"></i>Storico lotti</div>
+      <div class="card-body" style="padding:0">
+        {% if storico %}
+        <table class="tbl">
+          <thead><tr><th>Data</th><th>Lotto</th><th>Qtà</th><th>Ganci</th><th>Saturazione</th><th>Costo/pz (€)</th><th>Velocità</th></tr></thead>
+          <tbody>
+          {% for s in storico %}
+          <tr>
+            <td style="font-size:.72rem;color:var(--muted)">{{ s.data_produzione or '—' }}</td>
+            <td><a href="{{ url_for('lotto_detail', lotto_id=s.lotto_id) }}" style="color:var(--grn-h)">{{ s.lotto_id }}</a></td>
+            <td>{{ s.quantita }}</td>
+            <td>{{ s.n_ganci }}</td>
+            <td>
+              <div class="prog-wrap" style="width:50px;display:inline-block">
+                <div class="prog-bar green" style="width:{{ s.saturazione_pct or 0 }}%"></div>
+              </div>
+              <span style="font-size:.65rem;color:var(--muted);margin-left:4px">{{ '%.0f'%(s.saturazione_pct or 0) }}%</span>
+            </td>
+            <td style="font-weight:700;color:var(--grn-h)">{{ '%.4f'%s.costo_unitario }}</td>
+            <td style="font-size:.72rem;color:var(--muted)">{{ s.velocita_catena or '—' }} m/min</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div style="text-align:center;padding:36px;color:var(--muted)">Nessuno storico disponibile</div>
+        {% endif %}
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <a href="{{ url_for('storico') }}" class="btn-out"><i class="bi bi-arrow-left"></i>Torna allo storico</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
