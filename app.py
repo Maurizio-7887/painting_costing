@@ -2310,6 +2310,11 @@ def api_nesting_analizza():
                 L = float(bbox_max[0] - bbox_min[0])
                 H = float(bbox_max[1] - bbox_min[1])
                 D = float(bbox_max[2] - bbox_min[2])
+                # Auto-detect units: STEP spesso in metri (non mm)
+                # Se la dimensione massima e' < 100, assumiamo metri e convertiamo
+                max_raw = max(L, H, D)
+                if max_raw > 0 and max_raw < 100:
+                    L *= 1000; H *= 1000; D *= 1000
                 dims = sorted([L, H, D], reverse=True)
                 L_mm = max(round(dims[0]), 10)
                 H_mm = max(round(dims[1]), 10)
