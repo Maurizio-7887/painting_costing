@@ -2250,14 +2250,166 @@ def api_nesting_config():
     })
 
 
+def _analizza_step_per_nesting(filepath):
+    """
+    Analizza file STEP/STL e ritorna NDATA per il viewer nesting.
+    Ogni geometria separata = un gancio sulla catena.
+    Formato output: { passo_mm, z_max_mm, max_kg, total_slots, columns:[{...}] }
+    """
+    import trimesh
+    import numpy as np
+    import base64, io, math
+
+    ACCIAIO_KG_MM3 = 7.85e-9  # kg/mm³
+    PASSO_MM = 400
+    MAX_KG_GANCIO = 60.0
+    Z_MAX_MM = 2000
+
+    COLORS = [
+        '#1565C0','#00897B','#F57F17','#6A1B9A','#D32F2F',
+        '#0277BD','#558B2F','#E65100','#4527A0','#AD1457',
+        '#00695C','#F9A825','#283593','#2E7D32','#4E342E'
+    ]
+
+    try:
+        scene = trimesh.load(filepath, force='scene')
+    except Exception as e:
+        try:
+            mesh = trimesh.load(filepath, force='mesh')
+            scene = trimesh.scene.Scene({'parte_0': mesh})
+        except Exception as e2:
+            return {'error': f'Impossibile caricare il file: {str(e2)}'}
+
+    # Estrai geometrie
+    if hasattr(scene, 'geometry') and scene.geometry:
+        geoms = list(scene.geometry.items())
+    elif hasattr(scene, 'triangles'):
+        geoms = [('parte_0', scene)]
+    else:
+        return {'error': 'Nessuna geometria trovata nel file'}
+
+    parts = []
+    for name, mesh in geoms:
+        try:
+            if not hasattr(mesh, 'bounds') or mesh.bounds is None:
+                continue
+            bounds = mesh.bounds
+            dims = bounds[1] - bounds[0]
+            L, H, D = float(dims[0]), float(dims[1]), float(dims[2])
+
+            # Auto-detect unità: se tutto < 10 → probabilmente metri
+            max_dim = max(L, H, D)
+            if max_dim < 10:
+                L *= 1000; H *= 1000; D *= 1000
+            elif max_dim < 100:
+                # Potrebbe essere cm o piccoli mm — controlla se < 2m
+                if max_dim < 5:  # sicuramente metri
+                    L *= 1000; H *= 1000; D *= 1000
+
+            L = max(L, 10.0)
+            H = max(H, 10.0)
+            D = max(D, 10.0)
+
+            # Larghezza = dimensione maggiore
+            dims_sorted = sorted([L, H, D], reverse=True)
+            largh_mm = dims_sorted[0]  # più largo
+            alt_mm   = dims_sorted[1]  # altezza
+            prof_mm  = dims_sorted[2]  # profondità
+
+            # Peso
+            try:
+                if hasattr(mesh, 'is_watertight') and mesh.is_watertight and mesh.volume > 0:
+                    vol_mm3 = float(mesh.volume)
+                    # Converti volume se unità erano metri
+                    if max_dim < 10:
+                        vol_mm3 *= 1e9
+                    peso_kg = vol_mm3 * ACCIAIO_KG_MM3
+                else:
+                    # Stima da bbox con fill factor 20%
+                    peso_kg = (largh_mm * alt_mm * prof_mm) * ACCIAIO_KG_MM3 * 0.20
+            except Exception:
+                peso_kg = (largh_mm * alt_mm * prof_mm) * ACCIAIO_KG_MM3 * 0.20
+
+            peso_kg = max(0.01, round(peso_kg, 2))
+
+            # Genera SVG profilo (proiezione frontale)
+            svg_uri = _genera_svg_profilo_trimesh(mesh, largh_mm, alt_mm)
+
+            parts.append({
+                'nome': name,
+                'largh_mm': round(largh_mm, 1),
+                'alt_mm': round(alt_mm, 1),
+                'D_mm': round(prof_mm, 1),
+                'peso_kg': peso_kg,
+                'orientamento': 'standard',
+                'svg_uri': svg_uri,
+            })
+        except Exception as ex:
+            # Pezzo non leggibile → skip
+            continue
+
+    if not parts:
+        return {'error': 'Nessun componente valido trovato nel file STEP'}
+
+    # Ordina per altezza decrescente (pezzi alti vanno prima sulla catena)
+    parts.sort(key=lambda p: -p['alt_mm'])
+
+    # Assegna colori e ganci
+    columns = []
+    slot = 0
+    for i, part in enumerate(parts):
+        color = COLORS[i % len(COLORS)]
+        col = {
+            'idx': i,
+            'start_slot': slot,
+            'n_slots': 1,
+            'peso': part['peso_kg'],
+            'color': color,
+            'pezzi': [dict(id=i+1, **part)]
+        }
+        columns.append(col)
+        slot += 1  # ogni pezzo occupa 1 slot (pitch 400mm)
+
+    return {
+        'passo_mm': PASSO_MM,
+        'z_max_mm': Z_MAX_MM,
+        'max_kg': MAX_KG_GANCIO,
+        'total_slots': slot,
+        'columns': columns,
+        'n_pezzi': len(parts),
+        'peso_totale': round(sum(p['peso_kg'] for p in parts), 2)
+    }
+
+
 @app.route('/api/nesting/analizza', methods=['POST'])
 def api_nesting_analizza():
     """
     Riceve uno o più file STEP, li analizza con trimesh/cascadio,
     calcola il nesting sulla catena e restituisce JSON con profili SVG.
+    Supporta sia 'file' (singolo, nuovo viewer) che 'files[]' (multipli).
     """
     import tempfile, os, math, base64, io
 
+    # ── Modalità singolo file (nuovo viewer nesting_viewer.html) ──
+    single_file = request.files.get('file')
+    if single_file and single_file.filename:
+        fname = single_file.filename
+        suffix = os.path.splitext(fname)[1] or '.stp'
+        try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                single_file.save(tmp.name)
+                tmp_path = tmp.name
+            result = _analizza_step_per_nesting(tmp_path)
+            os.unlink(tmp_path)
+            return jsonify(result)
+        except Exception as e:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            return jsonify({'error': str(e)}), 500
+
+    # ── Modalità multi-file (compatibilità precedente) ──
     files = request.files.getlist('files[]')
     nomi  = request.form.getlist('nomi[]')
     z_max    = float(request.form.get('z_max', 2000))
