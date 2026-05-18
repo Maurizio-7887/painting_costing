@@ -2296,69 +2296,84 @@ def api_nesting_analizza():
             else:
                 meshes = []
 
-            # ── MERGE: un solo pezzo per file STEP ──────────────
+            # ── SEPARA: ogni geometria del STEP = pezzo singolo sulla catena ──
             try:
                 import numpy as np
-                valid_meshes = [m for m in meshes if hasattr(m, 'vertices') and len(m.vertices) > 0]
-                if not valid_meshes:
-                    raise ValueError('Nessuna mesh valida')
+                import re as _re
 
-                # Combina tutti i vertici per calcolare bounding box globale
-                all_verts = np.vstack([m.vertices for m in valid_meshes])
-                bbox_min = all_verts.min(axis=0)
-                bbox_max = all_verts.max(axis=0)
-                L = float(bbox_max[0] - bbox_min[0])
-                H = float(bbox_max[1] - bbox_min[1])
-                D = float(bbox_max[2] - bbox_min[2])
-                # Auto-detect units: STEP spesso in metri (non mm)
-                # Se la dimensione massima e' < 100, assumiamo metri e convertiamo
-                max_raw = max(L, H, D)
-                if max_raw > 0 and max_raw < 100:
-                    L *= 1000; H *= 1000; D *= 1000
-                dims = sorted([L, H, D], reverse=True)
-                L_mm = max(round(dims[0]), 10)
-                H_mm = max(round(dims[1]), 10)
-                D_mm = max(round(dims[2]), 10)
+                # Estrai nomi PRODUCT dal file STEP per etichettare i pezzi
+                with open(tmp_path, 'r', errors='replace') as _sf:
+                    _step_raw = _sf.read()
+                _product_names = _re.findall(r"PRODUCT\s*\(\s*'([^']*)'[^)]*\)", _step_raw)
+                # Il primo è l'assembly root → escludi, usa i sub-product come nomi
+                _sub_names = [p.strip() for p in _product_names[1:] if p.strip()]
 
-                # Crea mesh combinata per SVG e volume
-                all_v_list = []
-                all_f_list = []
-                offset = 0
-                for m in valid_meshes:
-                    all_v_list.append(m.vertices)
-                    all_f_list.append(m.faces + offset)
-                    offset += len(m.vertices)
-                import trimesh as tr_mod
-                combined = tr_mod.Trimesh(
-                    vertices=np.vstack(all_v_list),
-                    faces=np.vstack(all_f_list),
-                    process=False
-                )
-
-                # Peso: volume se watertight, altrimenti bbox * fill_factor
-                vol = float(combined.volume) if combined.is_watertight else 0.0
-                if vol > 0:
-                    peso = round(vol * 7850 / 1e9, 2)
+                # Geometrie valide dall'assembly
+                if hasattr(scene, 'geometry') and scene.geometry:
+                    _geom_items = [(k, v) for k, v in scene.geometry.items()
+                                   if hasattr(v, 'vertices') and len(v.vertices) > 0]
+                elif hasattr(scene, 'vertices') and len(scene.vertices) > 0:
+                    _geom_items = [(nome, scene)]
                 else:
-                    # Stima con 15% fill factor (parte strutturale tipica)
-                    bbox_vol_mm3 = L_mm * H_mm * D_mm
-                    peso = round(bbox_vol_mm3 * 0.15 * 7850 / 1e9, 2)
+                    _geom_items = []
 
-                # Area superficiale totale
-                area = sum(float(m.area) for m in valid_meshes)
+                if not _geom_items:
+                    raise ValueError('Nessuna geometria valida nel file STEP')
 
-                # SVG del profilo combinato
-                svg_uri = _genera_svg_profilo_trimesh(combined, L_mm, H_mm)
+                # Auto-detect unità: calcola max dimensione su tutti i vertici
+                _all_verts_g = np.vstack([m.vertices for _, m in _geom_items])
+                _global_max = float(np.abs(_all_verts_g).max())
+                _unit_scale = 1000.0 if 0 < _global_max < 100 else 1.0
 
-                all_parts.append({
-                    'nome':     nome,
-                    'largh_mm': L_mm,
-                    'alt_mm':   H_mm,
-                    'D_mm':     max(D_mm, 20),
-                    'peso_kg':  peso,
-                    'area_m2':  round(area / 1e6, 4),
-                    'svg_uri':  svg_uri,
-                })
+                import trimesh as tr_mod
+                for _idx, (_mesh_key, _mesh) in enumerate(_geom_items):
+                    try:
+                        # Scala vertici nelle unità corrette (mm)
+                        _verts_mm = _mesh.vertices * _unit_scale
+                        _scaled = tr_mod.Trimesh(
+                            vertices=_verts_mm,
+                            faces=_mesh.faces,
+                            process=False
+                        )
+
+                        # Bounding box in mm
+                        _bb = _scaled.bounding_box.extents
+                        _dims = sorted([float(_bb[0]), float(_bb[1]), float(_bb[2])], reverse=True)
+                        _L_mm = max(round(_dims[0]), 10)
+                        _H_mm = max(round(_dims[1]), 10)
+                        _D_mm = max(round(_dims[2]), 10)
+
+                        # Peso
+                        if _scaled.is_watertight and _scaled.volume > 0:
+                            _peso = round(float(_scaled.volume) * 7850 / 1e9, 2)
+                        else:
+                            _peso = round(_L_mm * _H_mm * _D_mm * 0.15 * 7850 / 1e9, 2)
+                        _peso = max(_peso, 0.01)
+
+                        # Nome: usa nome PRODUCT se disponibile, altrimenti chiave geometria
+                        if _idx < len(_sub_names):
+                            _part_nome = _sub_names[_idx]
+                        else:
+                            _part_nome = _mesh_key if _mesh_key else f'{nome}_p{_idx+1}'
+
+                        # Area superficiale in mm²
+                        _area = float(_scaled.area)
+
+                        # SVG profilo
+                        _svg_uri = _genera_svg_profilo_trimesh(_scaled, _L_mm, _H_mm)
+
+                        all_parts.append({
+                            'nome':     _part_nome,
+                            'largh_mm': _L_mm,
+                            'alt_mm':   _H_mm,
+                            'D_mm':     max(_D_mm, 20),
+                            'peso_kg':  _peso,
+                            'area_m2':  round(_area / 1e6, 4),
+                            'svg_uri':  _svg_uri,
+                        })
+                    except Exception as _e:
+                        errors.append(f'parte {_idx} ({_mesh_key}): {_e}')
+
             except Exception as e:
                 errors.append(f'{nome}: {e}')
             os.unlink(tmp_path)
