@@ -2235,11 +2235,13 @@ def nesting_viewer():
     return render_template('nesting_viewer.html')
 
 
+
+
 @app.route('/api/nesting/config')
 def api_nesting_config():
     """Ritorna parametri impianto dal DB Configurazione."""
     cfg = get_config()
-    return jsonify({
+    config = {
         'ok': True,
         'passo_mm':      getattr(cfg, 'passo_gancio_mm', 400),
         'max_kg':        getattr(cfg, 'max_peso_gancio_kg', 60),
@@ -2247,150 +2249,368 @@ def api_nesting_config():
         'n_ganci':       getattr(cfg, 'n_ganci_totali', 425),
         'nome_impianto': getattr(cfg, 'nome_impianto', 'Impianto Verniciatura'),
         'velocita_mmin': getattr(cfg, 'velocita_catena_mmin', 1.5),
-    })
+    }
+    config['altezza_catena_mm'] = 2000
+    config['passo_pali_mm'] = 400
+    config['peso_max_palo_kg'] = 55
+    config['gap_verticale_mm'] = 50
+    config['posizioni_per_palo'] = ['L', 'C', 'R']
+    config['soglia_doppio_gancio_mm'] = 600
+    return jsonify(config)
+
+
+# ─────────────────────────────────────────────
+#  UTILITÀ GEOMETRIA NESTING V7
+# ─────────────────────────────────────────────
+
+def _rileva_fori_aggancio(mesh_obj):
+    """
+    Cerca features cilindriche (fori) nella mesh trimesh.
+    Restituisce il punto più alto trovato (miglior punto di aggancio).
+    Se nessun foro → restituisce None (usa top-center bbox).
+    """
+    import numpy as np
+    if mesh_obj is None:
+        return None
+    try:
+        normals = mesh_obj.face_normals
+        verts   = mesh_obj.vertices
+        faces   = mesh_obj.faces
+
+        horiz_mask = np.abs(normals[:, 2]) < 0.2
+        if not np.any(horiz_mask):
+            return None
+
+        horiz_faces = faces[horiz_mask]
+
+        centroids_xy = []
+        for fi in np.where(horiz_mask)[0]:
+            face_v = verts[faces[fi]]
+            cx, cy = face_v[:, 0].mean(), face_v[:, 1].mean()
+            centroids_xy.append((cx, cy, fi))
+
+        if not centroids_xy:
+            return None
+
+        best_z = -1e9
+        best_pt = None
+        seen = []
+        for cx, cy, fi in centroids_xy:
+            is_new = True
+            for sx, sy in seen:
+                if abs(cx - sx) < 30 and abs(cy - sy) < 30:
+                    is_new = False
+                    break
+            if is_new:
+                seen.append((cx, cy))
+                face_v = verts[faces[fi]]
+                dists = np.sqrt((face_v[:,0]-cx)**2 + (face_v[:,1]-cy)**2)
+                r = dists.mean()
+                if r < 25:
+                    z_max = face_v[:, 2].max()
+                    if z_max > best_z:
+                        best_z = z_max
+                        best_pt = (cx, cy, z_max)
+
+        return best_pt
+    except Exception:
+        return None
+
+
+def _svg_silhouette(mesh_obj, largh_mm, alt_mm):
+    """
+    Genera SVG silhouette profilo frontale (proiezione XZ) della mesh.
+    """
+    import numpy as np, base64
+    try:
+        if mesh_obj is None:
+            raise ValueError("mesh None")
+        verts = mesh_obj.vertices
+        xs = verts[:, 0]
+        zs = verts[:, 2]
+        xmin, xmax = xs.min(), xs.max()
+        zmin, zmax = zs.min(), zs.max()
+
+        W = largh_mm if largh_mm > 0 else (xmax - xmin)
+        H = alt_mm   if alt_mm   > 0 else (zmax - zmin)
+
+        SVG_W, SVG_H = 100, 120
+        sx = SVG_W / max(W, 1)
+        sz = SVG_H / max(H, 1)
+        s  = min(sx, sz) * 0.85
+
+        pts_norm = []
+        for x, z in zip(xs, zs):
+            px = (x - xmin) * s + (SVG_W - (xmax - xmin)*s) / 2
+            pz = SVG_H - ((z - zmin) * s + (SVG_H - (zmax - zmin)*s) / 2)
+            pts_norm.append((px, pz))
+
+        if not pts_norm:
+            raise ValueError("nessun punto")
+
+        from scipy.spatial import ConvexHull
+        pts_arr = np.array(pts_norm)
+        hull = ConvexHull(pts_arr)
+        hull_pts = pts_arr[hull.vertices]
+
+        poly = " ".join(f"{p[0]:.1f},{p[1]:.1f}" for p in hull_pts)
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_W} {SVG_H}">'
+               f'<polygon points="{poly}" fill="#1565C0" fill-opacity="0.7" stroke="#0D47A1" stroke-width="1.5"/>'
+               f'</svg>')
+        return svg
+    except Exception:
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">'
+                f'<rect x="5" y="5" width="90" height="110" fill="#1565C0" fill-opacity="0.6" stroke="#0D47A1" stroke-width="2"/>'
+                f'</svg>')
 
 
 def _analizza_step_per_nesting(filepath):
     """
-    Analizza file STEP/STL e ritorna NDATA per il viewer nesting.
-    Ogni geometria separata = un gancio sulla catena.
-    Formato output: { passo_mm, z_max_mm, max_kg, total_slots, columns:[{...}] }
+    Legge file STEP, estrae ogni componente come mesh separata.
+    Per ciascuno calcola: dimensioni mm, peso kg, punto aggancio, SVG silhouette.
+    Ritorna lista di dict componenti + metadati.
     """
     import trimesh
     import numpy as np
-    import base64, io, math
+    import base64, io, math, re, json
 
-    ACCIAIO_KG_MM3 = 7.85e-9  # kg/mm³
-    PASSO_MM = 400
-    MAX_KG_GANCIO = 60.0
-    Z_MAX_MM = 2000
-
-    COLORS = [
-        '#1565C0','#00897B','#F57F17','#6A1B9A','#D32F2F',
-        '#0277BD','#558B2F','#E65100','#4527A0','#AD1457',
-        '#00695C','#F9A825','#283593','#2E7D32','#4E342E'
-    ]
+    DENSITA_ACCIAIO = 7850  # kg/m³
 
     try:
         scene = trimesh.load(filepath, force='scene')
     except Exception as e:
-        try:
-            mesh = trimesh.load(filepath, force='mesh')
-            scene = trimesh.scene.Scene({'parte_0': mesh})
-        except Exception as e2:
-            return {'error': f'Impossibile caricare il file: {str(e2)}'}
+        return {"error": f"Impossibile caricare STEP: {e}"}
 
-    # Estrai geometrie
+    # Estrai nomi PRODUCT dal testo STEP
+    nomi_step = []
+    try:
+        with open(filepath, 'r', errors='ignore') as f:
+            testo = f.read()
+        for m in re.finditer(r"PRODUCT\s*\(\s*'([^']+)'", testo):
+            nome = m.group(1).strip()
+            if nome and nome not in ['', ' '] and 'NONE' not in nome.upper():
+                nomi_step.append(nome)
+        nomi_step = list(dict.fromkeys(nomi_step))
+    except Exception:
+        nomi_step = []
+
+    componenti = []
+
     if hasattr(scene, 'geometry') and scene.geometry:
-        geoms = list(scene.geometry.items())
-    elif hasattr(scene, 'triangles'):
-        geoms = [('parte_0', scene)]
+        meshes = list(scene.geometry.values())
+    elif hasattr(scene, 'dump'):
+        meshes = scene.dump(concatenate=False)
     else:
-        return {'error': 'Nessuna geometria trovata nel file'}
+        meshes = [scene]
 
-    parts = []
-    for name, mesh in geoms:
+    for idx, mesh_obj in enumerate(meshes):
         try:
-            if not hasattr(mesh, 'bounds') or mesh.bounds is None:
+            if mesh_obj is None or not hasattr(mesh_obj, 'vertices'):
                 continue
-            bounds = mesh.bounds
-            dims = bounds[1] - bounds[0]
-            L, H, D = float(dims[0]), float(dims[1]), float(dims[2])
+            if len(mesh_obj.vertices) < 4:
+                continue
 
-            # Auto-detect unità: se tutto < 10 → probabilmente metri
-            max_dim = max(L, H, D)
-            if max_dim < 10:
-                L *= 1000; H *= 1000; D *= 1000
-            elif max_dim < 100:
-                # Potrebbe essere cm o piccoli mm — controlla se < 2m
-                if max_dim < 5:  # sicuramente metri
-                    L *= 1000; H *= 1000; D *= 1000
+            verts = mesh_obj.vertices
 
-            L = max(L, 10.0)
-            H = max(H, 10.0)
-            D = max(D, 10.0)
+            max_dim = max(verts.max(axis=0) - verts.min(axis=0))
+            if max_dim < 100:
+                verts = verts * 1000
 
-            # Larghezza = dimensione maggiore
-            dims_sorted = sorted([L, H, D], reverse=True)
-            largh_mm = dims_sorted[0]  # più largo
-            alt_mm   = dims_sorted[1]  # altezza
-            prof_mm  = dims_sorted[2]  # profondità
+            bbox = verts.max(axis=0) - verts.min(axis=0)
+            largh_mm = float(bbox[0])
+            prof_mm  = float(bbox[1])
+            alt_mm   = float(bbox[2])
 
-            # Peso
+            if largh_mm < 1 or alt_mm < 1:
+                continue
+
             try:
-                if hasattr(mesh, 'is_watertight') and mesh.is_watertight and mesh.volume > 0:
-                    vol_mm3 = float(mesh.volume)
-                    # Converti volume se unità erano metri
-                    if max_dim < 10:
-                        vol_mm3 *= 1e9
-                    peso_kg = vol_mm3 * ACCIAIO_KG_MM3
-                else:
-                    # Stima da bbox con fill factor 20%
-                    peso_kg = (largh_mm * alt_mm * prof_mm) * ACCIAIO_KG_MM3 * 0.20
+                vol_m3 = float(abs(mesh_obj.volume)) * (1e-9 if max_dim >= 100 else 1e-3)
+                peso_kg = vol_m3 * DENSITA_ACCIAIO
+                if peso_kg > 500 or peso_kg < 0.001:
+                    spessore_est = min(bbox) * 0.05
+                    vol_est = largh_mm * alt_mm * spessore_est * 1e-9
+                    peso_kg = vol_est * DENSITA_ACCIAIO
             except Exception:
-                peso_kg = (largh_mm * alt_mm * prof_mm) * ACCIAIO_KG_MM3 * 0.20
+                peso_kg = 0.0
 
-            peso_kg = max(0.01, round(peso_kg, 2))
+            nome = nomi_step[idx] if idx < len(nomi_step) else f"Componente_{idx+1}"
 
-            # Genera SVG profilo (proiezione frontale)
-            svg_uri = _genera_svg_profilo_trimesh(mesh, largh_mm, alt_mm)
+            pt_aggancio = _rileva_fori_aggancio(mesh_obj)
+            if pt_aggancio:
+                anchor_type = "foro_cad"
+                anchor_note = f"Foro rilevato"
+            else:
+                anchor_type = "filo"
+                anchor_note = "Aggancio filo/morsetto (spigolo superiore)"
 
-            parts.append({
-                'nome': name,
-                'largh_mm': round(largh_mm, 1),
-                'alt_mm': round(alt_mm, 1),
-                'D_mm': round(prof_mm, 1),
-                'peso_kg': peso_kg,
-                'orientamento': 'standard',
-                'svg_uri': svg_uri,
+            svg_str = _svg_silhouette(mesh_obj, largh_mm, alt_mm)
+            svg_b64 = "data:image/svg+xml;base64," + base64.b64encode(svg_str.encode()).decode()
+
+            componenti.append({
+                "nome": nome,
+                "largh_mm": round(largh_mm, 1),
+                "alt_mm": round(alt_mm, 1),
+                "prof_mm": round(prof_mm, 1),
+                "peso_kg": round(peso_kg, 2),
+                "anchor_type": anchor_type,
+                "anchor_note": anchor_note,
+                "can_rotate": True,
+                "svg_uri": svg_b64,
+                "orientamento": "standard"
             })
-        except Exception as ex:
-            # Pezzo non leggibile → skip
+        except Exception:
             continue
 
-    if not parts:
-        return {'error': 'Nessun componente valido trovato nel file STEP'}
+    if not componenti:
+        return {"error": "Nessun componente estratto dal file STEP"}
 
-    # Ordina per altezza decrescente (pezzi alti vanno prima sulla catena)
-    parts.sort(key=lambda p: -p['alt_mm'])
-
-    # Assegna colori e ganci
-    columns = []
-    slot = 0
-    for i, part in enumerate(parts):
-        color = COLORS[i % len(COLORS)]
-        col = {
-            'idx': i,
-            'start_slot': slot,
-            'n_slots': 1,
-            'peso': part['peso_kg'],
-            'color': color,
-            'pezzi': [dict(id=i+1, **part)]
-        }
-        columns.append(col)
-        slot += 1  # ogni pezzo occupa 1 slot (pitch 400mm)
+    nesting_result = _ottimizza_nesting_fisico(componenti)
 
     return {
-        'passo_mm': PASSO_MM,
-        'z_max_mm': Z_MAX_MM,
-        'max_kg': MAX_KG_GANCIO,
-        'total_slots': slot,
-        'columns': columns,
-        'n_pezzi': len(parts),
-        'peso_totale': round(sum(p['peso_kg'] for p in parts), 2)
+        "n_componenti": len(componenti),
+        "n_pali": len(nesting_result["pali"]),
+        "peso_totale": round(sum(c["peso_kg"] for c in componenti), 2),
+        "pali": nesting_result["pali"],
+        "kpi": nesting_result["kpi"],
+        "componenti_raw": componenti
     }
+
+
+def _ottimizza_nesting_fisico(componenti,
+                               altezza_catena_mm=2000,
+                               peso_max_palo_kg=55,
+                               gap_mm=50,
+                               soglia_doppio_gancio_mm=600):
+    """
+    Algoritmo FFD Fisico con 3 posizioni gancio per palo (L, C, R).
+    """
+    POSIZIONI_SINGOLE = ['C', 'L', 'R']
+
+    comps_sorted = sorted(componenti,
+                          key=lambda x: x['largh_mm'] * x['alt_mm'],
+                          reverse=True)
+
+    pali = []
+
+    def nuovo_palo():
+        return {
+            'posizioni': {
+                'L':  {'pezzi': [], 'alt_usata': 0},
+                'C':  {'pezzi': [], 'alt_usata': 0},
+                'R':  {'pezzi': [], 'alt_usata': 0},
+                'LR': {'pezzi': [], 'alt_usata': 0},
+            },
+            'peso_totale': 0.0
+        }
+
+    def tenta_inserimento(palo, pezzo_info, largh, alt, orient):
+        peso = pezzo_info['peso_kg']
+        if palo['peso_totale'] + peso > peso_max_palo_kg:
+            return False
+
+        usa_doppio = largh > soglia_doppio_gancio_mm
+
+        if usa_doppio:
+            pos_candidates = ['LR']
+        else:
+            pos_candidates = POSIZIONI_SINGOLE
+
+        for pk in pos_candidates:
+            pos = palo['posizioni'][pk]
+            gap = gap_mm if pos['pezzi'] else 0
+            spazio_libero = altezza_catena_mm - pos['alt_usata']
+
+            if spazio_libero >= alt + gap:
+                pos['alt_usata'] += alt + gap
+                pos['pezzi'].append({
+                    **pezzo_info,
+                    'largh_mm': largh,
+                    'alt_mm': alt,
+                    'orientamento': orient,
+                    'posizione_gancio': pk,
+                    'y_offset': pos['alt_usata'] - alt
+                })
+                palo['peso_totale'] += peso
+                return True
+
+        return False
+
+    for comp in comps_sorted:
+        largh0 = comp['largh_mm']
+        alt0   = comp['alt_mm']
+        can_rotate = comp.get('can_rotate', True)
+
+        orientamenti = [('standard', largh0, alt0)]
+        if can_rotate:
+            orientamenti.append(('ruotato_90', alt0, largh0))
+
+        placed = False
+
+        for orient, largh, alt in orientamenti:
+            if placed:
+                break
+            for palo in pali:
+                if tenta_inserimento(palo, comp, largh, alt, orient):
+                    placed = True
+                    break
+
+        if not placed:
+            new_palo = nuovo_palo()
+            for orient, largh, alt in orientamenti:
+                if tenta_inserimento(new_palo, comp, largh, alt, orient):
+                    placed = True
+                    break
+            if not placed:
+                for orient, largh, alt in orientamenti:
+                    comp_copy = {**comp, 'largh_mm': largh, 'alt_mm': min(alt, altezza_catena_mm),
+                                 'orientamento': orient, 'posizione_gancio': 'C',
+                                 'y_offset': 0}
+                    new_palo['posizioni']['C']['pezzi'].append(comp_copy)
+                    new_palo['posizioni']['C']['alt_usata'] = min(alt, altezza_catena_mm)
+                    new_palo['peso_totale'] += comp['peso_kg']
+                    placed = True
+                    break
+            pali.append(new_palo)
+
+    n_pali = len(pali)
+    peso_tot = sum(p['peso_totale'] for p in pali)
+
+    occupazioni = []
+    for p in pali:
+        for pk in ['L', 'C', 'R', 'LR']:
+            if p['posizioni'][pk]['pezzi']:
+                occ = p['posizioni'][pk]['alt_usata'] / altezza_catena_mm * 100
+                occupazioni.append(occ)
+    occ_media = round(sum(occupazioni) / len(occupazioni), 1) if occupazioni else 0
+
+    n_ruotati = sum(
+        1 for p in pali
+        for pk in ['L', 'C', 'R', 'LR']
+        for pz in p['posizioni'][pk]['pezzi']
+        if pz.get('orientamento') == 'ruotato_90'
+    )
+
+    kpi = {
+        "n_pali": n_pali,
+        "peso_totale_kg": round(peso_tot, 2),
+        "occupazione_media_pct": occ_media,
+        "n_pezzi_ruotati": n_ruotati,
+        "lunghezza_catena_m": round(n_pali * 0.4, 2),
+        "peso_medio_palo_kg": round(peso_tot / n_pali, 2) if n_pali else 0
+    }
+
+    return {"pali": pali, "kpi": kpi}
 
 
 @app.route('/api/nesting/analizza', methods=['POST'])
 def api_nesting_analizza():
     """
-    Riceve uno o più file STEP, li analizza con trimesh/cascadio,
-    calcola il nesting sulla catena e restituisce JSON con profili SVG.
-    Supporta sia 'file' (singolo, nuovo viewer) che 'files[]' (multipli).
+    Riceve file STEP, lo analizza con FFD fisico e restituisce JSON nesting.
+    Supporta sia 'file' (singolo) che 'files[]' (multipli, compatibilità).
     """
-    import tempfile, os, math, base64, io
+    import tempfile, os
 
-    # ── Modalità singolo file (nuovo viewer nesting_viewer.html) ──
     single_file = request.files.get('file')
     if single_file and single_file.filename:
         fname = single_file.filename
@@ -2400,157 +2620,40 @@ def api_nesting_analizza():
                 single_file.save(tmp.name)
                 tmp_path = tmp.name
             result = _analizza_step_per_nesting(tmp_path)
-            os.unlink(tmp_path)
             return jsonify(result)
         except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
             try:
                 os.unlink(tmp_path)
             except Exception:
                 pass
-            return jsonify({'error': str(e)}), 500
 
-    # ── Modalità multi-file (compatibilità precedente) ──
+    # Modalità multi-file (compatibilità precedente)
     files = request.files.getlist('files[]')
-    nomi  = request.form.getlist('nomi[]')
-    z_max    = float(request.form.get('z_max', 2000))
-    max_kg   = float(request.form.get('max_kg', 60))
-    passo_mm = float(request.form.get('passo_mm', 400))
-
     if not files:
         return jsonify({'ok': False, 'error': 'Nessun file ricevuto'}), 400
 
-    cfg = get_config()
-
-    all_parts = []
-    errors    = []
-
-    for idx, (fobj, nome) in enumerate(zip(files, nomi or [])):
-        fname = fobj.filename or f'part_{idx}.stp'
-        nome  = nome or fname.rsplit('.', 1)[0]
+    results = []
+    for f in files:
+        if not f.filename:
+            continue
+        suffix = os.path.splitext(f.filename)[1] or '.stp'
         try:
-            with tempfile.NamedTemporaryFile(suffix='.stp', delete=False) as tmp:
-                fobj.save(tmp.name)
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                f.save(tmp.name)
                 tmp_path = tmp.name
-            # Analisi con trimesh + cascadio
-            try:
-                import trimesh
-                scene = trimesh.load(tmp_path)
-            except Exception as e:
-                errors.append(f'{nome}: {e}')
-                os.unlink(tmp_path)
-                continue
-
-            # Estrai mesh singole dall'assembly
-            if hasattr(scene, 'geometry') and scene.geometry:
-                meshes = list(scene.geometry.values())
-            elif hasattr(scene, 'triangles'):
-                meshes = [scene]
-            else:
-                meshes = []
-
-            # ── SEPARA: ogni geometria del STEP = pezzo singolo sulla catena ──
-            try:
-                import numpy as np
-                import re as _re
-
-                # Estrai nomi PRODUCT dal file STEP per etichettare i pezzi
-                with open(tmp_path, 'r', errors='replace') as _sf:
-                    _step_raw = _sf.read()
-                _product_names = _re.findall(r"PRODUCT\s*\(\s*'([^']*)'[^)]*\)", _step_raw)
-                # Il primo è l'assembly root → escludi, usa i sub-product come nomi
-                _sub_names = [p.strip() for p in _product_names[1:] if p.strip()]
-
-                # Geometrie valide dall'assembly
-                if hasattr(scene, 'geometry') and scene.geometry:
-                    _geom_items = [(k, v) for k, v in scene.geometry.items()
-                                   if hasattr(v, 'vertices') and len(v.vertices) > 0]
-                elif hasattr(scene, 'vertices') and len(scene.vertices) > 0:
-                    _geom_items = [(nome, scene)]
-                else:
-                    _geom_items = []
-
-                if not _geom_items:
-                    raise ValueError('Nessuna geometria valida nel file STEP')
-
-                # Auto-detect unità: calcola max dimensione su tutti i vertici
-                _all_verts_g = np.vstack([m.vertices for _, m in _geom_items])
-                _global_max = float(np.abs(_all_verts_g).max())
-                _unit_scale = 1000.0 if 0 < _global_max < 100 else 1.0
-
-                import trimesh as tr_mod
-                for _idx, (_mesh_key, _mesh) in enumerate(_geom_items):
-                    try:
-                        # Scala vertici nelle unità corrette (mm)
-                        _verts_mm = _mesh.vertices * _unit_scale
-                        _scaled = tr_mod.Trimesh(
-                            vertices=_verts_mm,
-                            faces=_mesh.faces,
-                            process=False
-                        )
-
-                        # Bounding box in mm
-                        _bb = _scaled.bounding_box.extents
-                        _dims = sorted([float(_bb[0]), float(_bb[1]), float(_bb[2])], reverse=True)
-                        _L_mm = max(round(_dims[0]), 10)
-                        _H_mm = max(round(_dims[1]), 10)
-                        _D_mm = max(round(_dims[2]), 10)
-
-                        # Peso
-                        if _scaled.is_watertight and _scaled.volume > 0:
-                            _peso = round(float(_scaled.volume) * 7850 / 1e9, 2)
-                        else:
-                            _peso = round(_L_mm * _H_mm * _D_mm * 0.15 * 7850 / 1e9, 2)
-                        _peso = max(_peso, 0.01)
-
-                        # Nome: usa nome PRODUCT se disponibile, altrimenti chiave geometria
-                        if _idx < len(_sub_names):
-                            _part_nome = _sub_names[_idx]
-                        else:
-                            _part_nome = _mesh_key if _mesh_key else f'{nome}_p{_idx+1}'
-
-                        # Area superficiale in mm²
-                        _area = float(_scaled.area)
-
-                        # SVG profilo
-                        _svg_uri = _genera_svg_profilo_trimesh(_scaled, _L_mm, _H_mm)
-
-                        all_parts.append({
-                            'nome':     _part_nome,
-                            'largh_mm': _L_mm,
-                            'alt_mm':   _H_mm,
-                            'D_mm':     max(_D_mm, 20),
-                            'peso_kg':  _peso,
-                            'area_m2':  round(_area / 1e6, 4),
-                            'svg_uri':  _svg_uri,
-                        })
-                    except Exception as _e:
-                        errors.append(f'parte {_idx} ({_mesh_key}): {_e}')
-
-            except Exception as e:
-                errors.append(f'{nome}: {e}')
-            os.unlink(tmp_path)
+            r = _analizza_step_per_nesting(tmp_path)
+            results.append(r)
         except Exception as e:
-            errors.append(f'{nome}: {e}')
+            results.append({'error': str(e)})
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
-    if not all_parts:
-        return jsonify({'ok': False, 'error': 'Nessun pezzo estratto. ' + '; '.join(errors)}), 400
-
-    # Nesting: raggruppa pezzi in colonne per gancio
-    columns = _nesting_catena(all_parts, passo_mm=passo_mm, max_kg=max_kg, z_max=z_max)
-
-    total_slots  = len(columns)
-    n_pezzi_tot  = sum(len(c['pezzi']) for c in columns)
-    peso_tot     = round(sum(c['peso'] for c in columns), 2)
-
-    return jsonify({
-        'ok':          True,
-        'columns':     columns,
-        'total_slots': total_slots,
-        'n_pezzi_tot': n_pezzi_tot,
-        'peso_tot':    peso_tot,
-        'passo_mm':    passo_mm,
-        'errors':      errors,
-    })
+    return jsonify({'ok': True, 'results': results})
 
 
 def _genera_svg_profilo_trimesh(mesh, L_mm, H_mm):
