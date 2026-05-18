@@ -1,0 +1,510 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nesting Catena — Enorossi Paint Optimizer</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c0e;--panel:#0f1418;--card:#131a1f;
+  --bdr:#1a2530;--bdr2:#243040;
+  --grn:#00e676;--grn2:#00c853;--gdim:rgba(0,230,118,.08);
+  --blu:#00b0ff;--yel:#ffab00;--red:#ff3d3d;--pur:#ce93d8;
+  --txt:#cdd9e5;--mut:#4a6070;
+  --mono:'JetBrains Mono',Consolas,monospace
+}
+body{background:var(--bg);color:var(--txt);font-family:var(--mono);min-height:100vh}
+.topbar{height:52px;background:var(--panel);border-bottom:2px solid var(--grn);
+  display:flex;align-items:center;padding:0 22px;gap:14px;position:sticky;top:0;z-index:200}
+.logo{font-size:.92rem;font-weight:700;letter-spacing:3px;color:var(--grn)}
+.logo sub{color:var(--mut);font-size:.58rem;letter-spacing:1px;margin-left:8px;font-weight:400}
+.kpis{display:flex;gap:18px;margin-left:auto}
+.kv{text-align:center}
+.kv-v{font-size:.88rem;font-weight:700}
+.kv-l{font-size:.46rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em}
+.layout{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 52px)}
+/* SIDEBAR */
+.sidebar{background:var(--panel);border-right:1px solid var(--bdr);
+  display:flex;flex-direction:column;overflow:hidden}
+.sb-section{padding:12px 14px;border-bottom:1px solid var(--bdr)}
+.sb-title{font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);margin-bottom:8px}
+/* Upload zone */
+.dropzone{border:2px dashed var(--bdr2);border-radius:8px;padding:18px;text-align:center;
+  cursor:pointer;transition:border-color .15s,background .15s;background:#0a0f12}
+.dropzone:hover,.dropzone.over{border-color:var(--grn);background:var(--gdim)}
+.dropzone-ico{font-size:2rem;margin-bottom:6px;color:var(--bdr2)}
+.dropzone:hover .dropzone-ico,.dropzone.over .dropzone-ico{color:var(--grn)}
+.dropzone p{font-size:.68rem;color:var(--mut);line-height:1.5}
+.dropzone p b{color:var(--txt)}
+/* File list */
+.file-list{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.file-item{background:var(--card);border:1px solid var(--bdr2);border-radius:6px;
+  padding:7px 10px;display:flex;align-items:center;gap:8px}
+.file-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:.65rem;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-sub{font-size:.52rem;color:var(--mut);margin-top:1px}
+.file-rm{color:var(--red);cursor:pointer;font-size:.75rem;opacity:.6;flex-shrink:0}
+.file-rm:hover{opacity:1}
+/* Params */
+.params{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pg{display:flex;flex-direction:column;gap:3px}
+.pg label{font-size:.55rem;color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.pg input{background:#0a0f12;border:1px solid var(--bdr2);color:var(--txt);
+  border-radius:5px;padding:5px 8px;font-family:var(--mono);font-size:.72rem;outline:none}
+.pg input:focus{border-color:var(--grn)}
+/* Buttons */
+.btn{padding:7px 16px;border-radius:6px;border:none;cursor:pointer;
+  font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.05em;transition:all .13s}
+.btn-g{background:var(--grn2);color:#000;width:100%}
+.btn-g:hover:not(:disabled){background:var(--grn)}
+.btn-g:disabled{opacity:.4;cursor:not-allowed}
+.btn-o{background:transparent;border:1px solid var(--bdr2);color:var(--mut)}
+.btn-o:hover{border-color:var(--grn);color:var(--grn)}
+/* Results sidebar */
+.res-list{flex:1;overflow-y:auto;padding:8px}
+.mac-card{background:var(--card);border:1px solid var(--bdr);border-radius:7px;
+  margin-bottom:6px;overflow:hidden}
+.mac-hdr{padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.mac-hdr:hover{background:rgba(255,255,255,.02)}
+.mac-nome{font-size:.68rem;font-weight:700;color:var(--txt);flex:1}
+.mac-badge{font-size:.52rem;padding:2px 7px;border-radius:3px;font-weight:700}
+.mac-body{padding:0 10px 8px;font-size:.6rem;color:var(--mut);display:none}
+.mac-body.open{display:block}
+.mac-row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid var(--bdr)}
+.mac-row:last-child{border:none}
+.mac-v{color:var(--txt)}
+/* Main area */
+.main-area{display:flex;flex-direction:column;overflow:hidden}
+.toolbar{padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--bdr);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;font-size:.68rem}
+/* Chain view */
+.chain-wrap{flex:1;overflow:auto;padding:16px}
+/* Empty state */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;text-align:center;color:var(--mut)}
+.empty-ico{font-size:3.5rem;margin-bottom:14px;opacity:.3}
+.empty h2{font-size:.95rem;font-weight:700;margin-bottom:6px;color:var(--txt)}
+.empty p{font-size:.72rem;line-height:1.7}
+/* Progress */
+.progress{background:#0a0f12;border:1px solid var(--bdr);border-radius:8px;
+  padding:18px;margin:20px;text-align:center}
+.progress-bar-wrap{height:4px;background:#1a2530;border-radius:2px;margin:12px 0;overflow:hidden}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--grn),var(--blu));
+  border-radius:2px;animation:prog 1.4s ease-in-out infinite}
+@keyframes prog{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
+.progress-msg{font-size:.72rem;color:var(--mut)}
+/* Tooltip */
+#tip{position:fixed;background:rgba(8,12,14,.97);border:1px solid var(--grn);
+  border-radius:8px;padding:10px 13px;font-size:.68rem;pointer-events:none;
+  z-index:999;display:none;min-width:210px;max-width:280px}
+.tip-nome{font-weight:700;color:#fff;margin-bottom:5px;font-size:.74rem}
+.tip-row{display:flex;justify-content:space-between;gap:14px;margin-bottom:2px}
+.tip-lbl{color:var(--mut)}.tip-val{color:var(--grn);font-weight:700}
+.tip-img{width:90px;height:68px;float:right;margin:0 0 6px 8px;
+  background:#0a0f0a;border-radius:4px;overflow:hidden;border:1px solid var(--bdr)}
+.tip-img img{width:100%;height:100%;object-fit:contain}
+/* Stats bar */
+.statsbar{background:var(--panel);border-top:1px solid var(--bdr);
+  padding:7px 18px;display:flex;gap:24px;flex-shrink:0;font-size:.6rem}
+.stat b{color:var(--grn)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:#1e2a32;border-radius:2px}
+/* Legend */
+.legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:.58rem;color:var(--mut)}
+.leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+/* Saturazione bar catena */
+.sat-bar{height:6px;background:#1a2530;border-radius:3px;margin:8px 0;overflow:hidden}
+.sat-fill{height:100%;border-radius:3px;transition:width .5s}
+</style></head><body><div class="topbar"><div class="logo">ENOROSSI<sub>Paint Optimizer · Chain Nesting</sub></div><div class="kpis"><div class="kv"><div class="kv-v" id="kv-pezzi" style="color:var(--blu)">—</div><div class="kv-l">Pezzi tot.</div></div><div class="kv"><div class="kv-v" id="kv-ganci" style="color:var(--grn)">—</div><div class="kv-l">Ganci usati</div></div><div class="kv"><div class="kv-v" id="kv-metri" style="color:var(--grn)">—</div><div class="kv-l">Catena</div></div><div class="kv"><div class="kv-v" id="kv-peso" style="color:var(--yel)">—</div><div class="kv-l">Peso tot.</div></div><div class="kv"><div class="kv-v" id="kv-sat" style="color:var(--mut)">—</div><div class="kv-l">Saturaz.</div></div><div class="kv"><div class="kv-v" id="kv-lib" style="color:var(--mut)">425</div><div class="kv-l">Liberi</div></div></div></div><div class="layout"><div class="sidebar"><div class="sb-section"><div class="sb-title">File STEP / macchine</div><div class="dropzone" id="dropzone"><div class="dropzone-ico">📁</div><p><b>Trascina qui i file STEP</b><br>o clicca per selezionarli<br><span style="font-size:.6rem;color:var(--mut)">Supporta .stp e .step · più file insieme</span></p></div><input type="file" id="fileInput" multiple accept=".stp,.step" style="display:none"><div class="file-list" id="fileList"></div></div><div class="sb-section"><div class="sb-title">Parametri catena</div><div class="params"><div class="pg"><label>Pitch (mm)</label><input id="pPasso" type="number" value="400" min="100" max="1000" step="50"></div><div class="pg"><label>Z max (mm)</label><input id="pZ" type="number" value="2000" min="500" max="5000" step="100"></div><div class="pg"><label>Max kg/gancio</label><input id="pKg" type="number" value="100" min="10" max="500" step="10"></div><div class="pg"><label>Ganci totali</label><input id="pGanci" type="number" value="425" min="50" max="2000" step="25"></div></div><div class="sb-title" style="margin-top:10px">URL backend Railway</div><div class="pg"><input id="serverURL" type="text" value="https://your-app.railway.app" style="width:100%;font-size:.62rem" placeholder="https://...railway.app"></div></div><div class="sb-section"><button class="btn btn-g" id="runBtn" onclick="runAnalysis()" disabled>⚡ Analizza &amp; Ottimizza</button><div style="margin-top:6px;text-align:center"><button class="btn btn-o" onclick="exportJSON()" style="font-size:.6rem;padding:4px 10px">⬇ Esporta JSON</button></div></div><div class="sb-section" style="border-bottom:none"><div class="sb-title">Riepilogo macchine</div></div><div class="res-list" id="resList"><div style="font-size:.6rem;color:var(--mut);padding:12px">Carica i file STEP e avvia l'analisi</div></div></div><div class="main-area"><div class="toolbar"><div class="legend" id="legend"><span style="color:var(--mut);font-size:.58rem">Legenda macchine:</span></div><div style="margin-left:auto;display:flex;gap:8px;align-items:center"><span style="font-size:.58rem;color:var(--mut)" id="chainInfo"></span></div></div><div style="flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column"><div class="empty" id="mainEmpty"><div class="empty-ico">⛓</div><h2>Nessuna analisi avviata</h2><p>Carica uno o più file STEP nella sidebar<br>configura i parametri della catena<br>e premi <b>Analizza &amp; Ottimizza</b></p></div><div class="progress" id="mainProgress" style="display:none"><div style="font-size:.78rem;color:var(--grn);margin-bottom:8px">⚙ Analisi in corso...</div><div class="progress-bar-wrap"><div class="progress-bar"></div></div><div class="progress-msg" id="progressMsg">Inizializzazione...</div><div style="font-size:.58rem;color:var(--mut);margin-top:8px">La durata dipende dalla complessità del file STEP (10-60 sec tipici)</div></div><div id="mainResult" style="display:none;flex:1;flex-direction:column;overflow:hidden"><div class="chain-wrap" id="chainWrap"></div></div></div><div class="statsbar"><div class="stat">Pezzi: <b id="s-pezzi">—</b></div><div class="stat">Ganci usati: <b id="s-ganci">—</b> / 425</div><div class="stat">Catena: <b id="s-m">—</b> m / 170 m</div><div class="stat">Peso: <b id="s-kg">—</b> kg</div><div class="stat">Ganci liberi: <b id="s-lib">425</b></div></div></div></div><div id="tip"></div><script>
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
+const PALETTE = [
+  '#1565C0','#2E7D32','#6A1B9A','#AD1457','#E65100',
+  '#00695C','#4E342E','#37474F','#F57F17','#283593',
+  '#0D47A1','#1B5E20','#4A148C','#880E4F','#BF360C'
+];
+
+// Stato applicazione
+let files      = [];   // {file, nome, color}
+let nestResult = null; // risposta server
+let serverURL  = document.getElementById('serverURL').value;
+
+// ═══════════════════════════════════════════════════════
+// FILE MANAGEMENT
+// ═══════════════════════════════════════════════════════
+const dropzone   = document.getElementById('dropzone');
+const fileInput  = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('over');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
+
+function addFiles(newFiles) {
+  newFiles.forEach(f => {
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (!['stp','step'].includes(ext)) return;
+    if (files.find(x => x.file.name === f.name)) return;
+    files.push({
+      file:  f,
+      nome:  f.name.replace(/\.(stp|step)$/i,''),
+      color: PALETTE[files.length % PALETTE.length]
+    });
+  });
+  renderFileList();
+  updateRunBtn();
+}
+
+function removeFile(idx) {
+  files.splice(idx, 1);
+  // Ricalcola colori
+  files.forEach((f,i) => f.color = PALETTE[i % PALETTE.length]);
+  renderFileList();
+  updateRunBtn();
+}
+
+function renderFileList() {
+  fileListEl.innerHTML = '';
+  if (files.length === 0) {
+    fileListEl.innerHTML = '<div style="font-size:.6rem;color:var(--mut);text-align:center;padding:8px">Nessun file caricato</div>';
+    return;
+  }
+  files.forEach((f, i) => {
+    const d = document.createElement('div');
+    d.className = 'file-item';
+    d.innerHTML =
+      '<div class="file-dot" style="background:'+f.color+'"></div>'+
+      '<div class="file-info">'+
+        '<div class="file-name">'+f.nome+'</div>'+
+        '<div class="file-sub">'+f.file.name+' · '+(f.file.size/1024).toFixed(0)+' KB</div>'+
+      '</div>'+
+      '<div class="file-rm" onclick="removeFile('+i+')">✕</div>';
+    fileListEl.appendChild(d);
+  });
+}
+renderFileList();
+
+function updateRunBtn() {
+  document.getElementById('runBtn').disabled = files.length === 0;
+}
+
+// ═══════════════════════════════════════════════════════
+// RUN ANALYSIS
+// ═══════════════════════════════════════════════════════
+async function runAnalysis() {
+  if (files.length === 0) return;
+  serverURL = document.getElementById('serverURL').value.trim().replace(/\/+$/,'');
+
+  showProgress('Invio file STEP al server...');
+
+  const fd = new FormData();
+  files.forEach(f => {
+    fd.append('files[]', f.file);
+    fd.append('nomi[]',  f.nome);
+  });
+  fd.append('z_max',    document.getElementById('pZ').value);
+  fd.append('max_kg',   document.getElementById('pKg').value);
+  fd.append('passo_mm', document.getElementById('pPasso').value);
+
+  try {
+    updateProgress('Analisi geometrie STEP in corso...');
+    const resp = await fetch(serverURL + '/api/nesting/analizza', {
+      method: 'POST', body: fd
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: resp.statusText}));
+      throw new Error(err.error || resp.statusText);
+    }
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error);
+    nestResult = data;
+    showResult(data);
+  } catch(e) {
+    hideProgress();
+    showError('Errore: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PROGRESS
+// ═══════════════════════════════════════════════════════
+function showProgress(msg) {
+  document.getElementById('mainEmpty').style.display = 'none';
+  document.getElementById('mainProgress').style.display = 'block';
+  document.getElementById('mainResult').style.display = 'none';
+  document.getElementById('progressMsg').textContent = msg;
+}
+function updateProgress(msg) {
+  document.getElementById('progressMsg').textContent = msg;
+}
+function hideProgress() {
+  document.getElementById('mainProgress').style.display = 'none';
+}
+function showError(msg) {
+  document.getElementById('mainEmpty').style.display = 'flex';
+  document.getElementById('mainEmpty').innerHTML =
+    '<div class="empty-ico">⚠</div><h2>Errore analisi</h2><p>'+msg+'</p>';
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER RISULTATO
+// ═══════════════════════════════════════════════════════
+function showResult(data) {
+  hideProgress();
+  document.getElementById('mainEmpty').style.display = 'none';
+  document.getElementById('mainResult').style.display = 'flex';
+
+  // KPI topbar
+  document.getElementById('kv-pezzi').textContent  = data.n_pezzi_tot;
+  document.getElementById('kv-ganci').textContent  = data.total_slots;
+  document.getElementById('kv-metri').textContent  = data.total_m.toFixed(1)+' m';
+  document.getElementById('kv-peso').textContent   = data.peso_tot_kg.toFixed(1)+' kg';
+  document.getElementById('kv-sat').textContent    = data.saturazione_pct+'%';
+  document.getElementById('kv-lib').textContent    = data.ganci_liberi;
+  document.getElementById('kv-sat').style.color =
+    data.saturazione_pct > 85 ? 'var(--red)' : data.saturazione_pct > 60 ? 'var(--yel)' : 'var(--grn)';
+
+  // Stats bar
+  document.getElementById('s-pezzi').textContent = data.n_pezzi_tot;
+  document.getElementById('s-ganci').textContent = data.total_slots;
+  document.getElementById('s-m').textContent = data.total_m.toFixed(2);
+  document.getElementById('s-kg').textContent = data.peso_tot_kg.toFixed(1);
+  document.getElementById('s-lib').textContent = data.ganci_liberi;
+
+  // Sidebar macchine
+  renderMachineSummary(data);
+
+  // Legend
+  renderLegend(data);
+
+  // SVG catena
+  renderChain(data);
+}
+
+function renderMachineSummary(data) {
+  const el = document.getElementById('resList');
+  el.innerHTML = '';
+  const macNames = [...new Set(data.columns.map(c => c.macchina))];
+  macNames.forEach((nome, mi) => {
+    const cols = data.columns.filter(c => c.macchina === nome);
+    const slots = cols.reduce((s,c) => s+c.n_slots, 0);
+    const kg    = cols.reduce((s,c) => s+c.peso, 0);
+    const n     = cols.reduce((s,c) => s+c.pezzi.length, 0);
+    const color = cols[0]?.color || PALETTE[mi];
+    const sum   = data.macchine_summary?.find(m => m.nome === nome);
+    const card  = document.createElement('div');
+    card.className = 'mac-card';
+    card.innerHTML =
+      '<div class="mac-hdr" onclick="toggleMac(this)">' +
+        '<div class="file-dot" style="background:'+color+'"></div>' +
+        '<div class="mac-nome">'+nome+'</div>' +
+        '<div class="mac-badge" style="background:'+color+'22;color:'+color+'">'+slots+' ganci</div>' +
+      '</div>' +
+      '<div class="mac-body">' +
+        '<div class="mac-row"><span>Pezzi</span><span class="mac-v">'+n+'</span></div>' +
+        '<div class="mac-row"><span>Ganci usati</span><span class="mac-v">'+slots+' × 400mm</span></div>' +
+        '<div class="mac-row"><span>Catena occupata</span><span class="mac-v">'+(slots*0.4).toFixed(1)+' m</span></div>' +
+        '<div class="mac-row"><span>Peso totale</span><span class="mac-v">'+kg.toFixed(1)+' kg</span></div>' +
+        (sum ? '<div class="mac-row"><span>Solidi STEP</span><span class="mac-v">'+sum.n_solidi+'</span></div>' : '') +
+      '</div>';
+    el.appendChild(card);
+  });
+}
+
+function toggleMac(hdr) {
+  const body = hdr.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+function renderLegend(data) {
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  const macNames = [...new Set(data.columns.map(c => c.macchina))];
+  macNames.forEach(nome => {
+    const col = data.columns.find(c => c.macchina === nome);
+    const d = document.createElement('div');
+    d.className = 'leg-item';
+    d.innerHTML = '<div class="leg-dot" style="background:'+(col?.color||'#888')+'"></div>'+nome;
+    el.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER SVG CATENA
+// ═══════════════════════════════════════════════════════
+function renderChain(data) {
+  const wrap = document.getElementById('chainWrap');
+  wrap.innerHTML = '';
+
+  const columns   = data.columns;
+  const Z_MAX     = parseInt(document.getElementById('pZ').value) || 2000;
+  const PASSO     = parseInt(document.getElementById('pPasso').value) || 400;
+  const GANCI_TOT = 425;
+
+  const SCALE  = 0.20;
+  const PAD    = 22;
+  const RAIL_H = 20;
+  const LABEL_H= 24;
+  const GAP_MM = 30;
+
+  const totalSlots = data.total_slots;
+  // Mostra anche i ganci liberi rimanenti (fino a 425 max, ma non più di 30 liberi)
+  const displaySlots = Math.min(totalSlots + 15, GANCI_TOT);
+
+  const svgW = Math.round(displaySlots * PASSO * SCALE) + 2*PAD + 50;
+  const svgH = Math.round(Z_MAX * SCALE) + RAIL_H + LABEL_H + PAD + 60;
+
+  const chain_y = LABEL_H + RAIL_H/2;
+  const cx0 = PAD;
+  const cx1 = PAD + Math.round(displaySlots * PASSO * SCALE);
+
+  let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+svgW+'" height="'+svgH+'" '+
+    'viewBox="0 0 '+svgW+' '+svgH+'" style="display:block">';
+  svg += '<rect width="'+svgW+'" height="'+svgH+'" fill="#080c0e"/>';
+
+  // Catena
+  svg += '<line x1="'+cx0+'" y1="'+chain_y+'" x2="'+cx1+'" y2="'+chain_y+'" stroke="#37474F" stroke-width="12" stroke-linecap="round"/>';
+  svg += '<line x1="'+cx0+'" y1="'+chain_y+'" x2="'+cx1+'" y2="'+chain_y+'" stroke="#546E7A" stroke-width="5" stroke-dasharray="16,12"/>';
+
+  // Tick ogni 5 ganci
+  for (let g = 0; g <= displaySlots; g += 5) {
+    const tx = PAD + Math.round(g * PASSO * SCALE);
+    svg += '<line x1="'+tx+'" y1="'+(chain_y-8)+'" x2="'+tx+'" y2="'+(chain_y+8)+'" stroke="#263545" stroke-width="1"/>';
+    svg += '<text x="'+tx+'" y="'+(chain_y+20)+'" font-family="monospace" font-size="8" fill="#263545" text-anchor="middle">'+g+'</text>';
+  }
+
+  // Label catena
+  svg += '<text x="'+cx0+'" y="14" font-family="monospace" font-size="10" fill="#37474F">'+
+    '↑ CATENA VERNICIATURA — '+PASSO+'mm pitch — 425 ganci totali</text>';
+  svg += '<text x="'+(cx1-80)+'" y="14" font-family="monospace" font-size="11" fill="#00e676" font-weight="700">'+
+    data.total_m.toFixed(1)+' m usati</text>';
+
+  // Scala Z
+  for (let z = 0; z <= Z_MAX; z += 500) {
+    const zy = LABEL_H + RAIL_H + 8 + Math.round(z * SCALE);
+    const lx = svgW - 44;
+    svg += '<line x1="'+(lx-2)+'" y1="'+zy+'" x2="'+(lx+3)+'" y2="'+zy+'" stroke="#263545" stroke-width="1"/>';
+    svg += '<text x="'+(lx+5)+'" y="'+(zy+4)+'" font-family="monospace" font-size="8" fill="#37474F">'+z+'mm</text>';
+  }
+
+  // Limite Z
+  const zlim = LABEL_H + RAIL_H + 8 + Math.round(Z_MAX * SCALE);
+  svg += '<line x1="'+PAD+'" y1="'+zlim+'" x2="'+cx1+'" y2="'+zlim+'" stroke="rgba(255,61,61,.25)" stroke-width="1" stroke-dasharray="6,4"/>';
+
+  // Colonne pezzi
+  columns.forEach(function(col, ci) {
+    const color   = col.color;
+    const col_x   = PAD + Math.round(col.start_slot * PASSO * SCALE);
+    const col_w   = Math.round(col.n_slots * PASSO * SCALE);
+    const gcx     = col_x + Math.round(col_w/2);
+
+    // Sfondo macchina
+    const bg_y = LABEL_H + RAIL_H + 8;
+    const bg_h = Math.round(Z_MAX * SCALE);
+    svg += '<rect x="'+col_x+'" y="'+bg_y+'" width="'+col_w+'" height="'+bg_h+'" fill="'+color+'" opacity="0.035" rx="2"/>';
+
+    // Gambo + gancio
+    svg += '<line x1="'+gcx+'" y1="'+chain_y+'" x2="'+gcx+'" y2="'+(LABEL_H+RAIL_H+6)+'" stroke="'+color+'" stroke-width="3" opacity="0.8"/>';
+    svg += '<circle cx="'+gcx+'" cy="'+(LABEL_H+RAIL_H+10)+'" r="7" fill="'+color+'" opacity="0.9"/>';
+
+    // Label slot
+    const slotLbl = col.n_slots===1 ? 'G'+(col.start_slot+1) : 'G'+(col.start_slot+1)+'–'+(col.start_slot+col.n_slots);
+    svg += '<text x="'+gcx+'" y="'+(LABEL_H-3)+'" font-family="monospace" font-size="8" fill="'+color+'" text-anchor="middle" font-weight="700">'+
+      slotLbl+'·'+col.peso.toFixed(1)+'kg</text>';
+
+    // Pezzi nella colonna
+    let cursor_z = 0;
+    col.pezzi.forEach(function(part, pi) {
+      const py_top = LABEL_H + RAIL_H + 12 + Math.round(cursor_z * SCALE);
+      const pw     = col_w - 4;
+      const ph     = Math.max(10, Math.round(part.alt_mm * SCALE));
+      const px_l   = col_x + 2;
+
+      // Box cliccabile
+      svg += '<rect x="'+px_l+'" y="'+py_top+'" width="'+pw+'" height="'+ph+'" '+
+        'fill="'+color+'1a" stroke="'+color+'" stroke-width="1.2" rx="2" '+
+        'class="pr" data-id="'+part.id+'" data-mac="'+encodeURIComponent(col.macchina)+'" '+
+        'data-ci="'+ci+'" data-pi="'+pi+'" cursor="pointer"/>';
+
+      // Label
+      if (ph > 18) {
+        const nm = (part.nome||'').substring(0,16);
+        svg += '<text x="'+(px_l+pw/2)+'" y="'+(py_top+ph-4)+'" font-family="monospace" '+
+          'font-size="7" fill="rgba(255,255,255,.65)" text-anchor="middle" pointer-events="none">'+
+          nm+'</text>';
+      }
+
+      // Separatore
+      if (pi < col.pezzi.length-1) {
+        const sy = py_top + ph + Math.round(GAP_MM*SCALE/2);
+        svg += '<line x1="'+px_l+'" y1="'+sy+'" x2="'+(px_l+pw)+'" y2="'+sy+'" '+
+          'stroke="'+color+'" stroke-width="0.4" stroke-dasharray="3,3" opacity="0.3"/>';
+      }
+
+      cursor_z += part.alt_mm + GAP_MM;
+    });
+  });
+
+  // Zona libera
+  const freeX = PAD + Math.round(totalSlots * PASSO * SCALE) + 4;
+  const freeW = cx1 - freeX;
+  if (freeW > 10) {
+    const bg_y = LABEL_H + RAIL_H + 8;
+    svg += '<rect x="'+freeX+'" y="'+bg_y+'" width="'+freeW+'" height="'+Math.round(Z_MAX*SCALE)+'" '+
+      'fill="rgba(0,230,118,.02)" stroke="rgba(0,230,118,.08)" stroke-width="1" stroke-dasharray="4,4" rx="3"/>';
+    svg += '<text x="'+(freeX+freeW/2)+'" y="'+(bg_y+40)+'" font-family="monospace" font-size="9" '+
+      'fill="rgba(0,230,118,.25)" text-anchor="middle">GANCI LIBERI</text>';
+  }
+
+  // Riepilogo
+  svg += '<text x="'+PAD+'" y="'+(svgH-10)+'" font-family="monospace" font-size="9" fill="#00e676">'+
+    '✓ '+data.n_pezzi_tot+' pezzi · '+data.n_macchine+' macchine · '+data.total_slots+' ganci · '+
+    data.total_m.toFixed(1)+'m · '+data.peso_tot_kg.toFixed(1)+'kg</text>';
+
+  svg += '</svg>';
+
+  const container = document.createElement('div');
+  container.style.cssText = 'overflow-x:auto;border-radius:8px';
+  container.innerHTML = svg;
+  wrap.appendChild(container);
+
+  // Tooltip hover
+  const tip = document.getElementById('tip');
+  container.querySelectorAll('.pr').forEach(function(el) {
+    el.addEventListener('mouseenter', function(e) {
+      const ci  = parseInt(this.dataset.ci);
+      const pi  = parseInt(this.dataset.pi);
+      const col = nestResult.columns[ci];
+      if (!col) return;
+      const part = col.pezzi[pi];
+      if (!part) return;
+      tip.innerHTML =
+        '<div class="tip-nome">'+part.nome+'</div>'+
+        '<div style="color:var(--mut);font-size:.55rem;margin-bottom:5px">'+
+          decodeURIComponent(this.dataset.mac)+'</div>'+
+        '<div class="tip-row"><span class="tip-lbl">Altezza sospesa</span><span class="tip-val">'+part.alt_mm.toFixed(0)+' mm</span></div>'+
+        '<div class="tip-row"><span class="tip-lbl">Larghezza</span><span class="tip-val">'+part.largh_mm.toFixed(0)+' mm</span></div>'+
+        '<div class="tip-row"><span class="tip-lbl">Ganci occup.</span><span class="tip-val">'+part.ganci_n+'</span></div>'+
+        '<div class="tip-row"><span class="tip-lbl">Peso</span><span class="tip-val">'+part.peso_kg.toFixed(2)+' kg</span></div>'+
+        '<div class="tip-row"><span class="tip-lbl">Orient.</span><span class="tip-val">'+part.orientamento+'</span></div>';
+      tip.style.display = 'block';
+    });
+    el.addEventListener('mousemove', function(e) {
+      tip.style.left = (e.clientX+14)+'px';
+      tip.style.top  = (e.clientY-20)+'px';
+    });
+    el.addEventListener('mouseleave', function() { tip.style.display='none'; });
+  });
+}
+
+// Export JSON
+function exportJSON() {
+  if (!nestResult) return;
+  const b = new Blob([JSON.stringify(nestResult,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(b);
+  a.download='nesting_catena.json'; a.click();
+}
+</script></body></html>

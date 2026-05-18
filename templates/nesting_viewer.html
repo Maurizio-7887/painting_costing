@@ -163,13 +163,7 @@ canvas.rotating{cursor:crosshair}
       </div>
       <input type="file" id="fi" accept=".stp,.step" multiple style="display:none"
              onchange="onFiles(this.files)">
-      <div style="margin-top:8px;font-size:.56rem;color:var(--mut)">URL backend Railway:</div>
-      <div class="url-row">
-        <input class="url-in" id="railURL" type="text"
-               value=""
-               placeholder="https://...railway.app">
-        <button class="btn-sm btn-grn" onclick="testServer()">Test</button>
-      </div>
+      <div style="margin-top:8px;font-size:.56rem;color:var(--mut)">Backend: <span id="backendStatus" style="color:#00e676">● connesso</span></div>
       <div style="margin-top:5px;display:flex;gap:5px">
         <input class="url-in" id="zParam" type="number" value="2000" style="width:60px" title="Z max mm">
         <input class="url-in" id="kgParam" type="number" value="100" style="width:55px" title="Max kg">
@@ -369,11 +363,8 @@ function onFiles(files) {
 }
 
 async function analyzeFiles(files) {
-  const url = document.getElementById('railURL').value.trim().replace(/\/+$/,'');
-  if (!url || url.includes('your-app')) {
-    toast('Inserisci l\'URL del tuo Railway prima di caricare','warn'); return;
-  }
-  showProgress('Invio ' + files.length + ' file al server Railway...');
+  const url = '';
+  showProgress('Invio ' + files.length + ' file al server...');
   const fd = new FormData();
   files.forEach(f => { fd.append('files[]', f); fd.append('nomi[]', f.name.replace(/\.(stp|step)$/i,'')); });
   fd.append('z_max',    document.getElementById('zParam').value);
@@ -395,15 +386,16 @@ async function analyzeFiles(files) {
   }
 }
 
-async function testServer() {
-  const url = document.getElementById('railURL').value.trim().replace(/\/+$/,'');
+async function loadImplantoConfig() {
   try {
-    const r = await fetch(url + '/api/dashboard_stats', {signal: AbortSignal.timeout(5000)});
-    if (r.ok) toast('✓ Server Railway raggiungibile!','ok');
-    else toast('Server risponde ma con errore '+r.status,'warn');
-  } catch(e) {
-    toast('Server non raggiungibile: '+e.message,'err');
-  }
+    const r = await fetch('/api/nesting/config');
+    if (!r.ok) return;
+    const cfg = await r.json();
+    if (cfg.passo_mm) document.getElementById('passoParam').value = cfg.passo_mm;
+    if (cfg.max_kg)   document.getElementById('kgParam').value   = cfg.max_kg;
+    if (cfg.z_max)    document.getElementById('zParam').value    = cfg.z_max;
+    document.getElementById('backendStatus').textContent = '● ' + (cfg.nome_impianto||'Impianto');
+  } catch(e) { console.warn('Config impianto non disponibile'); }
 }
 
 function showProgress(msg) {
@@ -900,6 +892,7 @@ function toast(msg,type){
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
+loadImplantoConfig();
 loadStore();
 renderMachineList();
 
@@ -911,19 +904,6 @@ if (machines.length > 0) {
 }
 
 setTimeout(resize, 50);
-
-// Auto-detect Railway URL quando servito da Flask
-(function() {
-  const el = document.getElementById('railURL');
-  if (el && (!el.value || el.value.includes('your-app'))) {
-    const origin = window.location.origin;
-    if (origin && !origin.includes('localhost') || origin.includes('railway')) {
-      el.value = origin;
-    } else {
-      el.value = window.location.origin;
-    }
-  }
-})();
 </script>
 </body>
 </html>
