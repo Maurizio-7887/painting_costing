@@ -2224,6 +2224,405 @@ def api_glb_list(asm_id):
     return jsonify({'disponibile': bool(files), 'files': files})
 
 
+
+
+# ═══════════════════════════════════════════════════════════════
+# NESTING CAD — Viewer multi-macchina con silhouette SVG
+# ═══════════════════════════════════════════════════════════════
+
+# Parametri globali nesting (override via form params)
+NESTING_Z_MAX_MM   = 2000
+NESTING_MAX_KG     = 100
+NESTING_PASSO_MM   = 400
+NESTING_TOTGANCI   = 425
+NESTING_GAP_MM     = 30
+
+
+def _genera_svg_profilo(mesh_obj, largh_mm, alt_mm, color='#00e676'):
+    """
+    Genera SVG profilo 2D (convex hull proiezione frontale) per il nesting viewer.
+    Ritorna data URI base64 oppure None se fallisce.
+    """
+    import base64
+    try:
+        import numpy as np
+        from scipy.spatial import ConvexHull
+
+        verts = np.array(mesh_obj.vertices, dtype=float)
+        if len(verts) < 4:
+            raise ValueError("mesh troppo piccola")
+
+        # Normalizza a spazio [0,1]
+        vmin = verts.min(axis=0)
+        vmax = verts.max(axis=0)
+        span = vmax - vmin
+        span[span < 0.001] = 0.001
+        verts = (verts - vmin) / span
+
+        # Vista frontale: asse X = larghezza, asse Z = altezza
+        pts2d = np.column_stack([verts[:, 0] * largh_mm,
+                                  (1.0 - verts[:, 2]) * alt_mm])
+
+        PAD = 4
+        W = largh_mm + 2 * PAD
+        H = alt_mm + 2 * PAD
+        pts2d += PAD
+
+        hull = ConvexHull(pts2d)
+        hull_pts = pts2d[hull.vertices]
+        path = 'M ' + ' L '.join(f'{p[0]:.1f},{p[1]:.1f}' for p in hull_pts) + ' Z'
+
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" '
+               f'viewBox="0 0 {W:.0f} {H:.0f}">'
+               f'<rect width="{W:.0f}" height="{H:.0f}" fill="#0a1628"/>'
+               f'<path d="{path}" fill="{color}2a" stroke="{color}" '
+               f'stroke-width="1.5" stroke-linejoin="round"/>'
+               f'</svg>')
+
+        svg_b64 = base64.b64encode(svg.encode()).decode()
+        return f'data:image/svg+xml;base64,{svg_b64}'
+
+    except Exception:
+        # Fallback: rettangolo semplice
+        try:
+            import base64
+            W = largh_mm + 8
+            H = alt_mm + 8
+            svg = (f'<svg xmlns="http://www.w3.org/2000/svg" '
+                   f'viewBox="0 0 {W:.0f} {H:.0f}">'
+                   f'<rect x="4" y="4" width="{largh_mm:.0f}" height="{alt_mm:.0f}" '
+                   f'fill="{color}22" stroke="{color}" stroke-width="1.5" rx="2"/>'
+                   f'</svg>')
+            svg_b64 = base64.b64encode(svg.encode()).decode()
+            return f'data:image/svg+xml;base64,{svg_b64}'
+        except Exception:
+            return None
+
+
+def _analizza_step_per_nesting(filepath, nome_macchina):
+    """
+    Analizza un file STEP con cad_parser esistente, calcola orientamento
+    ottimale per nesting catena, genera SVG profilo per ogni parte.
+    Ritorna dict con lista parti pronta per _ottimizza_sequenza().
+    """
+    import math
+    import trimesh as _trimesh
+
+    # Usa il parser esistente del progetto
+    try:
+        from cad_parser import analizza_file_automatico
+        result = analizza_file_automatico(filepath)
+        bom_items = result.bom
+    except Exception as e:
+        scrivi_log(f"NESTING cad_parser fallito ({e}), fallback trimesh diretto")
+        # Fallback: carica con trimesh direttamente
+        scene = _trimesh.load(filepath, force='scene')
+        if isinstance(scene, _trimesh.Scene):
+            geoms = [(name, g) for name, g in scene.geometry.items()
+                     if isinstance(g, _trimesh.Trimesh) and len(g.vertices) > 3]
+        elif isinstance(scene, _trimesh.Trimesh):
+            geoms = [('Part_1', scene)]
+        else:
+            raise ValueError(f"Formato STEP non riconoscibile: {type(scene)}")
+
+        # Crea BOMItem-like dicts
+        class _FakeGeom:
+            pass
+
+        bom_items = []
+        for idx, (name, mesh) in enumerate(geoms):
+            bb = mesh.bounding_box.bounds
+            dims = sorted(bb[1] - bb[0], reverse=True)
+            L, W2, D = dims[0], dims[1], dims[2]
+            STEEL = 7850
+            try:
+                vol_m3 = abs(mesh.volume) / 1e9
+                peso = round(vol_m3 * STEEL, 2)
+            except Exception:
+                peso = round((L / 1000) * (W2 / 1000) * (D / 1000) * 0.3 * STEEL, 2)
+
+            class _FakeBOM:
+                pass
+
+            fb = _FakeBOM()
+            fg = _FakeGeom()
+            fg.nome = name or f'Parte {idx+1}'
+            fg.lunghezza_mm = L
+            fg.larghezza_mm = W2
+            fg.altezza_mm = D
+            fg.peso_kg = peso
+            fg.mesh_obj = mesh
+            fb.geom = fg
+            bom_items.append(fb)
+
+    STEEL_KG_M3 = 7850.0
+
+    def _orienta_pezzo(geom):
+        """Calcola orientamento ottimale: minimizza ganci, rispetta Z_max."""
+        L = geom.lunghezza_mm or 1
+        W2 = geom.larghezza_mm or 1
+        D = geom.altezza_mm or 1
+        dims = sorted([L, W2, D], reverse=True)
+        d1, d2, d3 = dims  # d1 >= d2 >= d3
+
+        orientamenti = [
+            (d2, d1, d3, 'verticale'),    # appeso per il lato più stretto → altezza massima
+            (d1, d2, d3, 'coricato_L'),
+            (d1, d3, d2, 'coricato_D'),
+        ]
+        validi = [(w, h, dep, o) for (w, h, dep, o) in orientamenti
+                  if h <= NESTING_Z_MAX_MM]
+        if not validi:
+            validi = orientamenti
+        # Priorità: min ganci, poi min larghezza
+        best = min(validi, key=lambda x: (math.ceil(x[0] / NESTING_PASSO_MM), x[0]))
+        largh_mm, alt_mm, dep_mm, orient = best
+        ganci_n = math.ceil(largh_mm / NESTING_PASSO_MM)
+        return largh_mm, alt_mm, dep_mm, orient, ganci_n
+
+    PALETTE_TIPI = {
+        'Traversa': '#00e676',
+        'Pannello': '#40c4ff',
+        'Struttura': '#ff9100',
+        'Componente': '#ea80fc',
+    }
+
+    def _stima_tipo(geom):
+        L = geom.lunghezza_mm or 1
+        W2 = geom.larghezza_mm or 1
+        D = geom.altezza_mm or 1
+        max_d = max(L, W2, D)
+        min_d = min(L, W2, D)
+        ratio = max_d / max(min_d, 1)
+        if ratio > 15:
+            return 'Traversa'
+        elif ratio > 5:
+            return 'Pannello'
+        elif L > 200 and W2 > 200 and D > 200:
+            return 'Struttura'
+        return 'Componente'
+
+    parti = []
+    n_valide = 0
+
+    for idx, item in enumerate(bom_items):
+        geom = getattr(item, 'geom', None)
+        if geom is None:
+            continue
+        if not (geom.lunghezza_mm or geom.larghezza_mm or geom.altezza_mm):
+            continue
+
+        tipo = _stima_tipo(geom)
+        nome = (geom.nome or f'{tipo} {idx+1}')[:40]
+        largh_mm, alt_mm, dep_mm, orient, ganci_n = _orienta_pezzo(geom)
+
+        # Peso
+        peso = geom.peso_kg if geom.peso_kg and geom.peso_kg > 0 else None
+        if peso is None:
+            peso = round((largh_mm / 1000) * (alt_mm / 1000) *
+                         (dep_mm / 1000) * 0.3 * STEEL_KG_M3, 2)
+
+        # SVG profilo
+        svg_uri = None
+        mesh = getattr(geom, 'mesh_obj', None)
+        if mesh is not None:
+            try:
+                color = PALETTE_TIPI.get(tipo, '#00e676')
+                svg_uri = _genera_svg_profilo(mesh, largh_mm, alt_mm, color)
+            except Exception:
+                svg_uri = None
+
+        n_valide += 1
+        parti.append({
+            'id':           n_valide,
+            'nome':         nome,
+            'macchina':     nome_macchina,
+            'tipo':         tipo,
+            'L_mm':         round(geom.lunghezza_mm or 0, 1),
+            'W_mm':         round(geom.larghezza_mm or 0, 1),
+            'H_mm':         round(geom.altezza_mm or 0, 1),
+            'peso_kg':      round(peso, 2),
+            'orientamento': orient,
+            'largh_mm':     round(largh_mm, 1),
+            'alt_mm':       round(alt_mm, 1),
+            'D_mm':         round(dep_mm, 1),
+            'ganci_n':      ganci_n,
+            'svg_uri':      svg_uri,
+        })
+
+    if not parti:
+        raise ValueError("Nessuna parte valida estratta dal file STEP")
+
+    return {
+        'nome':        nome_macchina,
+        'n_solidi':    len(parti),
+        'peso_tot_kg': round(sum(p['peso_kg'] for p in parti), 2),
+        'parti':       parti,
+    }
+
+
+def _ottimizza_sequenza(macchine_parti):
+    """
+    Column Packing multi-macchina. First-Fit Decreasing su altezza Z.
+    Input:  lista di {nome, n_solidi, peso_tot_kg, parti:[...]}
+    Output: dict pronto per il viewer nesting_cad.
+    """
+    import math
+
+    PALETTE = [
+        '#1565C0', '#2E7D32', '#6A1B9A', '#AD1457', '#E65100',
+        '#00695C', '#4E342E', '#37474F', '#F57F17', '#283593',
+        '#0D47A1', '#1B5E20', '#4A148C', '#880E4F', '#BF360C',
+    ]
+
+    columns = []
+    slot_cursor = 0
+
+    for mi, mac in enumerate(macchine_parti):
+        color = PALETTE[mi % len(PALETTE)]
+        mac_columns = []
+
+        # FFD: ordina per altezza decrescente
+        sorted_parts = sorted(mac['parti'], key=lambda p: -p['alt_mm'])
+
+        for part in sorted_parts:
+            placed = False
+            for col in mac_columns:
+                if col['n_slots'] >= part['ganci_n']:
+                    new_z = col['z_usata'] + part['alt_mm'] + NESTING_GAP_MM
+                    new_kg = col['peso'] + part['peso_kg']
+                    if new_z <= NESTING_Z_MAX_MM and new_kg <= NESTING_MAX_KG:
+                        col['pezzi'].append(part)
+                        col['z_usata'] += part['alt_mm'] + NESTING_GAP_MM
+                        col['peso'] += part['peso_kg']
+                        placed = True
+                        break
+            if not placed:
+                mac_columns.append({
+                    'n_slots':  part['ganci_n'],
+                    'z_usata':  part['alt_mm'] + NESTING_GAP_MM,
+                    'peso':     part['peso_kg'],
+                    'macchina': mac['nome'],
+                    'color':    color,
+                    'pezzi':    [part],
+                })
+
+        # Assegna slot catena
+        for col in mac_columns:
+            col['start_slot'] = slot_cursor
+            slot_cursor += col['n_slots']
+
+        columns.extend(mac_columns)
+
+    total_slots = slot_cursor
+    ganci_liberi = max(0, NESTING_TOTGANCI - total_slots)
+    n_pezzi = sum(len(c['pezzi']) for c in columns)
+    peso_tot = round(sum(c['peso'] for c in columns), 2)
+
+    return {
+        'columns':          columns,
+        'total_slots':      total_slots,
+        'total_m':          round(total_slots * NESTING_PASSO_MM / 1000, 2),
+        'passo_mm':         NESTING_PASSO_MM,
+        'ganci_liberi':     ganci_liberi,
+        'n_macchine':       len(macchine_parti),
+        'n_pezzi_tot':      n_pezzi,
+        'peso_tot_kg':      peso_tot,
+        'saturazione_pct':  round(total_slots / NESTING_TOTGANCI * 100, 1),
+    }
+
+
+@app.route('/nesting')
+def nesting_page():
+    """Viewer nesting CAD multi-macchina con silhouette SVG."""
+    return render_template('nesting_viewer.html')
+
+
+@app.route('/api/nesting/analizza', methods=['POST'])
+def api_nesting_analizza():
+    """
+    Riceve uno o più file STEP (multipart), li analizza e restituisce
+    il piano nesting ottimizzato per la catena con SVG profili.
+
+    Form fields:
+        files[]   — file STEP/STP (multipli)
+        nomi[]    — nome macchina per ogni file (opzionale)
+        z_max     — altezza max mm (default 2000)
+        max_kg    — kg max per gancio (default 100)
+        passo_mm  — pitch catena mm (default 400)
+    """
+    import tempfile
+    import os as _os
+
+    global NESTING_Z_MAX_MM, NESTING_MAX_KG, NESTING_PASSO_MM
+
+    files = request.files.getlist('files[]')
+    nomi = request.form.getlist('nomi[]')
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({'ok': False, 'error': 'Nessun file STEP ricevuto'}), 400
+
+    try:
+        NESTING_Z_MAX_MM = int(request.form.get('z_max', 2000))
+    except Exception:
+        pass
+    try:
+        NESTING_MAX_KG = int(request.form.get('max_kg', 100))
+    except Exception:
+        pass
+    try:
+        NESTING_PASSO_MM = int(request.form.get('passo_mm', 400))
+    except Exception:
+        pass
+
+    macchine = []
+    errori = []
+
+    for i, f in enumerate(files):
+        if not f.filename:
+            continue
+        ext = f.filename.rsplit('.', 1)[-1].lower()
+        if ext not in ('stp', 'step'):
+            errori.append(f'{f.filename}: formato non supportato (serve .stp/.step)')
+            continue
+        nome = (nomi[i].strip() if i < len(nomi) and nomi[i].strip()
+                else f.filename.rsplit('.', 1)[0])
+        with tempfile.NamedTemporaryFile(suffix=f'.{ext}', delete=False) as tmp:
+            f.save(tmp.name)
+            tmppath = tmp.name
+        try:
+            mac = _analizza_step_per_nesting(tmppath, nome)
+            macchine.append(mac)
+            scrivi_log(f"NESTING: {f.filename} → {mac['n_solidi']} parti, "
+                       f"{mac['peso_tot_kg']} kg")
+        except Exception as e:
+            errori.append(f'{f.filename}: {e}')
+            scrivi_log(f"ERRORE NESTING {f.filename}: {e}")
+        finally:
+            try:
+                _os.unlink(tmppath)
+            except Exception:
+                pass
+
+    if not macchine:
+        return jsonify({
+            'ok': False,
+            'error': '; '.join(errori) or 'Analisi fallita'
+        }), 500
+
+    result = _ottimizza_sequenza(macchine)
+    result['ok'] = True
+    result['errori'] = errori
+    result['macchine_summary'] = [
+        {
+            'nome': m['nome'],
+            'n_solidi': m['n_solidi'],
+            'peso_tot_kg': m['peso_tot_kg'],
+        }
+        for m in macchine
+    ]
+    return jsonify(result)
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
