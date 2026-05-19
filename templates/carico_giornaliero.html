@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block title %}Carico Giornaliero — ENOROSSI{% endblock %}
+{% block page_title %}Carico Giornaliero Verniciatura{% endblock %}
+{% block head %}
+<style>
+.upload-zone{border:2px dashed var(--bdr2);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2)}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--grn-h);background:rgba(28,110,46,.06)}
+.upload-zone.drag{transform:scale(1.01)}
+.preview-img{max-width:100%;max-height:340px;border-radius:8px;border:1px solid var(--bdr);display:block;margin:0 auto}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.extracted-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(28,110,46,.15);border:1px solid rgba(28,110,46,.3);border-radius:5px;padding:2px 8px;font-size:.7rem;color:var(--grn-h);margin:2px}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.log-row{padding:8px 0;border-bottom:1px solid var(--bdr);display:grid;grid-template-columns:90px 1fr 80px 80px 90px 80px;gap:8px;align-items:center;font-size:.78rem}
+.log-row:last-child{border-bottom:none}
+.spinner{width:18px;height:18px;border:2px solid var(--bdr2);border-top-color:var(--grn-h);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- INTESTAZIONE -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+  <div>
+    <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px">
+      <i class="bi bi-calendar3" style="margin-right:4px"></i>
+      Registrazione lavori verniciatura — {{ oggi }}
+    </div>
+    <div style="font-size:.82rem;color:var(--muted)">
+      Fotografa o scansiona l'ordine di produzione NetPro → il sistema estrae i dati automaticamente
+    </div>
+  </div>
+  <a href="{{ url_for('storico') }}" class="btn-out" style="font-size:.72rem">
+    <i class="bi bi-graph-up-arrow"></i>Storico Costi
+  </a>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+
+  <!-- ── COLONNA SINISTRA: upload + estrazione ── -->
+  <div>
+
+    <!-- Step 1: Upload -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+        <div class="step-num">1</div>
+        Carica ordine NetPro (foto o scan)
+      </div>
+      <div class="card-body">
+        <div class="upload-zone" id="dropzone"
+             onclick="document.getElementById('file-input').click()"
+             ondragover="ev.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="handleDrop(event)">
+          <i class="bi bi-camera" style="font-size:2.2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:4px">
+            Clicca o trascina qui la foto dell'ordine
+          </div>
+          <div style="font-size:.68rem;color:var(--muted2)">JPG, PNG, PDF, TIFF — max 10MB</div>
+        </div>
+        <input type="file" id="file-input" accept="image/*,.pdf" style="display:none"
+               onchange="handleFile(this.files[0])">
+
+        <div id="preview-wrap" style="display:none;margin-top:12px">
+          <img id="preview-img" class="preview-img" src="" alt="Anteprima ordine">
+          <button class="btn-out" style="margin-top:8px;width:100%;justify-content:center;font-size:.75rem"
+                  onclick="resetUpload()">
+            <i class="bi bi-x"></i>Cambia immagine
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Estrazione OCR -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+        <div class="step-num">2</div>
+        Dati estratti dall'ordine
+        <span id="ocr-spinner" style="display:none;margin-left:auto"><span class="spinner"></span></span>
+      </div>
+      <div class="card-body">
+        <div id="ocr-placeholder" style="color:var(--muted2);font-size:.78rem;text-align:center;padding:20px 0">
+          <i class="bi bi-file-earmark-text" style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:.4"></i>
+          Carica un ordine per estrarre i dati
+        </div>
+
+        <div id="ocr-form" style="display:none">
+          <div class="field-row">
+            <div>
+              <label class="form-label">Commessa / Macchina</label>
+              <input type="text" id="f-commessa" class="form-control" placeholder="es. 20310">
+            </div>
+            <div>
+              <label class="form-label">Num. serie</label>
+              <input type="text" id="f-serie" class="form-control" placeholder="es. RB100-2026-0310">
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label class="form-label">Cliente</label>
+              <input type="text" id="f-cliente" class="form-control" placeholder="Ragione sociale">
+            </div>
+            <div>
+              <label class="form-label">Data produzione</label>
+              <input type="date" id="f-data" class="form-control">
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label class="form-label">Colore verniciatura</label>
+              <input type="text" id="f-colore" class="form-control" placeholder="es. VERDE RAL 6005">
+            </div>
+            <div>
+              <label class="form-label">Operaio</label>
+              <input type="text" id="f-operaio" class="form-control" placeholder="Nome operaio">
+            </div>
+          </div>
+
+          <!-- Codici pezzi verniciati -->
+          <label class="form-label" style="margin-top:6px">Codici pezzi verniciati</label>
+          <div id="codici-wrap" style="min-height:36px;border:1px solid var(--bdr2);border-radius:7px;padding:6px;margin-bottom:10px;background:var(--bg0)">
+            <!-- Popolato dinamicamente -->
+          </div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="codice-add" class="form-control" placeholder="Aggiungi codice manualmente"
+                   style="font-size:.8rem" onkeydown="if(event.key==='Enter')aggiungiCodice()">
+            <button class="btn-out" style="font-size:.75rem;white-space:nowrap" onclick="aggiungiCodice()">
+              <i class="bi bi-plus"></i>Aggiungi
+            </button>
+          </div>
+
+          <div class="field-row-3" style="margin-top:12px">
+            <div>
+              <label class="form-label">N° ganci usati</label>
+              <input type="number" id="f-ganci" class="form-control" placeholder="es. 7" min="1">
+            </div>
+            <div>
+              <label class="form-label">Velocità (m/min)</label>
+              <input type="number" id="f-velocita" class="form-control" step="0.1" placeholder="1.5">
+            </div>
+            <div>
+              <label class="form-label">Kg totali verniciati</label>
+              <input type="number" id="f-peso" class="form-control" step="0.1" placeholder="0.0">
+            </div>
+          </div>
+
+          <div style="margin-top:6px">
+            <label class="form-label">Note / osservazioni</label>
+            <textarea id="f-note" class="form-control" rows="2" placeholder="Problemi riscontrati, colori speciali, ecc."></textarea>
+          </div>
+
+          <div id="costo-preview" style="display:none;margin-top:12px;padding:10px;background:rgba(28,110,46,.08);border:1px solid rgba(28,110,46,.2);border-radius:8px">
+            <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.08em">Costo stimato giro catena</div>
+            <div style="font-size:1.4rem;font-weight:700;color:var(--grn-h)" id="costo-val">€ —</div>
+            <div style="font-size:.65rem;color:var(--muted);margin-top:2px" id="costo-det"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── COLONNA DESTRA: storico giornata ── -->
+  <div>
+
+    <!-- Step 3: Registra -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+        <div class="step-num">3</div>
+        Registra nel sistema
+      </div>
+      <div class="card-body">
+        <button id="btn-salva" class="btn-grn" style="width:100%;justify-content:center;padding:.65rem;font-size:.9rem"
+                onclick="salvaCarico()" disabled>
+          <i class="bi bi-check2-circle"></i>Conferma e registra
+        </button>
+        <div style="font-size:.65rem;color:var(--muted);margin-top:6px;text-align:center">
+          I dati vengono salvati nel database e alimentano lo Storico Costi per codice
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI giornata -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="kpi" style="border-bottom-color:var(--grn)">
+        <i class="bi bi-camera kpi-ico"></i>
+        <div class="kpi-num" style="color:var(--grn-h)" id="kpi-giri">{{ giri_oggi }}</div>
+        <div class="kpi-lbl">Giri catena oggi</div>
+      </div>
+      <div class="kpi" style="border-bottom-color:var(--yel)">
+        <i class="bi bi-currency-euro kpi-ico"></i>
+        <div class="kpi-num" style="color:var(--yel)" id="kpi-costo">€ {{ '%.0f'|format(costo_oggi) }}</div>
+        <div class="kpi-lbl">Costo totale oggi</div>
+      </div>
+    </div>
+
+    <!-- Log giornata -->
+    <div class="card">
+      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="bi bi-list-ul" style="margin-right:6px"></i>Registrazioni di oggi</span>
+        <span style="font-size:.65rem;color:var(--muted)">{{ oggi }}</span>
+      </div>
+      <div class="card-body" style="padding:0">
+        {% if log_oggi %}
+        <div style="padding:4px 12px 4px;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:grid;grid-template-columns:90px 1fr 80px 80px 90px 80px;gap:8px">
+          <span>Ora</span><span>Commessa</span><span>Ganci</span><span>Kg</span><span>Costo</span><span></span>
+        </div>
+        {% for log in log_oggi %}
+        <div class="log-row" style="padding:8px 12px">
+          <span style="color:var(--muted);font-size:.72rem">{{ log.ora }}</span>
+          <div>
+            <div style="font-weight:600;font-size:.78rem">{{ log.commessa }}</div>
+            <div style="font-size:.65rem;color:var(--muted)">{{ log.operaio }} · {{ log.colore }}</div>
+          </div>
+          <span style="color:var(--txt)">{{ log.n_ganci }}</span>
+          <span style="color:var(--txt)">{{ '%.1f'|format(log.kg_totali or 0) }}</span>
+          <span style="color:var(--grn-h);font-weight:600">€ {{ '%.2f'|format(log.costo_calcolato or 0) }}</span>
+          <form method="POST" action="{{ url_for('carico_giornaliero_delete', log_id=log.id) }}" style="margin:0">
+            <button type="submit" class="btn-out"
+                    style="font-size:.65rem;padding:.2rem .5rem;color:var(--red)"
+                    onclick="return confirm('Eliminare questa registrazione?')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:30px;text-align:center;color:var(--muted2);font-size:.78rem">
+          <i class="bi bi-inbox" style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:.4"></i>
+          Nessuna registrazione ancora oggi
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// ── Stato ──────────────────────────────────────────────────────
+let currentFile = null;
+let codiciEstratti = [];
+
+// ── Upload / drag&drop ────────────────────────────────────────
+function handleDrop(ev) {
+  ev.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag');
+  const f = ev.dataTransfer.files[0];
+  if (f) handleFile(f);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  currentFile = file;
+  // Mostra preview
+  if (file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('preview-img').src = e.target.result;
+      document.getElementById('preview-wrap').style.display = 'block';
+      document.getElementById('dropzone').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  } else {
+    document.getElementById('preview-wrap').style.display = 'block';
+    document.getElementById('dropzone').style.display = 'none';
+    document.getElementById('preview-img').src = '';
+  }
+  // Avvia OCR
+  eseguiOCR(file);
+}
+
+function resetUpload() {
+  currentFile = null;
+  codiciEstratti = [];
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('dropzone').style.display = 'block';
+  document.getElementById('ocr-placeholder').style.display = 'block';
+  document.getElementById('ocr-form').style.display = 'none';
+  document.getElementById('btn-salva').disabled = true;
+  document.getElementById('costo-preview').style.display = 'none';
+}
+
+// ── OCR: invia immagine al server ─────────────────────────────
+async function eseguiOCR(file) {
+  document.getElementById('ocr-placeholder').style.display = 'none';
+  document.getElementById('ocr-form').style.display = 'none';
+  document.getElementById('ocr-spinner').style.display = 'inline';
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const r = await fetch('/api/carico/ocr', { method: 'POST', body: fd });
+    const d = await r.json();
+
+    if (d.error) {
+      alert('Errore OCR: ' + d.error);
+      document.getElementById('ocr-placeholder').style.display = 'block';
+      return;
+    }
+
+    // Popola form con dati estratti
+    document.getElementById('f-commessa').value  = d.commessa    || '';
+    document.getElementById('f-serie').value     = d.num_serie   || '';
+    document.getElementById('f-cliente').value   = d.cliente     || '';
+    document.getElementById('f-data').value      = d.data        || new Date().toISOString().split('T')[0];
+    document.getElementById('f-colore').value    = d.colore      || '';
+    document.getElementById('f-ganci').value     = d.n_ganci     || '';
+    document.getElementById('f-velocita').value  = d.velocita    || '1.5';
+    document.getElementById('f-peso').value      = d.kg_totali   || '';
+
+    // Codici pezzi
+    codiciEstratti = d.codici || [];
+    renderCodici();
+
+    document.getElementById('ocr-form').style.display = 'block';
+    document.getElementById('btn-salva').disabled = false;
+    calcolaCosto();
+
+  } catch(err) {
+    alert('Errore di rete: ' + err);
+    document.getElementById('ocr-placeholder').style.display = 'block';
+  } finally {
+    document.getElementById('ocr-spinner').style.display = 'none';
+  }
+}
+
+// ── Codici pezzi ──────────────────────────────────────────────
+function renderCodici() {
+  const wrap = document.getElementById('codici-wrap');
+  wrap.innerHTML = codiciEstratti.map((c, i) =>
+    `<span class="extracted-tag">
+      ${c}
+      <button onclick="rimuoviCodice(${i})" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 3px;line-height:1">×</button>
+    </span>`
+  ).join('') || '<span style="color:var(--muted2);font-size:.72rem">Nessun codice — aggiungili manualmente</span>';
+}
+
+function aggiungiCodice() {
+  const inp = document.getElementById('codice-add');
+  const val = inp.value.trim().toUpperCase();
+  if (val && !codiciEstratti.includes(val)) {
+    codiciEstratti.push(val);
+    renderCodici();
+  }
+  inp.value = '';
+}
+
+function rimuoviCodice(i) {
+  codiciEstratti.splice(i, 1);
+  renderCodici();
+}
+
+// ── Calcolo costo stimato ─────────────────────────────────────
+function calcolaCosto() {
+  const ganci = parseFloat(document.getElementById('f-ganci').value) || 0;
+  const vel   = parseFloat(document.getElementById('f-velocita').value) || 1.5;
+  const kg    = parseFloat(document.getElementById('f-peso').value) || 0;
+
+  if (ganci <= 0) return;
+
+  // Calcolo semplificato lato client (il server farà quello preciso)
+  const lunghezza_m = 170;
+  const tempo_ore   = lunghezza_m / vel / 60;
+  const costo_est   = tempo_ore * 350; // €/h centro lavoro (default)
+
+  document.getElementById('costo-val').textContent = '€ ' + costo_est.toFixed(2);
+  document.getElementById('costo-det').textContent =
+    `${lunghezza_m}m ÷ ${vel}m/min = ${(tempo_ore*60).toFixed(1)}min · ${ganci} ganci · ${kg}kg`;
+  document.getElementById('costo-preview').style.display = 'block';
+}
+
+document.getElementById('f-ganci').addEventListener('input', calcolaCosto);
+document.getElementById('f-velocita').addEventListener('input', calcolaCosto);
+document.getElementById('f-peso').addEventListener('input', calcolaCosto);
+
+// ── Salva registrazione ───────────────────────────────────────
+async function salvaCarico() {
+  const btn = document.getElementById('btn-salva');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvataggio...';
+
+  const payload = {
+    commessa:   document.getElementById('f-commessa').value,
+    num_serie:  document.getElementById('f-serie').value,
+    cliente:    document.getElementById('f-cliente').value,
+    data:       document.getElementById('f-data').value,
+    colore:     document.getElementById('f-colore').value,
+    operaio:    document.getElementById('f-operaio').value,
+    n_ganci:    parseInt(document.getElementById('f-ganci').value) || 0,
+    velocita:   parseFloat(document.getElementById('f-velocita').value) || 1.5,
+    kg_totali:  parseFloat(document.getElementById('f-peso').value) || 0,
+    note:       document.getElementById('f-note').value,
+    codici:     codiciEstratti,
+  };
+
+  try {
+    const r = await fetch('/api/carico/salva', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify(payload),
+    });
+    const d = await r.json();
+
+    if (d.ok) {
+      // Aggiorna KPI
+      document.getElementById('kpi-giri').textContent = d.giri_oggi;
+      document.getElementById('kpi-costo').textContent = '€ ' + Math.round(d.costo_oggi);
+      // Reset form
+      resetUpload();
+      // Ricarica pagina per vedere il nuovo log
+      setTimeout(() => location.reload(), 800);
+    } else {
+      alert('Errore: ' + d.error);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check2-circle"></i>Conferma e registra';
+    }
+  } catch(err) {
+    alert('Errore di rete: ' + err);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle"></i>Conferma e registra';
+  }
+}
+</script>
+{% endblock %}

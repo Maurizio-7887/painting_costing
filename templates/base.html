@@ -109,14 +109,14 @@ code{background:rgba(255,255,255,.07);color:#f0a0b0;padding:1px 5px;border-radiu
     <li class="sb-sec">Produzione</li>
     <li><a href="{{ url_for('dashboard') }}" class="{% if request.endpoint=='dashboard' %}act{% endif %}">
       <i class="bi bi-speedometer2"></i>Dashboard</a></li>
-    <li><a href="{{ url_for('ottimizzatore') }}" class="{% if 'ottimizzatore' in request.endpoint %}act{% endif %}">
-      <i class="bi bi-diagram-3"></i>Carico Giornaliero</a></li>
-    <li><a href="{{ url_for('knowledge_base') }}" class="{% if 'knowledge' in request.endpoint %}act{% endif %}">
-      <i class="bi bi-lightbulb"></i>Knowledge Base</a></li>
+    <li><a href="{{ url_for('carico_giornaliero') }}" class="{% if 'carico_giornaliero' in request.endpoint %}act{% endif %}">
+      <i class="bi bi-camera"></i>Carico Giornaliero</a></li>
     <li><a href="{{ url_for('commesse') }}" class="{% if 'commess' in request.endpoint %}act{% endif %}">
       <i class="bi bi-truck"></i>Macchine da Consegnare</a></li>
     <li><a href="/nesting" class="{% if request.endpoint=='nesting_viewer' %}act{% endif %}">
       <i class="bi bi-link-45deg"></i>Nesting Catena CAD</a></li>
+    <li><a href="{{ url_for('knowledge_base') }}" class="{% if 'knowledge' in request.endpoint %}act{% endif %}">
+      <i class="bi bi-lightbulb"></i>Knowledge Base</a></li>
 
     <li class="sb-sec">Costi &amp; Analisi</li>
     <li><a href="{{ url_for('storico') }}" class="{% if 'storico' in request.endpoint %}act{% endif %}">
