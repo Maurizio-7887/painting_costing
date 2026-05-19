@@ -2260,7 +2260,7 @@ def _analizza_step_per_nesting(filepath):
     import numpy as np
     import base64, io, math
 
-    ACCIAIO_KG_MM3 = 7.85e-9  # kg/mm³
+    ACCIAIO_KG_MM3 = 7.85e-6  # kg/mm³  (7850 kg/m³ — acciaio)
     PASSO_MM = 400
     MAX_KG_GANCIO = 60.0
     Z_MAX_MM = 2000
@@ -2351,24 +2351,15 @@ def _analizza_step_per_nesting(filepath):
     if not parts:
         return {'error': 'Nessun componente valido trovato nel file STEP'}
 
-    # Ordina per altezza decrescente (pezzi alti vanno prima sulla catena)
-    parts.sort(key=lambda p: -p['alt_mm'])
+    # ── FFD OPTIMIZER: riempie ogni palo con quanti più pezzi possibile ──
+    parts.sort(key=lambda p: -(p['largh_mm'] * p['alt_mm']))  # grandi prima
 
-    # Assegna colori e ganci
-    columns = []
-    slot = 0
-    for i, part in enumerate(parts):
-        color = COLORS[i % len(COLORS)]
-        col = {
-            'idx': i,
-            'start_slot': slot,
-            'n_slots': 1,
-            'peso': part['peso_kg'],
-            'color': color,
-            'pezzi': [dict(id=i+1, **part)]
-        }
-        columns.append(col)
-        slot += 1  # ogni pezzo occupa 1 slot (pitch 400mm)
+    columns = _nesting_catena(
+        parts,
+        passo_mm=PASSO_MM,
+        max_kg=MAX_KG_GANCIO,
+        z_max=Z_MAX_MM
+    )
 
     return {
         'passo_mm': PASSO_MM,
