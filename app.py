@@ -2365,7 +2365,7 @@ def _analizza_step_per_nesting(filepath):
         'passo_mm': PASSO_MM,
         'z_max_mm': Z_MAX_MM,
         'max_kg': MAX_KG_GANCIO,
-        'total_slots': slot,
+        'total_slots': sum(c.get('n_slots', 1) for c in columns),
         'columns': columns,
         'n_pezzi': len(parts),
         'peso_totale': round(sum(p['peso_kg'] for p in parts), 2)
