@@ -162,6 +162,9 @@ body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
       <button class="tbtn" onclick="setView('top');setActive(this)">↕ Top</button>
       <button class="tbtn" onclick="zoom(1.3)">+</button>
       <button class="tbtn" onclick="zoom(0.77)">-</button>
+      <button class="tbtn" onclick="orbitLeft()" title="Ruota vista -15°">◁</button>
+      <button class="tbtn" onclick="orbitRight()" title="Ruota vista +15°">▷</button>
+      <button class="tbtn" onclick="printReport()" title="Report stampabile">🖨 Report</button>
       <button class="tbtn danger" onclick="showUpload()">↺ Reset</button>
     </div>
 
@@ -298,11 +301,19 @@ const COS30 = Math.cos(Math.PI/6);
 const SIN30 = Math.sin(Math.PI/6);
 
 function iso(x, y, z) {
+    // Ruota X,Z attorno all'asse Y (azimuth)
+    const cosA = Math.cos(azimuth);
+    const sinA = Math.sin(azimuth);
+    const rx = x * cosA - z * sinA;
+    const rz = x * sinA + z * cosA;
     return {
-        sx: (x - z) * COS30,
-        sy: (x + z) * SIN30 - y
+        sx: rx * COS30,
+        sy: rz * SIN30 - y
     };
 }
+
+function orbitLeft()  { azimuth -= Math.PI/12; if(NDATA) draw(); }
+function orbitRight() { azimuth += Math.PI/12; if(NDATA) draw(); }
 
 function front(x, y, z) {
     return { sx: x * 0.5, sy: -y * 0.5 };
@@ -316,6 +327,10 @@ let projFn = iso;
 let scale  = 1.0;
 let offX   = 0, offY = 0;
 let viewMode = 'iso';
+
+// ORBIT: azimuth (rotazione orizzontale) in radianti
+// Default: PI/6 ~ 30° (vista isometrica classica)
+let azimuth = Math.PI / 6;
 
 // Canvas
 const cw = document.getElementById('canvaswrap');
@@ -331,22 +346,31 @@ function resize() {
 // ═══════════════════════════════════════════════
 // PAN & ZOOM
 // ═══════════════════════════════════════════════
-let dragging = false, dragX = 0, dragY = 0;
+let dragging = false, orbiting = false;
+let dragX = 0, dragY = 0;
 
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('mousedown', e => {
-    dragging = true; dragX = e.clientX; dragY = e.clientY;
+    e.preventDefault();
+    dragX = e.clientX; dragY = e.clientY;
+    if (e.button === 2 || e.shiftKey) { orbiting = true; canvas.style.cursor='grabbing'; }
+    else { dragging = true; canvas.style.cursor='grabbing'; }
 });
 canvas.addEventListener('mousemove', e => {
+    const dx = e.clientX - dragX;
+    const dy = e.clientY - dragY;
+    dragX = e.clientX; dragY = e.clientY;
     if (dragging) {
-        offX += e.clientX - dragX;
-        offY += e.clientY - dragY;
-        dragX = e.clientX; dragY = e.clientY;
+        offX += dx; offY += dy;
+        if (NDATA) draw();
+    } else if (orbiting) {
+        azimuth += dx * 0.008; // velocità rotazione
         if (NDATA) draw();
     }
     handleHover(e);
 });
-canvas.addEventListener('mouseup',   () => dragging = false);
-canvas.addEventListener('mouseleave',() => dragging = false);
+canvas.addEventListener('mouseup',    () => { dragging=false; orbiting=false; canvas.style.cursor='grab'; });
+canvas.addEventListener('mouseleave', () => { dragging=false; orbiting=false; canvas.style.cursor='grab'; });
 canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const f = e.deltaY < 0 ? 1.12 : 0.89;
@@ -370,6 +394,7 @@ function setView(v) {
 
 function resetView() {
     if (!NDATA) return;
+    azimuth = Math.PI / 6; // ripristina angolo isometrico
     const totalX = NDATA.total_slots * PASSO_MM;
     const p = projFn(totalX/2, Z_MAX_MM/2, 0);
     scale = viewMode==='iso' ? 0.28 : 0.38;
@@ -768,6 +793,123 @@ function showTip(e, part, col) {
     tip.style.left = (e.clientX+14)+'px';
     tip.style.top  = (e.clientY-20)+'px';
     tip.style.display = 'block';
+}
+
+
+// ═══════════════════════════════════════════════
+// REPORT STAMPABILE
+// ═══════════════════════════════════════════════
+function printReport() {
+    if (!NDATA) { alert('Carica prima un file STEP'); return; }
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+    const nomeFile = NDATA.nome_file || 'N/D';
+    const totalPz  = NDATA.columns.reduce((s,c) => s + c.pezzi.length, 0);
+    const pesoTot  = NDATA.columns.reduce((s,c) => s + c.peso, 0).toFixed(1);
+    const satGlob  = NDATA.columns[0]?.sat_globale_pct ?? '-';
+    const nGanci   = NDATA.columns.length;
+    const catenaM  = ((NDATA.total_slots || nGanci) * (NDATA.passo_mm || 400) / 1000).toFixed(1);
+
+    let righeGanci = '';
+    NDATA.columns.forEach((col, ci) => {
+        let firstRow = true;
+        col.pezzi.forEach((p, pi) => {
+            const bg = pi % 2 === 0 ? '#f8f9fa' : '#ffffff';
+            righeGanci += `<tr style="background:${bg}">`;
+            if (firstRow) {
+                righeGanci += `<td rowspan="${col.pezzi.length}" style="
+                    background:${col.color}22; border-right:3px solid ${col.color};
+                    font-weight:bold; text-align:center; vertical-align:middle;
+                    padding:6px; font-size:13px;">
+                    G${ci+1}<br><small style="font-weight:normal">${col.peso.toFixed(1)} kg<br>${col.sat_pct}%</small>
+                </td>`;
+                firstRow = false;
+            }
+            const orient = p.orientamento === 'ruotato_90' ? '🔄 90°' : '↕ std';
+            righeGanci += `
+                <td style="padding:5px 8px">${p.nome || '-'}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.largh_mm||0).toFixed(0)}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.alt_mm||0).toFixed(0)}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.D_mm||0).toFixed(0)}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.peso_kg||0).toFixed(2)}</td>
+                <td style="padding:5px 8px;text-align:center">${orient}</td>
+            </tr>`;
+        });
+        // Riga totale gancio
+        righeGanci += `<tr style="background:#e8f5e9;border-top:2px solid ${col.color}">
+            <td colspan="7" style="padding:4px 8px;font-size:11px;color:#2e7d32">
+                ↳ G${ci+1}: ${col.pezzi.length} pz | ${col.peso.toFixed(1)} kg |
+                   h=${col.h_usata_mm} mm / 2000 mm | sat=${col.sat_pct}%
+            </td>
+        </tr>`;
+    });
+
+    const html = `<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="UTF-8">
+<title>Report Nesting Catena — ${nomeFile}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size:12px; color:#222; margin:20px; }
+  h1 { font-size:18px; color:#1565C0; border-bottom:2px solid #1565C0; padding-bottom:6px; margin-bottom:4px;}
+  h2 { font-size:13px; color:#555; margin:0 0 16px; font-weight:normal;}
+  .kpi-row { display:flex; gap:20px; margin:12px 0 18px; flex-wrap:wrap; }
+  .kpi { background:#f0f4ff; border-radius:6px; padding:8px 16px; text-align:center; }
+  .kpi .v { font-size:22px; font-weight:bold; color:#1565C0; }
+  .kpi .l { font-size:10px; color:#888; text-transform:uppercase; margin-top:2px; }
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  th { background:#1565C0; color:#fff; padding:7px 8px; text-align:left; }
+  th.r { text-align:right; }
+  td { border-bottom:1px solid #e0e0e0; }
+  .footer { margin-top:24px; font-size:10px; color:#888; border-top:1px solid #ddd; padding-top:8px; }
+  @media print {
+    .no-print { display:none; }
+    body { margin:10px; }
+    h1 { font-size:15px; }
+  }
+</style>
+</head><body>
+<div class="no-print" style="margin-bottom:16px;">
+  <button onclick="window.print()" style="background:#1565C0;color:#fff;border:none;
+    padding:8px 20px;border-radius:4px;cursor:pointer;font-size:13px;">🖨 Stampa / Salva PDF</button>
+  &nbsp;
+  <button onclick="window.close()" style="background:#eee;border:none;
+    padding:8px 16px;border-radius:4px;cursor:pointer;font-size:12px;">✕ Chiudi</button>
+</div>
+
+<h1>⛓ Report Nesting Catena Verniciatura</h1>
+<h2>File: <b>${nomeFile}</b> &nbsp;|&nbsp; Data: ${dateStr}</h2>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="v">${nGanci}</div><div class="l">N° Ganci</div></div>
+  <div class="kpi"><div class="v">${totalPz}</div><div class="l">Pezzi totali</div></div>
+  <div class="kpi"><div class="v">${pesoTot} kg</div><div class="l">Peso totale</div></div>
+  <div class="kpi"><div class="v">${catenaM} m</div><div class="l">Catena usata</div></div>
+  <div class="kpi"><div class="v" style="color:${satGlob>=80?'#2e7d32':satGlob>=50?'#f57c00':'#c62828'}">${satGlob}%</div><div class="l">Saturazione globale</div></div>
+</div>
+
+<table>
+  <thead><tr>
+    <th style="width:60px">Gancio</th>
+    <th>Nome Pezzo</th>
+    <th class="r">L (mm)</th>
+    <th class="r">H (mm)</th>
+    <th class="r">P (mm)</th>
+    <th class="r">Peso (kg)</th>
+    <th style="text-align:center">Orient.</th>
+  </tr></thead>
+  <tbody>${righeGanci}</tbody>
+</table>
+
+<div class="footer">
+  ENOROSSI Paint Optimizer &nbsp;|&nbsp; Pitch catena: ${NDATA.passo_mm||400} mm &nbsp;|&nbsp;
+  Altezza utile: 2000 mm &nbsp;|&nbsp; Gap verticale: 50 mm &nbsp;|&nbsp; Gap laterale: 50 mm
+</div>
+</body></html>`;
+
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.write(html);
+    w.document.close();
 }
 
 // Init canvas size
