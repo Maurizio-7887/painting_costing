@@ -2589,52 +2589,67 @@ def _genera_svg_profilo_trimesh(mesh, L_mm, H_mm):
         return 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
 
 
-def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_mm=50):
+def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_curva=40):
     """
-    FFD (First Fit Decreasing) con rotazione 90°.
-    Ogni colonna = una posizione di aggancio sulla catena.
-    Pezzi ordinati per area decrescente → prima i più grandi.
-    Per ogni pezzo: prova orientamento normale, poi 90° → sceglie quello
-    che occupa meno altezza e trova posto in una colonna esistente.
-    Se nessuna colonna lo accetta → apre colonna nuova.
+    FFD fisico con vincoli reali impianto verniciatura:
+    1. GAP VERTICALE gap_v=50mm tra pezzi sullo stesso gancio (oscillazione)
+    2. GAP CURVA: D_pezzo/2 + D_vicino/2 + gap_curva <= passo_mm
+       (nessun contatto fisico in curva tra ganci adiacenti)
+    3. PESO MAX per gancio
+    4. ALTEZZA MAX z_max=2000mm
+    5. ROTAZIONE 90deg se riduce altezza
+    6. SATURAZIONE: sat_pct per colonna e globale
     """
     COLORS = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
               '#69f0ae','#18ffff','#ffd740','#b388ff','#ff6e40']
 
-    # Ordina per area decrescente (FFD)
     sorted_parts = sorted(parts, key=lambda p: p['largh_mm'] * p['alt_mm'], reverse=True)
-
     columns = []
 
-    def col_height_used(col):
-        if not col['pezzi']:
+    def h_usata(col):
+        n = len(col['pezzi'])
+        if n == 0:
             return 0
-        return sum(p['alt_mm'] + gap_mm for p in col['pezzi']) - gap_mm
+        return sum(p['alt_mm'] for p in col['pezzi']) + gap_v * (n - 1)
 
-    def try_add(col, part_dict):
-        h_used = col_height_used(col)
-        space_needed = part_dict['alt_mm'] + (gap_mm if col['pezzi'] else 0)
-        if h_used + space_needed > z_max:
+    def vincolo_curva_ok(col_idx, D_nuovo):
+        if col_idx == 0:
+            return True
+        D_sx = columns[col_idx - 1]['D_max']
+        return (D_nuovo / 2.0 + D_sx / 2.0 + gap_curva) <= passo_mm
+
+    def can_add(col_idx, col, part):
+        h_agg = (gap_v if col['pezzi'] else 0) + part['alt_mm']
+        if h_usata(col) + h_agg > z_max:
             return False
-        if col['peso'] + part_dict['peso_kg'] > max_kg:
+        if col['peso'] + part['peso_kg'] > max_kg:
             return False
-        col['pezzi'].append(part_dict)
-        col['peso'] = round(col['peso'] + part_dict['peso_kg'], 2)
+        D = part.get('D_mm', min(part['largh_mm'], 200))
+        if not vincolo_curva_ok(col_idx, D):
+            return False
         return True
+
+    def do_add(col, part):
+        col['pezzi'].append(part)
+        col['peso'] = round(col['peso'] + part['peso_kg'], 2)
+        D = part.get('D_mm', min(part['largh_mm'], 200))
+        col['D_max'] = max(col['D_max'], D)
 
     for part in sorted_parts:
         W0, H0 = part['largh_mm'], part['alt_mm']
-        W90, H90 = part['alt_mm'], part['largh_mm']
+        W90, H90 = H0, W0
 
-        p_normal  = dict(part, largh_mm=W0,  alt_mm=H0,  rotated=False)
-        p_rotated = dict(part, largh_mm=W90, alt_mm=H90, rotated=True)
+        p_std = dict(part, largh_mm=W0,  alt_mm=H0,  rotated=False, orientamento='standard')
+        p_rot = dict(part, largh_mm=W90, alt_mm=H90, rotated=True,  orientamento='ruotato_90')
 
         placed = False
-        for col in columns:
-            if try_add(col, p_normal):
+        for idx, col in enumerate(columns):
+            if can_add(idx, col, p_std):
+                do_add(col, p_std)
                 placed = True
                 break
-            if H90 < H0 and try_add(col, p_rotated):
+            if H90 < H0 and can_add(idx, col, p_rot):
+                do_add(col, p_rot)
                 placed = True
                 break
 
@@ -2645,26 +2660,32 @@ def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_mm=50):
                 'peso':       0.0,
                 'color':      COLORS[len(columns) % len(COLORS)],
                 'pezzi':      [],
+                'D_max':      0.0,
             }
             if H90 < H0 and H90 <= z_max:
-                try_add(new_col, p_rotated)
+                do_add(new_col, p_rot)
+            elif H0 <= z_max:
+                do_add(new_col, p_std)
             else:
-                try_add(new_col, p_normal)
+                do_add(new_col, p_std)
             columns.append(new_col)
+
+    # Calcola saturazione per ogni colonna
+    for col in columns:
+        h = h_usata(col)
+        col['h_usata_mm']  = int(round(h))
+        col['h_libera_mm'] = int(round(z_max - h))
+        col['sat_pct']     = round(100.0 * h / z_max, 1)
+
+    # Saturazione globale
+    n_col = len(columns)
+    if n_col:
+        sat_glob = round(sum(c['h_usata_mm'] for c in columns) / (z_max * n_col) * 100, 1)
+        for col in columns:
+            col['sat_globale_pct'] = sat_glob
 
     return columns
 
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-
-# ══════════════════════════════════════════════════════════════════
-# ROUTE: CAD PARSER — Upload STEP → BOM automatica (Phase 1)
-# ══════════════════════════════════════════════════════════════════
-
-@app.route('/cad/upload', methods=['GET', 'POST'])
 def cad_upload():
     """Upload file STEP/STP → parsing → BOM nel DB."""
     assemblies = BOMAssembly.query.order_by(BOMAssembly.id.desc()).limit(20).all()
