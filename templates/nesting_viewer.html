@@ -98,6 +98,40 @@ body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
   position:absolute; bottom:16px; left:16px; font-size:10px;
   color:#4a6070; display:none;
 }
+
+/* ── LIGHT THEME ── */
+body.light { background:#f0f4f8; color:#1a2633; }
+body.light #sidebar { background:#ffffff; border-right:1px solid #dde3ea; }
+body.light #sidebar h3 { color:#007a3d; }
+body.light .kpi { background:#e8eef5; }
+body.light .kpi .kl { color:#5a7080; }
+body.light .kv { color:#007a3d; }
+body.light .ci { background:#eef2f7; color:#1a2633; }
+body.light .ci:hover { background:#dde3ea; }
+body.light .ck { color:#2e7d6b; }
+body.light #canvaswrap { background:#f0f4f8; }
+body.light #toolbar { background:#ffffff; border-bottom:1px solid #dde3ea; }
+body.light .tbtn { background:#e8eef5; border:1px solid #b0c0cc; color:#1a2633; }
+body.light .tbtn:hover { border-color:#007a3d; color:#007a3d; }
+body.light .tbtn.active { background:#007a3d; color:#fff; border-color:#007a3d; }
+body.light .tbtn.danger { background:#c62828; color:#fff; }
+body.light #upload-overlay { background:#f0f4f8; }
+body.light #dropzone { border-color:#b0c0cc; background:#e8eef5; }
+body.light #dropzone:hover, body.light #dropzone.drag-over { border-color:#007a3d; background:#d6ede3; }
+body.light #dropzone h2 { color:#007a3d; }
+body.light #dropzone p { color:#5a7080; }
+body.light #upload-btn { background:#007a3d; color:#fff; }
+body.light #upload-btn:hover { background:#005c2e; }
+body.light #loading { background:#f0f4f8; }
+body.light #loading p { color:#5a7080; }
+body.light .spinner { border-color:#dde3ea; border-top-color:#007a3d; }
+body.light #kpi-sat-box { background:#dce8f5 !important; border-color:#007a3d !important; }
+body.light #kpi-sat-label { color:#5a7080 !important; }
+body.light .tooltip { background:#ffffff !important; border-color:#dde3ea !important; color:#1a2633 !important; }
+body.light .tn { color:#007a3d !important; }
+body.light .tl { color:#5a7080 !important; }
+body.light .tv { color:#1a5e52 !important; }
+
 </style>
 
 <div id="app">
@@ -168,6 +202,7 @@ body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
       <button class="tbtn" onclick="orbitRight()" title="Ruota vista +15°">▷</button>
       <button class="tbtn" onclick="printReport()" title="Report stampabile">🖨 Report</button>
       <button class="tbtn danger" onclick="showUpload()">↺ Reset</button>
+      <button id="theme-btn" class="tbtn" onclick="toggleTheme()" title="Cambia tema chiaro/scuro" style="margin-left:8px;font-size:15px;">☀️</button>
     </div>
 
     <!-- CANVAS -->
@@ -432,13 +467,13 @@ function draw() {
     ctx.clearRect(0, 0, W, H);
 
     // Sfondo
-    ctx.fillStyle = '#080c0e';
+    ctx.fillStyle = getBgColor();
     ctx.fillRect(0, 0, W, H);
 
     hitBoxes.length = 0;
 
     // ── Griglia a terra ────────────────────────
-    ctx.strokeStyle = 'rgba(13,19,24,0.8)';
+    ctx.strokeStyle = getGridColor();
     ctx.lineWidth = 0.5;
     const totalX = NDATA.total_slots * PASSO_MM;
     for (let gx = 0; gx <= totalX + PASSO_MM; gx += PASSO_MM) {
@@ -491,7 +526,7 @@ function drawChain() {
         ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
 
         // Label numero gancio
-        ctx.fillStyle = '#263545';
+        ctx.fillStyle = getHookLabelBg();
         ctx.font = `${Math.max(8,10*scale)}px 'Courier New'`;
         ctx.textAlign = 'center';
         ctx.fillText('G'+g, a.x, a.y - 5*scale);
@@ -499,13 +534,13 @@ function drawChain() {
 
     // Label "CATENA" e lunghezza
     const la = px(-PASSO_MM*0.5, 50, 0);
-    ctx.fillStyle = '#4a6070';
+    ctx.fillStyle = getChainLabelColor();
     ctx.font = `bold ${Math.max(7,9*scale)}px 'Courier New'`;
     ctx.textAlign = 'left';
     ctx.fillText('↑ CATENA — PITCH '+NDATA.passo_mm+'mm — '+NDATA.total_slots+' GANCI', la.x, la.y);
 
     const lb = px(totalX + PASSO_MM*0.2, 50, 0);
-    ctx.fillStyle = '#00e676';
+    ctx.fillStyle = getChainLenColor();
     ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
     ctx.fillText((NDATA.total_slots * NDATA.passo_mm / 1000).toFixed(1)+' m usati', lb.x, lb.y);
 }
@@ -1013,5 +1048,44 @@ ${istruzioni}
 
 // Init canvas size
 resize();
+
+// ═══════════════════════════════════════════════
+// THEME TOGGLE
+// ═══════════════════════════════════════════════
+let darkMode = true;
+
+// Palette pezzi: dark = toni vivaci su nero, light = stessi ma leggermente più saturi
+const PART_COLORS_DARK  = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252','#69f0ae','#ffff00','#ff6e40','#b388ff','#18ffff'];
+const PART_COLORS_LIGHT = ['#00695c','#0277bd','#e65100','#6a1b9a','#b71c1c','#1b5e20','#f57f17','#bf360c','#4527a0','#006064'];
+
+function toggleTheme() {
+    darkMode = !darkMode;
+    const btn = document.getElementById('theme-btn');
+    if (darkMode) {
+        document.body.classList.remove('light');
+        btn.textContent = '☀️';
+        btn.title = 'Passa a tema chiaro';
+    } else {
+        document.body.classList.add('light');
+        btn.textContent = '🌙';
+        btn.title = 'Passa a tema scuro';
+    }
+    // Aggiorna colori pezzi nel dataset
+    if (NDATA && NDATA.columns) {
+        const palette = darkMode ? PART_COLORS_DARK : PART_COLORS_LIGHT;
+        NDATA.columns.forEach((col, i) => {
+            col.color = palette[i % palette.length];
+        });
+        updateKPI();
+    }
+    draw();
+}
+
+function getBgColor()   { return darkMode ? '#080c0e' : '#f0f4f8'; }
+function getGridColor() { return darkMode ? 'rgba(13,19,24,0.8)' : 'rgba(180,195,210,0.9)'; }
+function getHookLabelBg()  { return darkMode ? '#263545' : '#c8d8e8'; }
+function getChainLabelColor() { return darkMode ? '#4a6070' : '#5a7080'; }
+function getChainLenColor()   { return darkMode ? '#00e676' : '#007a3d'; }
+
 </script>
 {% endblock %}
