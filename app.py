@@ -231,6 +231,37 @@ class KBRegola(db.Model):
     creata_il       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     prodotto_ref    = db.relationship('Prodotto', backref='kb_regole', lazy=True)
 
+# ══════════════════════════════════════════════════════════════════
+# MODELLO: CaricoDailyLog — registro giornaliero verniciatura
+# ══════════════════════════════════════════════════════════════════
+class CaricoDailyLog(db.Model):
+    """
+    Ogni riga = un giro di catena verniciatura registrato da un operaio.
+    Il verniciatore fotografa l'ordine NetPro → OCR estrae i campi
+    → si salva qui → alimenta lo Storico Costi per codice.
+    """
+    __tablename__ = 'carico_daily_log'
+
+    id              = db.Column(db.Integer, primary_key=True)
+    data            = db.Column(db.String(10), nullable=False)      # YYYY-MM-DD
+    ora             = db.Column(db.String(8),  nullable=False)      # HH:MM:SS
+    commessa        = db.Column(db.String(80),  default='')
+    num_serie       = db.Column(db.String(100), default='')
+    cliente         = db.Column(db.String(200), default='')
+    colore          = db.Column(db.String(80),  default='')
+    operaio         = db.Column(db.String(100), default='')
+    n_ganci         = db.Column(db.Integer,     default=0)
+    velocita_mmin   = db.Column(db.Float,       default=1.5)
+    kg_totali       = db.Column(db.Float,       default=0.0)
+    codici_json     = db.Column(db.Text,        default='[]')   # JSON list codici
+    note            = db.Column(db.Text,        default='')
+    costo_calcolato = db.Column(db.Float,       default=0.0)    # € calcolato dal server
+    immagine_path   = db.Column(db.String(300), default='')     # path foto originale
+    creato_il       = db.Column(db.DateTime(timezone=True),
+                                default=lambda: datetime.now(timezone.utc))
+
+
+
 
 # MODELLI AGGIUNTIVI: Macchina da consegnare + Componenti
 # ══════════════════════════════════════════════════════════════════
@@ -3507,4 +3538,237 @@ def api_commessa_piano(mac_id):
         piano = ottimizza_slot_commessa(comp_list, mac.ganci_slot)
     return jsonify(piano)
 
+
+
+
+# ══════════════════════════════════════════════════════════════════
+# CARICO GIORNALIERO — verniciatori fotografano ordini NetPro
+# ══════════════════════════════════════════════════════════════════
+
+@app.route('/carico_giornaliero')
+def carico_giornaliero():
+    """Pagina principale registro giornaliero."""
+    import json
+    from datetime import date, datetime as dt
+
+    oggi_str = date.today().isoformat()
+    oggi_fmt = date.today().strftime('%d/%m/%Y')
+
+    log_oggi_raw = CaricoDailyLog.query.filter_by(data=oggi_str)        .order_by(CaricoDailyLog.id.desc()).all()
+
+    log_oggi = []
+    for l in log_oggi_raw:
+        log_oggi.append({
+            'id':             l.id,
+            'ora':            l.ora[:5],
+            'commessa':       l.commessa,
+            'operaio':        l.operaio,
+            'colore':         l.colore,
+            'n_ganci':        l.n_ganci,
+            'kg_totali':      l.kg_totali,
+            'costo_calcolato':l.costo_calcolato,
+        })
+
+    giri_oggi  = len(log_oggi_raw)
+    costo_oggi = sum(l.costo_calcolato or 0 for l in log_oggi_raw)
+
+    return render_template('carico_giornaliero.html',
+        oggi=oggi_fmt,
+        log_oggi=log_oggi,
+        giri_oggi=giri_oggi,
+        costo_oggi=costo_oggi,
+    )
+
+
+@app.route('/carico_giornaliero/<int:log_id>/delete', methods=['POST'])
+def carico_giornaliero_delete(log_id):
+    log = CaricoDailyLog.query.get_or_404(log_id)
+    db.session.delete(log)
+    db.session.commit()
+    flash('Registrazione eliminata.', 'success')
+    return redirect(url_for('carico_giornaliero'))
+
+
+@app.route('/api/carico/ocr', methods=['POST'])
+def api_carico_ocr():
+    """
+    Riceve immagine ordine NetPro → estrae campi con OCR/AI.
+    Per ora usa pattern fissi sul layout NetPro standard.
+    Quando arriva un ordine reale, si affina il parser.
+    """
+    import json, re
+    from datetime import date
+
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'Nessun file'}), 400
+
+    filename = f.filename.lower()
+
+    # Prova OCR con pytesseract se disponibile
+    estratto = {}
+    try:
+        import pytesseract
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(f.read()))
+        testo = pytesseract.image_to_string(img, lang='ita+eng')
+
+        estratto = _parse_netpro_ocr(testo)
+
+    except ImportError:
+        # pytesseract non disponibile — restituisce form vuoto da compilare
+        estratto = {
+            'commessa':   '',
+            'num_serie':  '',
+            'cliente':    '',
+            'data':       date.today().isoformat(),
+            'colore':     'VERDE RAL 6005',
+            'n_ganci':    '',
+            'velocita':   1.5,
+            'kg_totali':  '',
+            'codici':     [],
+            '_nota':      'OCR non disponibile: compila manualmente i campi',
+        }
+    except Exception as e:
+        estratto = {
+            'commessa': '', 'num_serie': '', 'cliente': '',
+            'data': date.today().isoformat(), 'colore': '',
+            'n_ganci': '', 'velocita': 1.5, 'kg_totali': '',
+            'codici': [],
+            '_nota': f'Errore lettura: {str(e)[:80]}',
+        }
+
+    return jsonify(estratto)
+
+
+def _parse_netpro_ocr(testo: str) -> dict:
+    """
+    Parser ordine NetPro — adattare al layout reale quando
+    si riceve il primo ordine scansionato.
+
+    Layout atteso NetPro (da affinare):
+      COMMESSA: 20310
+      N. SERIE: RB100-2026-0310
+      CLIENTE: Cooperativa Agricola...
+      COLORE: VERDE RAL 6005
+      DATA: 22/05/2026
+      CODICI: PRES-RB100, CART-LAT-M, ROTA-STD
+    """
+    import re
+    from datetime import date
+
+    def cerca(pattern, default=''):
+        m = re.search(pattern, testo, re.IGNORECASE | re.MULTILINE)
+        return m.group(1).strip() if m else default
+
+    # Commessa / numero ordine
+    commessa = cerca(r'COMMESSA[:\s]+([A-Z0-9\-]+)')
+    if not commessa:
+        commessa = cerca(r'ORD(?:INE)?[:\s]+([A-Z0-9\-]+)')
+
+    # Num serie macchina
+    num_serie = cerca(r'N\.?\s*SERIE[:\s]+([A-Z0-9\-]+)')
+
+    # Cliente
+    cliente = cerca(r'CLIENTE[:\s]+(.+?)(?:\n|DATA|COLORE)')
+
+    # Data (formati: DD/MM/YYYY o YYYY-MM-DD)
+    data_str = cerca(r'DATA[:\s]+(\d{1,2}/\d{1,2}/\d{4})')
+    if data_str:
+        try:
+            from datetime import datetime
+            data_iso = datetime.strptime(data_str, '%d/%m/%Y').date().isoformat()
+        except Exception:
+            data_iso = date.today().isoformat()
+    else:
+        data_iso = date.today().isoformat()
+
+    # Colore
+    colore = cerca(r'(?:COLORE|RAL)[:\s]+([A-Z0-9\s]+(?:RAL\s*\d{4})?)')
+    if not colore:
+        colore = cerca(r'((?:VERDE|ROSSO|NERO|GRIGIO|BLU|GIALLO)\s+RAL\s*\d{4})')
+
+    # Codici prodotto (formato ENOROSSI: lettere-lettere-numeri)
+    codici_trovati = re.findall(r'([A-Z]{2,6}-[A-Z0-9]{2,8}(?:-[A-Z0-9]+)?)', testo)
+    # Filtra falsi positivi
+    codici = list(dict.fromkeys([c for c in codici_trovati if len(c) >= 5]))
+
+    return {
+        'commessa':  commessa,
+        'num_serie': num_serie,
+        'cliente':   cliente[:100] if cliente else '',
+        'data':      data_iso,
+        'colore':    colore[:60] if colore else '',
+        'n_ganci':   '',
+        'velocita':  1.5,
+        'kg_totali': '',
+        'codici':    codici,
+    }
+
+
+@app.route('/api/carico/salva', methods=['POST'])
+def api_carico_salva():
+    """Salva la registrazione giornaliera e calcola il costo preciso."""
+    import json
+    from datetime import date, datetime as dt, timezone
+
+    data_json = request.get_json(force=True)
+    cfg = get_config()
+
+    # Calcolo costo preciso
+    lunghezza_m    = cfg.lunghezza_tunnel_m or 170.0
+    velocita       = float(data_json.get('velocita', 1.5)) or 1.5
+    tempo_ore      = lunghezza_m / velocita / 60.0
+    costo_orario   = cfg.costo_centro_orario or 350.0
+    costo_calc     = round(tempo_ore * costo_orario, 2)
+
+    # Salva nel DB
+    now = dt.now(timezone.utc)
+    log = CaricoDailyLog(
+        data            = data_json.get('data', date.today().isoformat()),
+        ora             = now.strftime('%H:%M:%S'),
+        commessa        = data_json.get('commessa', ''),
+        num_serie       = data_json.get('num_serie', ''),
+        cliente         = data_json.get('cliente', ''),
+        colore          = data_json.get('colore', ''),
+        operaio         = data_json.get('operaio', ''),
+        n_ganci         = int(data_json.get('n_ganci', 0) or 0),
+        velocita_mmin   = velocita,
+        kg_totali       = float(data_json.get('kg_totali', 0) or 0),
+        codici_json     = json.dumps(data_json.get('codici', [])),
+        note            = data_json.get('note', ''),
+        costo_calcolato = costo_calc,
+    )
+    db.session.add(log)
+
+    # Aggiorna Storico Costi per ogni codice verniciato
+    codici = data_json.get('codici', [])
+    for cod in codici:
+        prod = Prodotto.query.filter_by(codice=cod).first()
+        if prod:
+            # Distribuisce il costo equamente tra i codici
+            costo_per_codice = costo_calc / max(len(codici), 1)
+            # Aggiorna media mobile
+            n = max(prod.n_campioni_standard, 0)
+            vecchia_media = prod.costo_standard or 0.0
+            prod.costo_standard     = round((vecchia_media * n + costo_per_codice) / (n + 1), 4)
+            prod.n_campioni_standard = n + 1
+
+    db.session.commit()
+
+    # Calcola totali della giornata
+    oggi_str  = date.today().isoformat()
+    log_oggi  = CaricoDailyLog.query.filter_by(data=oggi_str).all()
+    giri_oggi = len(log_oggi)
+    costo_oggi = sum(l.costo_calcolato or 0 for l in log_oggi)
+
+    return jsonify({
+        'ok':         True,
+        'log_id':     log.id,
+        'costo_calc': costo_calc,
+        'giri_oggi':  giri_oggi,
+        'costo_oggi': round(costo_oggi, 2),
+    })
 
