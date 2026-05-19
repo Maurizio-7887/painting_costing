@@ -2591,15 +2591,14 @@ def _genera_svg_profilo_trimesh(mesh, L_mm, H_mm):
 
 def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_lat=50, gap_curva=40):
     """
-    FFD fisico con vincoli reali impianto verniciatura:
-    1. GAP VERTICALE gap_v=50mm tra pezzi sullo stesso gancio (no oscillazione)
-    2. GAP LATERALE gap_lat=50mm: W_sx/2 + W_nuovo/2 + gap_lat <= passo_mm
-       => nessuna sovrapposizione fisica tra pezzi di colonne adiacenti
-    3. GAP CURVA: D_pezzo/2 + D_vicino/2 + gap_curva <= passo_mm
-       => nessun contatto in curva catena
+    FFD fisico RIGIDO — vincoli completi impianto verniciatura:
+    1. GAP VERTICALE gap_v=50mm tra pezzi sullo stesso gancio (oscillazione)
+    2. GAP LATERALE gap_lat=50mm: W[i]/2 + W[i+1]/2 + gap_lat <= passo_mm
+       => nessuna sovrapposizione fisica tra ganci adiacenti
+    3. GAP CURVA: D/2 + D_vicino/2 + gap_curva <= passo_mm
     4. PESO MAX per gancio
     5. ALTEZZA MAX z_max=2000mm
-    6. ROTAZIONE: prova 0deg e 90deg, sceglie quello che si adatta meglio
+    6. ROTAZIONE 90deg: prova sempre entrambe le orientazioni
     7. SATURAZIONE: sat_pct per colonna e globale
     """
     COLORS = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
@@ -2614,42 +2613,62 @@ def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_la
             return 0
         return sum(p['alt_mm'] for p in col['pezzi']) + gap_v * (n - 1)
 
-    def vincolo_laterale_ok(col_idx, W_nuovo):
-        """Garantisce che il pezzo non si sovrapponga lateralmente con colonne adiacenti."""
-        # Ogni pezzo e' centrato sul proprio gancio.
-        # Gancio sinistro a distanza passo_mm: semi-larghezza sx + semi-larghezza nuovo + gap <= passo
+    def check_lateral(col_idx, new_W):
+        """
+        Controlla che il pezzo con larghezza new_W, inserito in colonna col_idx,
+        non si sovrapponga fisicamente ai ganci adiacenti.
+        Vincolo: W_vicino/2 + new_W_max/2 + gap_lat <= passo_mm
+        """
+        # W_max aggiornato per la colonna (considera il nuovo pezzo)
+        col = columns[col_idx]
+        current_W_max = col.get('W_max', 0)
+        new_W_max = max(current_W_max, new_W)
+
         if col_idx > 0:
             W_sx = columns[col_idx - 1].get('W_max', 0)
-            if W_sx / 2.0 + W_nuovo / 2.0 + gap_lat > passo_mm:
+            if W_sx / 2.0 + new_W_max / 2.0 + gap_lat > passo_mm:
                 return False
-        # Gancio destro (se esiste gia')
         if col_idx < len(columns) - 1:
             W_dx = columns[col_idx + 1].get('W_max', 0)
-            if W_nuovo / 2.0 + W_dx / 2.0 + gap_lat > passo_mm:
+            if new_W_max / 2.0 + W_dx / 2.0 + gap_lat > passo_mm:
                 return False
         return True
 
+    def check_lateral_new(new_W):
+        """Verifica laterale per un NUOVO gancio (l'ultimo a destra)"""
+        if not columns:
+            return True
+        W_sx = columns[-1].get('W_max', 0)
+        return (W_sx / 2.0 + new_W / 2.0 + gap_lat) <= passo_mm
+
     def vincolo_curva_ok(col_idx, D_nuovo):
-        """Profondita' asse Z: nessun contatto fisico in curva catena."""
         if col_idx == 0:
             return True
-        D_sx = columns[col_idx - 1]['D_max']
+        D_sx = columns[col_idx - 1].get('D_max', 0)
         return (D_nuovo / 2.0 + D_sx / 2.0 + gap_curva) <= passo_mm
 
     def can_add(col_idx, col, part):
-        # 1. Altezza disponibile
+        # 1. Altezza
         h_agg = (gap_v if col['pezzi'] else 0) + part['alt_mm']
         if h_usata(col) + h_agg > z_max:
             return False
         # 2. Peso
         if col['peso'] + part['peso_kg'] > max_kg:
             return False
-        # 3. Vincolo laterale (NO sovrapposizione tra colonne)
-        if not vincolo_laterale_ok(col_idx, part['largh_mm']):
-            return False
-        # 4. Vincolo curva (profondita' Z)
+        # 3. Curva
         D = part.get('D_mm', min(part['largh_mm'], 200))
         if not vincolo_curva_ok(col_idx, D):
+            return False
+        # 4. Laterale — VINCOLO CRITICO no-overlap
+        if not check_lateral(col_idx, part['largh_mm']):
+            return False
+        return True
+
+    def can_add_new(part):
+        """Controlla se il pezzo può aprire un nuovo gancio"""
+        if not check_lateral_new(part['largh_mm']):
+            return False
+        if part['alt_mm'] > z_max:
             return False
         return True
 
@@ -2658,29 +2677,31 @@ def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_la
         col['peso'] = round(col['peso'] + part['peso_kg'], 2)
         D = part.get('D_mm', min(part['largh_mm'], 200))
         col['D_max'] = max(col['D_max'], D)
-        col['W_max'] = max(col.get('W_max', 0.0), part['largh_mm'])
+        col['W_max'] = max(col['W_max'], part['largh_mm'])
 
     for part in sorted_parts:
         W0, H0 = part['largh_mm'], part['alt_mm']
-        W90, H90 = H0, W0  # pezzo ruotato 90deg
+        W90, H90 = H0, W0
 
         p_std = dict(part, largh_mm=W0,  alt_mm=H0,  rotated=False, orientamento='standard')
         p_rot = dict(part, largh_mm=W90, alt_mm=H90, rotated=True,  orientamento='ruotato_90')
 
         placed = False
+
+        # Prima prova fit su ganci esistenti (FFD)
         for idx, col in enumerate(columns):
-            # Prova standard
             if can_add(idx, col, p_std):
                 do_add(col, p_std)
                 placed = True
                 break
-            # Prova ruotato (se riduce altezza O larghezza)
-            if can_add(idx, col, p_rot):
+            # Prova ruotato se cambia dimensioni
+            if (W90, H90) != (W0, H0) and can_add(idx, col, p_rot):
                 do_add(col, p_rot)
                 placed = True
                 break
 
         if not placed:
+            # Apre nuovo gancio — scegli orientamento migliore
             new_col = {
                 'start_slot': len(columns),
                 'n_slots':    1,
@@ -2690,21 +2711,23 @@ def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_la
                 'D_max':      0.0,
                 'W_max':      0.0,
             }
-            # Scegli orientamento: preferisci quello che minimizza la larghezza
-            # (meno larghezza = meno blocco per colonne adiacenti future)
-            # poi quello che minimizza l'altezza (massimizza riempimento verticale)
-            use_rot = False
-            if W90 < W0 and H90 <= z_max:
-                use_rot = True
-            elif H90 < H0 and W90 <= (passo_mm * 2 - gap_lat) and H90 <= z_max:
-                use_rot = True
+            # Scegli orientamento: preferisci quello che occupa meno larghezza
+            # (lascia spazio ai vicini) se entrambi ok, altrimenti il più alto
+            ok_std = can_add_new(p_std)
+            ok_rot = can_add_new(p_rot) if (W90, H90) != (W0, H0) else False
 
-            if use_rot:
-                do_add(new_col, p_rot)
-            elif H0 <= z_max:
-                do_add(new_col, p_std)
+            if ok_std and ok_rot:
+                # Scegli quello con larghezza minore (meno invasivo lateralmente)
+                chosen = p_std if W0 <= W90 else p_rot
+            elif ok_std:
+                chosen = p_std
+            elif ok_rot:
+                chosen = p_rot
             else:
-                do_add(new_col, p_std)
+                # Pezzo troppo largo: forza su nuovo gancio (meglio che perderlo)
+                chosen = p_std if H0 <= H90 else p_rot
+
+            do_add(new_col, chosen)
             columns.append(new_col)
 
     # Calcola saturazione per ogni colonna
@@ -2714,7 +2737,7 @@ def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_la
         col['h_libera_mm'] = int(round(z_max - h))
         col['sat_pct']     = round(100.0 * h / z_max, 1)
 
-    # Saturazione globale (spazio altezza usato / spazio totale disponibile)
+    # Saturazione globale
     n_col = len(columns)
     if n_col:
         sat_glob = round(sum(c['h_usata_mm'] for c in columns) / (z_max * n_col) * 100, 1)
