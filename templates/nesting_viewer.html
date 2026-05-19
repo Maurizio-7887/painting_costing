@@ -551,8 +551,8 @@ function drawColumn(col) {
     });
 
     // Linea Z_MAX
-    const zm1 = px(x - PASSO_MM*0.4, -Z_MAX_MM, -100);
-    const zm2 = px(x + PASSO_MM*0.4, -Z_MAX_MM, -100);
+    const zm1 = px(x_hook - PASSO_MM*0.4, -Z_MAX_MM, -100);
+    const zm2 = px(x_hook + PASSO_MM*0.4 + (n_slots-1)*PASSO_MM, -Z_MAX_MM, -100);
     ctx.strokeStyle = 'rgba(255,61,61,0.18)';
     ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(zm1.x,zm1.y); ctx.lineTo(zm2.x,zm2.y); ctx.stroke();
