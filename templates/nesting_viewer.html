@@ -120,6 +120,10 @@ body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
       <div class="kl">Max kg/gancio</div>
       <div class="kv" id="kpi-maxkg">—</div>
     </div>
+    <div class="kpi">
+      <div class="kl">Saturazione globale</div>
+      <div class="kv" id="kpi-sat">—</div>
+    </div>
 
     <!-- Upload nuovo file -->
     <div style="margin-top:12px;">
@@ -234,6 +238,12 @@ function initViewer() {
   const mkv = document.getElementById('kpi-maxkg');
   mkv.textContent = maxKgG.toFixed(1) + ' kg';
   mkv.className = 'kv' + (maxKgG > 55 ? ' danger' : maxKgG > 40 ? ' warn' : '');
+  // Saturazione globale
+  const satGlob = NDATA.columns[0] && NDATA.columns[0].sat_globale_pct !== undefined
+                  ? NDATA.columns[0].sat_globale_pct : 0;
+  const satEl = document.getElementById('kpi-sat');
+  satEl.textContent = satGlob.toFixed(1) + ' %';
+  satEl.className = 'kv' + (satGlob < 40 ? ' danger' : satGlob < 65 ? ' warn' : '');
 
   // Sidebar lista ganci
   const clistEl = document.getElementById('clist');
@@ -241,12 +251,15 @@ function initViewer() {
   NDATA.columns.forEach(col => {
     const d = document.createElement('div');
     d.className = 'ci';
+    const sat = col.sat_pct !== undefined ? col.sat_pct.toFixed(0)+'%' : '';
+    const satColor = col.sat_pct < 40 ? '#ff5252' : col.sat_pct < 65 ? '#ffab40' : '#00e676';
     d.innerHTML =
       '<div class="cdot" style="background:'+col.color+'"></div>'+
       '<div class="cn">G'+(col.start_slot+1)+
       (col.n_slots>1 ? '–'+(col.start_slot+col.n_slots) : '')+
       ' · '+col.pezzi.length+' pz</div>'+
-      '<div class="ck">'+col.peso.toFixed(1)+' kg</div>';
+      '<div class="ck">'+col.peso.toFixed(1)+' kg</div>'+
+      '<div style="font-size:9px;color:'+satColor+';margin-left:auto">'+sat+'</div>';
     d.onclick = () => {
       const x = col.start_slot * PASSO_MM;
       const p = projFn(x, -Z_MAX_MM/2, 0);
@@ -273,7 +286,7 @@ function setActive(btn) {
 // Tutto in mm reali, poi proiezione isometrica
 const PASSO_MM  = 400;
 const Z_MAX_MM  = 2000;
-const GAP_MM    = 30;    // gap verticale tra pezzi
+const GAP_MM    = 50;    // gap verticale tra pezzi (=backend gap_v)
 const HOOK_LEN  = 120;   // lunghezza gambo gancio mm
 
 // Proiezione isometrica standard
@@ -531,7 +544,8 @@ function drawColumn(col) {
     ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
     ctx.textAlign = 'center';
     const slotLabel = n_slots > 1 ? `G${col.start_slot+1}–G${col.start_slot+n_slots}` : `G${col.start_slot+1}`;
-    ctx.fillText(slotLabel+'·'+col.peso.toFixed(1)+'kg', lp.x, lp.y);
+    const satTxt = col.sat_pct !== undefined ? ` [${col.sat_pct.toFixed(0)}%]` : '';
+    ctx.fillText(slotLabel+'·'+col.peso.toFixed(1)+'kg'+satTxt, lp.x, lp.y);
 
     // ── Pezzi in colonna ───────────────────────────────────────
     // Ogni pezzo è centrato sul proprio span (usa i suoi n_slots)
