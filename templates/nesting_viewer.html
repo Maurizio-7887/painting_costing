@@ -120,9 +120,11 @@ body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
       <div class="kl">Max kg/gancio</div>
       <div class="kv" id="kpi-maxkg">—</div>
     </div>
-    <div class="kpi">
-      <div class="kl">Saturazione globale</div>
-      <div class="kv" id="kpi-sat">—</div>
+    <div class="kpi" id="kpi-sat-box" style="background:#1a2744;border:2px solid #00e676;border-radius:8px;padding:10px 8px;margin-top:4px;">
+      <div class="kl" style="font-size:10px;letter-spacing:1px;color:#90caf9;">SATURAZIONE GLOBALE</div>
+      <div id="kpi-sat" style="font-size:36px;font-weight:900;line-height:1;margin-top:4px;letter-spacing:-1px;">—</div>
+      <div id="kpi-sat-bar" style="height:6px;border-radius:3px;margin-top:6px;background:#223;"></div>
+      <div id="kpi-sat-label" style="font-size:9px;color:#888;margin-top:3px;text-align:center;">—</div>
     </div>
 
     <!-- Upload nuovo file -->
@@ -245,8 +247,15 @@ function initViewer() {
   const satGlob = NDATA.columns[0] && NDATA.columns[0].sat_globale_pct !== undefined
                   ? NDATA.columns[0].sat_globale_pct : 0;
   const satEl = document.getElementById('kpi-sat');
-  satEl.textContent = satGlob.toFixed(1) + ' %';
-  satEl.className = 'kv' + (satGlob < 40 ? ' danger' : satGlob < 65 ? ' warn' : '');
+  satEl.textContent = satGlob.toFixed(1) + '%';
+  const satColor = satGlob < 40 ? '#ff5252' : satGlob < 65 ? '#ffab40' : '#00e676';
+  satEl.style.color = satColor;
+  const satBox = document.getElementById('kpi-sat-box');
+  if (satBox) satBox.style.borderColor = satColor;
+  const satBar = document.getElementById('kpi-sat-bar');
+  if (satBar) { satBar.style.width = Math.min(100,satGlob).toFixed(0)+'%'; satBar.style.background = satColor; }
+  const satLbl = document.getElementById('kpi-sat-label');
+  if (satLbl) satLbl.textContent = satGlob < 40 ? '⚠ Bassa — ottimizzare' : satGlob < 65 ? '◑ Media — migliorabile' : '✓ Ottima';
 
   // Sidebar lista ganci
   const clistEl = document.getElementById('clist');
@@ -810,25 +819,29 @@ function printReport() {
     const satGlob  = NDATA.columns[0]?.sat_globale_pct ?? '-';
     const nGanci   = NDATA.columns.length;
     const catenaM  = ((NDATA.total_slots || nGanci) * (NDATA.passo_mm || 400) / 1000).toFixed(1);
+    const satColor = satGlob < 40 ? '#c62828' : satGlob < 65 ? '#e65100' : '#1b5e20';
 
-    let righeGanci = '';
+    // ── Tabella riepilogativa ─────────────────────────────────
+    let righeTabella = '';
     NDATA.columns.forEach((col, ci) => {
         let firstRow = true;
         col.pezzi.forEach((p, pi) => {
             const bg = pi % 2 === 0 ? '#f8f9fa' : '#ffffff';
-            righeGanci += `<tr style="background:${bg}">`;
+            righeTabella += `<tr style="background:${bg}">`;
             if (firstRow) {
-                righeGanci += `<td rowspan="${col.pezzi.length}" style="
+                const sc = col.sat_pct < 40 ? '#c62828' : col.sat_pct < 65 ? '#e65100' : '#2e7d32';
+                righeTabella += `<td rowspan="${col.pezzi.length}" style="
                     background:${col.color}22; border-right:3px solid ${col.color};
                     font-weight:bold; text-align:center; vertical-align:middle;
                     padding:6px; font-size:13px;">
-                    G${ci+1}<br><small style="font-weight:normal">${col.peso.toFixed(1)} kg<br>${col.sat_pct}%</small>
+                    G${ci+1}<br><small style="font-weight:normal;color:#555">${col.peso.toFixed(1)} kg</small>
+                    <br><span style="font-size:12px;font-weight:900;color:${sc}">${col.sat_pct.toFixed(0)}%</span>
                 </td>`;
                 firstRow = false;
             }
-            const orient = p.orientamento === 'ruotato_90' ? '🔄 90°' : '↕ std';
-            righeGanci += `
-                <td style="padding:5px 8px">${p.nome || '-'}</td>
+            const orient = p.orientamento === 'ruotato_90' ? '🔄 Ruotato 90°' : '↕ Standard';
+            righeTabella += `
+                <td style="padding:5px 8px;font-weight:500">${p.nome || '-'}</td>
                 <td style="padding:5px 8px;text-align:right">${(p.largh_mm||0).toFixed(0)}</td>
                 <td style="padding:5px 8px;text-align:right">${(p.alt_mm||0).toFixed(0)}</td>
                 <td style="padding:5px 8px;text-align:right">${(p.D_mm||0).toFixed(0)}</td>
@@ -836,81 +849,167 @@ function printReport() {
                 <td style="padding:5px 8px;text-align:center">${orient}</td>
             </tr>`;
         });
-        // Riga totale gancio
-        righeGanci += `<tr style="background:#e8f5e9;border-top:2px solid ${col.color}">
+        const sc2 = col.sat_pct < 40 ? '#c62828' : col.sat_pct < 65 ? '#e65100' : '#2e7d32';
+        righeTabella += `<tr style="background:#e8f5e9;border-top:2px solid ${col.color}">
             <td colspan="7" style="padding:4px 8px;font-size:11px;color:#2e7d32">
-                ↳ G${ci+1}: ${col.pezzi.length} pz | ${col.peso.toFixed(1)} kg |
-                   h=${col.h_usata_mm} mm / 2000 mm | sat=${col.sat_pct}%
+                ↳ G${ci+1}: ${col.pezzi.length} pz · ${col.peso.toFixed(1)} kg ·
+                   H usata ${col.h_usata_mm} mm / 2000 mm ·
+                   <b style="color:${sc2}">Saturazione ${col.sat_pct.toFixed(0)}%</b>
             </td>
         </tr>`;
+    });
+
+    // ── Istruzioni operative gancio per gancio ───────────────
+    let istruzioni = '';
+    NDATA.columns.forEach((col, ci) => {
+        const sc = col.sat_pct < 40 ? '#c62828' : col.sat_pct < 65 ? '#e65100' : '#1b5e20';
+        istruzioni += `
+        <div class="gancio-card" style="border:1px solid #ddd;border-left:5px solid ${col.color};
+             border-radius:4px;margin-bottom:14px;page-break-inside:avoid;">
+          <div style="background:${col.color}18;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <span style="font-size:16px;font-weight:900;color:${col.color}">GANCIO G${ci+1}</span>
+              <span style="font-size:12px;margin-left:12px;color:#555">
+                ${col.pezzi.length} pez${col.pezzi.length>1?'zi':'zo'} &nbsp;·&nbsp;
+                ${col.peso.toFixed(1)} kg &nbsp;·&nbsp;
+                ${col.h_usata_mm} mm / 2000 mm
+              </span>
+            </div>
+            <div style="font-size:22px;font-weight:900;color:${sc}">${col.sat_pct.toFixed(0)}%</div>
+          </div>
+          <div style="padding:10px 12px;">
+            <ol style="margin:0;padding-left:20px;">`;
+
+        col.pezzi.forEach((p, pi) => {
+            const L = (p.largh_mm||0).toFixed(0);
+            const H = (p.alt_mm||0).toFixed(0);
+            const D = (p.D_mm||0).toFixed(0);
+            const kg = (p.peso_kg||0).toFixed(2);
+            const isRot = p.orientamento === 'ruotato_90';
+            const orientTxt = isRot
+                ? '🔄 <b>RUOTATO 90°</b> — larghezza diventa altezza'
+                : '↕ <b>ORIENTAMENTO STANDARD</b> — come da disegno';
+
+            // Suggerimento aggancio basato su dimensioni
+            let metodo = '';
+            if (parseFloat(L) > 600) {
+                metodo = '🔗 Pezzo largo: usa <b>filo/morsetto su entrambi i lati</b> per bilanciare il peso';
+            } else if (parseFloat(kg) > 20) {
+                metodo = '🔗 Pezzo pesante: usa <b>gancio a C rinforzato</b> o doppio filo';
+            } else {
+                metodo = '🔗 Usa <b>filo metallico Ø3mm</b> o morsetto standard';
+            }
+
+            istruzioni += `
+              <li style="margin-bottom:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                <div style="font-weight:700;font-size:13px;">${p.nome || 'Pezzo '+(pi+1)}</div>
+                <div style="color:#444;margin:3px 0;">
+                  Dimensioni: <b>${L} × ${H} mm</b> (prof. ${D} mm) &nbsp;·&nbsp; Peso: <b>${kg} kg</b>
+                </div>
+                <div style="color:#1565C0;margin:2px 0;">${orientTxt}</div>
+                <div style="color:#555;margin:2px 0;">${metodo}</div>
+                <div style="color:#777;font-size:11px;margin-top:3px;">
+                  Posizione verticale: ${pi === 0 ? 'IN CIMA al gancio (primo da appendere)' :
+                    pi === col.pezzi.length-1 ? 'IN FONDO (ultimo, più vicino al pavimento)' :
+                    'Posizione '+(pi+1)+' dall'alto'}
+                  &nbsp;·&nbsp; Gap dal pezzo sopra: 50 mm
+                </div>
+              </li>`;
+        });
+
+        istruzioni += `</ol></div></div>`;
     });
 
     const html = `<!DOCTYPE html>
 <html lang="it"><head>
 <meta charset="UTF-8">
-<title>Report Nesting Catena — ${nomeFile}</title>
+<title>Report Nesting — ${nomeFile}</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size:12px; color:#222; margin:20px; }
-  h1 { font-size:18px; color:#1565C0; border-bottom:2px solid #1565C0; padding-bottom:6px; margin-bottom:4px;}
-  h2 { font-size:13px; color:#555; margin:0 0 16px; font-weight:normal;}
-  .kpi-row { display:flex; gap:20px; margin:12px 0 18px; flex-wrap:wrap; }
-  .kpi { background:#f0f4ff; border-radius:6px; padding:8px 16px; text-align:center; }
-  .kpi .v { font-size:22px; font-weight:bold; color:#1565C0; }
-  .kpi .l { font-size:10px; color:#888; text-transform:uppercase; margin-top:2px; }
-  table { width:100%; border-collapse:collapse; font-size:11px; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size:12px; color:#222; margin:20px; max-width:1100px; }
+  h1 { font-size:20px; color:#1565C0; border-bottom:3px solid #1565C0; padding-bottom:8px; margin-bottom:4px; }
+  h2 { font-size:12px; color:#666; margin:0 0 18px; font-weight:normal; }
+  h3 { font-size:14px; color:#1565C0; margin:24px 0 10px; border-bottom:1px solid #ddd; padding-bottom:4px; }
+  .kpi-row { display:flex; gap:14px; margin:14px 0 22px; flex-wrap:wrap; }
+  .kpi { background:#f0f4ff; border-radius:8px; padding:10px 18px; text-align:center; min-width:100px; }
+  .kpi .v { font-size:24px; font-weight:900; color:#1565C0; }
+  .kpi .l { font-size:10px; color:#888; text-transform:uppercase; margin-top:2px; letter-spacing:0.5px; }
+  .sat-box { background:#1565C022; border:2px solid ${satColor}; border-radius:8px; padding:12px 20px; text-align:center; }
+  .sat-box .v { font-size:40px; font-weight:900; color:${satColor}; line-height:1; }
+  table { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:4px; }
   th { background:#1565C0; color:#fff; padding:7px 8px; text-align:left; }
   th.r { text-align:right; }
-  td { border-bottom:1px solid #e0e0e0; }
-  .footer { margin-top:24px; font-size:10px; color:#888; border-top:1px solid #ddd; padding-top:8px; }
+  td { border-bottom:1px solid #e8e8e8; }
+  .footer { margin-top:28px; font-size:10px; color:#888; border-top:1px solid #ddd; padding-top:10px; }
+  .no-print { margin-bottom:16px; }
   @media print {
     .no-print { display:none; }
-    body { margin:10px; }
-    h1 { font-size:15px; }
+    body { margin:10px; font-size:11px; }
+    h1 { font-size:16px; }
+    .gancio-card { page-break-inside: avoid; }
   }
 </style>
 </head><body>
-<div class="no-print" style="margin-bottom:16px;">
+
+<div class="no-print">
   <button onclick="window.print()" style="background:#1565C0;color:#fff;border:none;
-    padding:8px 20px;border-radius:4px;cursor:pointer;font-size:13px;">🖨 Stampa / Salva PDF</button>
+    padding:9px 22px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">
+    🖨&nbsp; Stampa / Salva PDF
+  </button>
   &nbsp;
   <button onclick="window.close()" style="background:#eee;border:none;
-    padding:8px 16px;border-radius:4px;cursor:pointer;font-size:12px;">✕ Chiudi</button>
+    padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;">✕ Chiudi</button>
 </div>
 
 <h1>⛓ Report Nesting Catena Verniciatura</h1>
-<h2>File: <b>${nomeFile}</b> &nbsp;|&nbsp; Data: ${dateStr}</h2>
+<h2>File: <b>${nomeFile}</b> &nbsp;·&nbsp; Generato: ${dateStr}</h2>
 
 <div class="kpi-row">
+  <div class="sat-box">
+    <div class="l" style="color:${satColor};font-size:10px;letter-spacing:1px;margin-bottom:4px;">SATURAZIONE GLOBALE</div>
+    <div class="v">${satGlob}%</div>
+    <div style="font-size:11px;color:${satColor};margin-top:4px;">${satGlob>=80?'✓ Ottima':satGlob>=65?'◑ Buona':satGlob>=40?'⚠ Media':'✗ Bassa'}</div>
+  </div>
   <div class="kpi"><div class="v">${nGanci}</div><div class="l">N° Ganci</div></div>
   <div class="kpi"><div class="v">${totalPz}</div><div class="l">Pezzi totali</div></div>
   <div class="kpi"><div class="v">${pesoTot} kg</div><div class="l">Peso totale</div></div>
   <div class="kpi"><div class="v">${catenaM} m</div><div class="l">Catena usata</div></div>
-  <div class="kpi"><div class="v" style="color:${satGlob>=80?'#2e7d32':satGlob>=50?'#f57c00':'#c62828'}">${satGlob}%</div><div class="l">Saturazione globale</div></div>
 </div>
 
+<h3>📋 Riepilogo tabellare</h3>
 <table>
   <thead><tr>
-    <th style="width:60px">Gancio</th>
+    <th style="width:65px">Gancio</th>
     <th>Nome Pezzo</th>
     <th class="r">L (mm)</th>
     <th class="r">H (mm)</th>
-    <th class="r">P (mm)</th>
+    <th class="r">Prof. (mm)</th>
     <th class="r">Peso (kg)</th>
     <th style="text-align:center">Orient.</th>
   </tr></thead>
-  <tbody>${righeGanci}</tbody>
+  <tbody>${righeTabella}</tbody>
 </table>
 
+<h3>📌 Istruzioni operative — gancio per gancio</h3>
+<p style="color:#555;font-size:11px;margin-bottom:14px;">
+  Seguire l'ordine indicato. Appendere dal primo pezzo in cima verso il basso.
+  Gap verticale minimo tra pezzi: <b>50 mm</b>. Altezza utile gancio: <b>2000 mm</b>.
+</p>
+
+${istruzioni}
+
 <div class="footer">
-  ENOROSSI Paint Optimizer &nbsp;|&nbsp; Pitch catena: ${NDATA.passo_mm||400} mm &nbsp;|&nbsp;
-  Altezza utile: 2000 mm &nbsp;|&nbsp; Gap verticale: 50 mm &nbsp;|&nbsp; Gap laterale: 50 mm
+  ENOROSSI Paint Optimizer &nbsp;|&nbsp; Passo catena: ${NDATA.passo_mm||400} mm &nbsp;·&nbsp;
+  Altezza utile: 2000 mm &nbsp;·&nbsp; Gap verticale: 50 mm &nbsp;·&nbsp;
+  Peso max/gancio: 55 kg &nbsp;·&nbsp; Algoritmo: FFD fisico con vincoli geometrici
 </div>
 </body></html>`;
 
-    const w = window.open('', '_blank', 'width=900,height=700');
+    const w = window.open('', '_blank', 'width=1000,height=750');
     w.document.write(html);
     w.document.close();
 }
+//ENDREPORT//
 
 // Init canvas size
 resize();
