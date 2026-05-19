@@ -511,28 +511,41 @@ function drawBeamTinted(x1, y, x2, y2, z, depth, col1, col2) {
 }
 
 function drawColumn(col) {
-    const x = col.start_slot * PASSO_MM;
+    // x è il centro dello span fisico occupato dal gruppo di pezzi
+    // start_slot + (n_slots-1)/2 = centro dello span
+    const n_slots = col.n_slots || 1;
+    const x_hook  = col.start_slot * PASSO_MM;              // posizione gancio principale
+    const x_center = x_hook + (n_slots - 1) * PASSO_MM / 2; // centro span
     const color = col.color;
 
-    // ── Gancio fisico ──────────────────────────
-    drawHook(x, color);
+    // ── Gancio fisico (disegnato sul primo slot) ──────────────
+    drawHook(x_hook, color);
+    // Se multi-slot, disegna anche i ganci secondari
+    for (let s = 1; s < n_slots; s++) {
+        drawHookSecondary(x_hook + s * PASSO_MM, color);
+    }
 
-    // Label gancio sopra catena
-    const lp = px(x, 80, 0);
+    // Label gancio sopra catena (centrata sullo span)
+    const lp = px(x_center, 80, 0);
     ctx.fillStyle = color;
     ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
     ctx.textAlign = 'center';
-    ctx.fillText('G'+(col.start_slot+1)+'·'+col.peso.toFixed(1)+'kg', lp.x, lp.y);
+    const slotLabel = n_slots > 1 ? `G${col.start_slot+1}–G${col.start_slot+n_slots}` : `G${col.start_slot+1}`;
+    ctx.fillText(slotLabel+'·'+col.peso.toFixed(1)+'kg', lp.x, lp.y);
 
-    // ── Pezzi in colonna ───────────────────────
-    let curY = -(HOOK_LEN + 10); // parte da sotto il gancio
+    // ── Pezzi in colonna ───────────────────────────────────────
+    // Ogni pezzo è centrato sul proprio span (usa i suoi n_slots)
+    let curY = -(HOOK_LEN + 10);
 
     col.pezzi.forEach((part, pi) => {
-        const altH = part.alt_mm;
-        const W    = Math.max(part.largh_mm, 30);
-        const D    = Math.max(part.D_mm || 60, 20);
+        const altH   = part.alt_mm;
+        const W      = Math.max(part.largh_mm, 30);
+        const D      = Math.max(part.D_mm || 60, 20);
+        // Centro X del singolo pezzo = centro dei suoi slot
+        const p_slots = part.n_slots || Math.max(1, Math.ceil(W / PASSO_MM));
+        const x_piece = x_hook + (p_slots - 1) * PASSO_MM / 2;
 
-        drawPart(x, curY - altH, W, altH, D, color, part, col, pi);
+        drawPart(x_piece, curY - altH, W, altH, D, color, part, col, pi);
 
         curY -= altH + GAP_MM;
     });
@@ -543,6 +556,21 @@ function drawColumn(col) {
     ctx.strokeStyle = 'rgba(255,61,61,0.18)';
     ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(zm1.x,zm1.y); ctx.lineTo(zm2.x,zm2.y); ctx.stroke();
+}
+
+function drawHookSecondary(x, color) {
+    // Gancio secondario (slot aggiuntivo per pezzi larghi) — stile tratteggiato
+    const ga = px(x, 0, 0);
+    const gb = px(x, HOOK_LEN, 0);
+    ctx.strokeStyle = color + '66';
+    ctx.lineWidth = Math.max(1, 2*scale);
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Uncino piccolo
+    const gc = px(x, HOOK_LEN, 0);
+    const gd = px(x + HOOK_LEN*0.3, HOOK_LEN*0.7, HOOK_LEN*0.3);
+    ctx.beginPath(); ctx.moveTo(gc.x, gc.y); ctx.lineTo(gd.x, gd.y); ctx.stroke();
 }
 
 function drawHook(x, color) {
