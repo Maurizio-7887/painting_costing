@@ -2589,201 +2589,135 @@ def _genera_svg_profilo_trimesh(mesh, L_mm, H_mm):
         return 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
 
 
-def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=60, gap_curva=40):
+def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_lat=50, gap_curva=40):
     """
-    FFD fisico con TUTTI i vincoli reali impianto verniciatura:
-
-    VINCOLO 1 — ALTEZZA VERTICALE
-      Somma alt_mm pezzi + gap_v tra ognuno <= z_max (2000mm)
-      gap_v=60mm: oscillazione catena + spazio vernice
-
-    VINCOLO 2 — LARGHEZZA / ANTI-SOVRAPPOSIZIONE LATERALE
-      Ogni gancio occupa n_slots = ceil(largh_mm / passo_mm) slot fisici.
-      Un pezzo largo 850mm su gancio da 400mm → occupa 3 slot (850/400 = 2.1 → 3).
-      Quei slot vengono BLOCCATI: nessun altro pezzo può usarli.
-      Questo è il vincolo principale che impedisce sovrapposizioni.
-
-    VINCOLO 3 — LARGHEZZA MINIMA PER STARE IN UN SOLO SLOT
-      Se largh_mm <= passo_mm * 0.90 → 1 slot.
-      Se largh_mm > passo_mm → multi-slot (blocca slot adiacenti).
-
-    VINCOLO 4 — PROFONDITÀ / GAP IN CURVA
-      D_pezzo/2 + D_vicino/2 + gap_curva <= passo_mm
-      Evita collisioni tra pezzi di ganci adiacenti nelle curve.
-
-    VINCOLO 5 — PESO MAX per slot (kg per gancio fisico)
-
-    ALGORITMO: FFD (First Fit Decreasing) per area decrescente.
-    Per ogni pezzo testa prima orientamento standard, poi ruotato 90°.
+    FFD fisico con vincoli reali impianto verniciatura:
+    1. GAP VERTICALE gap_v=50mm tra pezzi sullo stesso gancio (no oscillazione)
+    2. GAP LATERALE gap_lat=50mm: W_sx/2 + W_nuovo/2 + gap_lat <= passo_mm
+       => nessuna sovrapposizione fisica tra pezzi di colonne adiacenti
+    3. GAP CURVA: D_pezzo/2 + D_vicino/2 + gap_curva <= passo_mm
+       => nessun contatto in curva catena
+    4. PESO MAX per gancio
+    5. ALTEZZA MAX z_max=2000mm
+    6. ROTAZIONE: prova 0deg e 90deg, sceglie quello che si adatta meglio
+    7. SATURAZIONE: sat_pct per colonna e globale
     """
-    import math
-
     COLORS = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
-              '#69f0ae','#18ffff','#ffd740','#b388ff','#ff6e40',
-              '#f06292','#4dd0e1','#aed581','#ffb74d','#ce93d8']
+              '#69f0ae','#18ffff','#ffd740','#b388ff','#ff6e40']
 
-    # ── Calcola n_slots fisici necessari per ogni pezzo ──────────────
-    def slot_necessari(largh_mm):
-        """Quanti ganci fisici occupa un pezzo largo largh_mm."""
-        if largh_mm <= passo_mm * 0.92:
-            return 1
-        return math.ceil(largh_mm / passo_mm)
+    sorted_parts = sorted(parts, key=lambda p: p['largh_mm'] * p['alt_mm'], reverse=True)
+    columns = []
 
-    # ── Struttura colonna ─────────────────────────────────────────────
-    def nuova_col(start_slot, n_slots, color):
-        return {
-            'start_slot': start_slot,
-            'n_slots':    n_slots,
-            'peso':       0.0,
-            'color':      color,
-            'pezzi':      [],
-            'D_max':      0.0,
-            'h_usata':    0.0,   # mm verticali occupati (aggiornato live)
-        }
-
-    def h_col(col):
+    def h_usata(col):
         n = len(col['pezzi'])
-        if n == 0: return 0.0
+        if n == 0:
+            return 0
         return sum(p['alt_mm'] for p in col['pezzi']) + gap_v * (n - 1)
 
-    # ── Mappa slot occupati → indice colonna che li usa ──────────────
-    # Chiave: slot_index (intero), Valore: col_index che lo occupa
-    slot_occupato = {}   # slot → col_index
-
-    def slots_liberi(start, n):
-        """Tutti gli n slot a partire da start sono liberi?"""
-        for s in range(start, start + n):
-            if s in slot_occupato:
+    def vincolo_laterale_ok(col_idx, W_nuovo):
+        """Garantisce che il pezzo non si sovrapponga lateralmente con colonne adiacenti."""
+        # Ogni pezzo e' centrato sul proprio gancio.
+        # Gancio sinistro a distanza passo_mm: semi-larghezza sx + semi-larghezza nuovo + gap <= passo
+        if col_idx > 0:
+            W_sx = columns[col_idx - 1].get('W_max', 0)
+            if W_sx / 2.0 + W_nuovo / 2.0 + gap_lat > passo_mm:
+                return False
+        # Gancio destro (se esiste gia')
+        if col_idx < len(columns) - 1:
+            W_dx = columns[col_idx + 1].get('W_max', 0)
+            if W_nuovo / 2.0 + W_dx / 2.0 + gap_lat > passo_mm:
                 return False
         return True
 
-    def occupa_slots(start, n, col_idx):
-        for s in range(start, start + n):
-            slot_occupato[s] = col_idx
+    def vincolo_curva_ok(col_idx, D_nuovo):
+        """Profondita' asse Z: nessun contatto fisico in curva catena."""
+        if col_idx == 0:
+            return True
+        D_sx = columns[col_idx - 1]['D_max']
+        return (D_nuovo / 2.0 + D_sx / 2.0 + gap_curva) <= passo_mm
 
-    # ── Vincolo curva (profondità) tra ganci adiacenti ───────────────
-    def vincolo_curva_ok(start_slot, D_nuovo):
-        """Verifica che il pezzo non collida lateralmente con i vicini."""
-        # Controlla gancio a sinistra
-        if start_slot > 0:
-            left_col_idx = slot_occupato.get(start_slot - 1)
-            if left_col_idx is not None:
-                D_sx = columns[left_col_idx]['D_max']
-                if D_nuovo / 2.0 + D_sx / 2.0 + gap_curva > passo_mm:
-                    return False
-        return True
-
-    # ── can_add: controlla TUTTI i vincoli ───────────────────────────
     def can_add(col_idx, col, part):
-        # V1: altezza verticale
+        # 1. Altezza disponibile
         h_agg = (gap_v if col['pezzi'] else 0) + part['alt_mm']
-        if h_col(col) + h_agg > z_max:
+        if h_usata(col) + h_agg > z_max:
             return False
-
-        # V5: peso
+        # 2. Peso
         if col['peso'] + part['peso_kg'] > max_kg:
             return False
-
-        # V2: larghezza — il pezzo ha già n_slots assegnato
-        # I nuovi slot che servono devono essere liberi
-        ns = part.get('n_slots', 1)
-        if ns > 1:
-            # Pezzo multi-slot: dobbiamo trovare ns slot consecutivi liberi
-            # partendo dallo start_slot della colonna
-            start = col['start_slot']
-            for s in range(start, start + ns):
-                if s != col['start_slot'] and s in slot_occupato and slot_occupato.get(s) != col_idx:
-                    return False
-
-        # V4: profondità / curva
-        D = part.get('D_mm', min(part['largh_mm'], passo_mm * 0.8))
-        D = min(D, passo_mm)
-        if not vincolo_curva_ok(col['start_slot'], D):
+        # 3. Vincolo laterale (NO sovrapposizione tra colonne)
+        if not vincolo_laterale_ok(col_idx, part['largh_mm']):
             return False
-
+        # 4. Vincolo curva (profondita' Z)
+        D = part.get('D_mm', min(part['largh_mm'], 200))
+        if not vincolo_curva_ok(col_idx, D):
+            return False
         return True
 
-    def do_add(col, col_idx, part):
+    def do_add(col, part):
         col['pezzi'].append(part)
         col['peso'] = round(col['peso'] + part['peso_kg'], 2)
-        D = part.get('D_mm', min(part['largh_mm'], passo_mm * 0.8))
-        col['D_max'] = max(col['D_max'], min(D, passo_mm))
-        # Aggiorna slot occupati per i nuovi slot del pezzo
-        ns = part.get('n_slots', 1)
-        start = col['start_slot']
-        occupa_slots(start, ns, col_idx)
+        D = part.get('D_mm', min(part['largh_mm'], 200))
+        col['D_max'] = max(col['D_max'], D)
+        col['W_max'] = max(col.get('W_max', 0.0), part['largh_mm'])
 
-    # ── Arricchisci parti con n_slots e orientamenti ──────────────────
-    enriched = []
-    for p in parts:
-        W0, H0 = p['largh_mm'], p['alt_mm']
-        W90, H90 = H0, W0
+    for part in sorted_parts:
+        W0, H0 = part['largh_mm'], part['alt_mm']
+        W90, H90 = H0, W0  # pezzo ruotato 90deg
 
-        ns0  = slot_necessari(W0)
-        ns90 = slot_necessari(W90)
+        p_std = dict(part, largh_mm=W0,  alt_mm=H0,  rotated=False, orientamento='standard')
+        p_rot = dict(part, largh_mm=W90, alt_mm=H90, rotated=True,  orientamento='ruotato_90')
 
-        # Orientamento standard
-        p_std = dict(p, largh_mm=W0,  alt_mm=H0,
-                     n_slots=ns0,  rotated=False, orientamento='standard')
-        # Orientamento ruotato 90°
-        p_rot = dict(p, largh_mm=W90, alt_mm=H90,
-                     n_slots=ns90, rotated=True,  orientamento='ruotato_90')
-
-        enriched.append((p_std, p_rot))
-
-    # Ordina per area decrescente (FFD: pezzi grandi prima)
-    enriched.sort(key=lambda x: x[0]['largh_mm'] * x[0]['alt_mm'], reverse=True)
-
-    columns = []
-    next_free_slot = 0   # prossimo slot disponibile per nuova colonna
-
-    for p_std, p_rot in enriched:
         placed = False
-
-        # Prova a inserire in colonna esistente
-        for col_idx, col in enumerate(columns):
+        for idx, col in enumerate(columns):
             # Prova standard
-            if can_add(col_idx, col, p_std):
-                do_add(col, col_idx, p_std)
+            if can_add(idx, col, p_std):
+                do_add(col, p_std)
                 placed = True
                 break
-            # Prova ruotato (solo se riduce altezza o larghezza)
-            if p_rot['alt_mm'] < p_std['alt_mm'] or p_rot['n_slots'] < p_std['n_slots']:
-                if can_add(col_idx, col, p_rot):
-                    do_add(col, col_idx, p_rot)
-                    placed = True
-                    break
+            # Prova ruotato (se riduce altezza O larghezza)
+            if can_add(idx, col, p_rot):
+                do_add(col, p_rot)
+                placed = True
+                break
 
         if not placed:
-            # Nuova colonna: scegli orientamento migliore
-            # Preferisci quello con meno slot (larghezza minore)
-            if p_rot['n_slots'] < p_std['n_slots'] and p_rot['alt_mm'] <= z_max:
-                chosen = p_rot
-            elif p_std['alt_mm'] <= z_max:
-                chosen = p_std
+            new_col = {
+                'start_slot': len(columns),
+                'n_slots':    1,
+                'peso':       0.0,
+                'color':      COLORS[len(columns) % len(COLORS)],
+                'pezzi':      [],
+                'D_max':      0.0,
+                'W_max':      0.0,
+            }
+            # Scegli orientamento: preferisci quello che minimizza la larghezza
+            # (meno larghezza = meno blocco per colonne adiacenti future)
+            # poi quello che minimizza l'altezza (massimizza riempimento verticale)
+            use_rot = False
+            if W90 < W0 and H90 <= z_max:
+                use_rot = True
+            elif H90 < H0 and W90 <= (passo_mm * 2 - gap_lat) and H90 <= z_max:
+                use_rot = True
+
+            if use_rot:
+                do_add(new_col, p_rot)
+            elif H0 <= z_max:
+                do_add(new_col, p_std)
             else:
-                # Pezzo troppo alto anche ruotato: mettilo comunque
-                chosen = p_rot if p_rot['alt_mm'] < p_std['alt_mm'] else p_std
+                do_add(new_col, p_std)
+            columns.append(new_col)
 
-            ns = chosen['n_slots']
-            col_idx = len(columns)
-            col = nuova_col(next_free_slot, ns, COLORS[col_idx % len(COLORS)])
-            columns.append(col)
-            do_add(col, col_idx, chosen)
-            next_free_slot += ns   # salta i slot occupati dal pezzo
-
-    # ── Calcola statistiche per ogni colonna ─────────────────────────
+    # Calcola saturazione per ogni colonna
     for col in columns:
-        h = h_col(col)
+        h = h_usata(col)
         col['h_usata_mm']  = int(round(h))
-        col['h_libera_mm'] = int(round(max(0, z_max - h)))
+        col['h_libera_mm'] = int(round(z_max - h))
         col['sat_pct']     = round(100.0 * h / z_max, 1)
-        col.pop('h_usata', None)  # rimuovi campo interno
 
+    # Saturazione globale (spazio altezza usato / spazio totale disponibile)
     n_col = len(columns)
     if n_col:
-        sat_glob = round(
-            sum(c['h_usata_mm'] for c in columns) / (z_max * n_col) * 100, 1)
+        sat_glob = round(sum(c['h_usata_mm'] for c in columns) / (z_max * n_col) * 100, 1)
         for col in columns:
             col['sat_globale_pct'] = sat_glob
 
