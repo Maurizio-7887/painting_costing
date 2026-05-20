@@ -14,6 +14,13 @@
         {{ asm.nome }} · ×{{ ordine.n_unita }} unità · Phase 3: Sospensione pensile + CoG alignment + Load balance
       </div>
     </div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <a href="{{ url_for('cad_nesting_manuale', ordine_id=ordine.id) }}" class="btn-out"
+         style="border-color:rgba(255,171,0,.3);color:#ffab00"
+         title="Apri canvas nesting manuale drag-drop">
+        <i class="bi bi-hand-index"></i> Manuale
+      </a>
+    </div>
     {% if nesting %}
     <div style="margin-left:auto;display:flex;gap:8px">
       <a href="{{ url_for('cad_viewer3d', ordine_id=ordine.id) }}" class="btn-grn">
