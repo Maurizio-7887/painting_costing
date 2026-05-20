@@ -34,6 +34,19 @@ from collections import defaultdict
 
 from flask import (Flask, render_template, request, redirect, url_for,
                    flash, jsonify, Response, send_file)
+
+# ── MODULI NESTING ───────────────────────────────────────────────
+try:
+    from nesting_export_routes import register_export_routes
+    _HAS_EXPORT_ROUTES = True
+except ImportError:
+    _HAS_EXPORT_ROUTES = False
+
+try:
+    from nesting_manual_routes import register_manual_routes
+    _HAS_MANUAL_ROUTES = True
+except ImportError:
+    _HAS_MANUAL_ROUTES = False
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
@@ -431,6 +444,13 @@ with app.app_context():
         # Table may not exist yet (before first migration); seed will run on next startup.
         db.session.rollback()
 
+
+# ── REGISTER MODULI NESTING ──────────────────────────────────────
+if _HAS_EXPORT_ROUTES:
+    register_export_routes(app, db, OrdineCAD, BOMAssembly, BOMRecordCAD, ItemMasterCAD)
+
+if _HAS_MANUAL_ROUTES:
+    register_manual_routes(app, db, OrdineCAD, BOMAssembly, BOMRecordCAD, ItemMasterCAD, Configurazione)
 
 # ── ABC COSTING ─────────────────────────────────────────────────
 
