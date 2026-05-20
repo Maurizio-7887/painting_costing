@@ -1,5 +1,5 @@
 """
-ENOROSSI Paint Optimizer v4.0
+ENOROSSI Paint Optimizer v4.0 
 app.py — Flask application completa
 Collega tutti i 18 template HTML con le route Flask.
 
