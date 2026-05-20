@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Lotto Operaio — ENOROSSI{% endblock %}
-{% block page_title %}Lotto #{{ lotto.id }}{% endblock %}
-{% block content %}
-<div style="text-align:center;padding:48px;color:var(--muted)">
-  <a href="{{ url_for('lotto_detail', lotto_id=lotto.id) }}" class="btn-grn"><i class="bi bi-eye"></i>Vedi dettaglio lotto</a>
-</div>
-{% endblock %}
