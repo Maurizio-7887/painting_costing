@@ -71,6 +71,7 @@
               <th>CoG Z</th>
               <th>Passo</th>
               <th>Mesh</th>
+              <th>3D</th>
             </tr>
           </thead>
           <tbody>
@@ -98,6 +99,18 @@
                 {% else %}
                   <span class="bdg bdg-gray">est.</span>
                 {% endif %}
+              </td>
+              <td style="text-align:center">
+                <a href="{{ url_for('cad_part_viewer', codice=item.codice_art) }}"
+                   target="_blank"
+                   title="Visualizza pezzo 3D"
+                   style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:rgba(88,166,255,.12);color:#58A6FF;font-size:.7rem;text-decoration:none;border:1px solid rgba(88,166,255,.25)">
+                  {% if item.mesh_presente %}
+                    <i class="bi bi-box-fill"></i>
+                  {% else %}
+                    <i class="bi bi-box-seam"></i>
+                  {% endif %}
+                </a>
               </td>
             </tr>
             {% endfor %}

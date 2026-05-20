@@ -22,6 +22,12 @@
       <a href="{{ url_for('cad_nesting_png', ordine_id=ordine.id) }}" class="btn-out" target="_blank">
         <i class="bi bi-image"></i> PNG
       </a>
+      <a href="{{ url_for('nesting_export_svg', ordine_id=ordine.id) }}" class="btn-out" target="_blank">
+        <i class="bi bi-filetype-svg"></i> SVG
+      </a>
+      <a href="{{ url_for('nesting_export_dxf', ordine_id=ordine.id) }}" class="btn-out" target="_blank">
+        <i class="bi bi-filetype-raw"></i> DXF
+      </a>
       <a href="{{ url_for('api_cad_esplodi', ordine_id=ordine.id) }}" class="btn-out" target="_blank">
         <i class="bi bi-braces"></i> BOM esplosa
       </a>
@@ -171,6 +177,12 @@
             <a href="{{ url_for('cad_nesting_png', ordine_id=ordine.id) }}" class="btn-out" style="padding:.2rem .6rem;font-size:.7rem" target="_blank">
               <i class="bi bi-download me-1"></i>PNG
             </a>
+              <a href="{{ url_for('nesting_export_svg', ordine_id=ordine.id) }}" class="btn-out" style="padding:.2rem .6rem;font-size:.7rem" target="_blank">
+                <i class="bi bi-filetype-svg me-1"></i>SVG
+              </a>
+              <a href="{{ url_for('nesting_export_dxf', ordine_id=ordine.id) }}" class="btn-out" style="padding:.2rem .6rem;font-size:.7rem" target="_blank">
+                <i class="bi bi-filetype-raw me-1"></i>DXF
+              </a>
           </div>
           <div class="card-body" style="overflow-x:auto">
             <!-- Visualizzazione SVG/canvas della barra -->

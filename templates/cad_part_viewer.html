@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+{% block title %}Viewer 3D — {{ item.codice_art }}{% endblock %}
+
+{% block content %}
+<style>
+  .main { margin-left: 0 !important; }
+  .sb, .topbar { display: none !important; }
+  body { overflow: hidden; margin: 0; background: #1C1F26; }
+
+  #viewer-canvas-wrap {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+    background: #1C1F26;
+  }
+
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 100;
+    background: #0D1117;
+    border-bottom: 1px solid rgba(0,200,80,.35);
+    display: flex; align-items: center; padding: 0 16px; gap: 14px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  #info-panel {
+    position: fixed; top: 60px; right: 16px; z-index: 100;
+    background: rgba(13,17,23,.92); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px; padding: 14px 16px; min-width: 220px;
+    font-family: 'Inter', sans-serif; font-size: .76rem; color: #8B949E;
+    backdrop-filter: blur(8px);
+  }
+
+  #info-panel .val { color: #E6EDF3; font-weight: 600; }
+  #info-panel .row-kpi { display:flex; justify-content:space-between; margin-bottom: 7px; }
+  #info-panel .lbl { color: #566880; }
+
+  #controls {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 100; display: flex; gap: 8px;
+    background: rgba(13,17,23,.85); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 20px; padding: 6px 14px;
+    font-family: 'Inter', sans-serif; font-size: .72rem; color: #566880;
+  }
+
+  #loading-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: #1C1F26;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+  }
+  #loading-bar { width: 220px; height: 3px; background: rgba(255,255,255,.08);
+                 border-radius: 2px; overflow: hidden; margin-top: 14px; }
+  #loading-fill { height: 100%; background: #00C851; width: 0%;
+                  transition: width .3s; }
+
+  .btn-ctrl {
+    background: none; border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px; color: #8B949E; padding: 3px 10px; cursor: pointer;
+    font-size: .71rem; transition: all .15s;
+  }
+  .btn-ctrl:hover { background: rgba(255,255,255,.06); color: #E6EDF3; }
+
+  #cog-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(0,200,80,.1); border: 1px solid rgba(0,200,80,.3);
+    border-radius: 4px; padding: 2px 7px; font-size: .68rem; color: #00C851;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+</style>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div style="font-family:'Orbitron',monospace;font-size:.9rem;font-weight:700;
+              letter-spacing:2px;color:#00C851">CARICAMENTO GEOMETRIA</div>
+  <div style="color:#566880;font-size:.75rem;margin-top:6px">
+    {{ item.codice_art }} — {{ item.nome }}
+  </div>
+  <div id="loading-bar"><div id="loading-fill"></div></div>
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <a href="javascript:history.back()"
+     style="color:#566880;text-decoration:none;font-size:.78rem;display:flex;align-items:center;gap:4px">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M19 12H5M12 5l-7 7 7 7"/>
+    </svg> BOM
+  </a>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.08)"></div>
+  <span style="font-family:'Orbitron',monospace;font-size:.82rem;font-weight:700;
+               letter-spacing:2px;color:#00C851">VIEWER 3D</span>
+  <span style="font-size:.76rem;color:#8B949E">{{ item.codice_art }}</span>
+  <span style="font-size:.75rem;color:#566880">{{ item.nome }}</span>
+
+  {% if not item.mesh_presente %}
+  <span style="font-size:.68rem;color:#F0883E;background:rgba(240,136,62,.1);
+               border:1px solid rgba(240,136,62,.3);border-radius:4px;padding:2px 8px">
+    ⚠ Bounding Box (geometria STL non disponibile)
+  </span>
+  {% endif %}
+
+  <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <span id="cog-badge" class="cog-badge">● CoG</span>
+  </div>
+</div>
+
+<!-- Info panel -->
+<div id="info-panel">
+  <div style="font-size:.68rem;color:#00C851;font-weight:700;
+              text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">
+    Dati Geometrici
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">Codice</span>
+    <span class="val" style="color:#00C851;font-size:.7rem">{{ item.codice_art }}</span>
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">Dimensioni</span>
+    <span class="val">
+      {{ item.lunghezza_mm|int }}×{{ item.larghezza_mm|int }}×{{ item.altezza_mm|int }} mm
+    </span>
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">Peso</span>
+    <span class="val">{{ "%.2f"|format(item.peso_kg) }} kg</span>
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">Superficie</span>
+    <span class="val">{{ "%.4f"|format(item.superficie_m2) }} m²</span>
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">CoG Z</span>
+    <span class="val">{{ item.cog_z_mm|int }} mm</span>
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">Passo gancio</span>
+    <span class="val">{{ item.passo_gancio_m }} m</span>
+  </div>
+  <div class="row-kpi">
+    <span class="lbl">Mesh</span>
+    <span class="val" style="color:{% if item.mesh_presente %}#00C851{% else %}#F0883E{% endif %}">
+      {% if item.mesh_presente %}STL reale{% else %}BBox stima{% endif %}
+    </span>
+  </div>
+
+  <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);
+              font-size:.65rem;color:#566880">
+    Trascina per ruotare · Scroll per zoom<br>
+    Click destro per traslare
+  </div>
+</div>
+
+<!-- Controls bottom bar -->
+<div id="controls">
+  <button class="btn-ctrl" onclick="resetCamera()">↺ Reset</button>
+  <button class="btn-ctrl" onclick="setView('front')">Front</button>
+  <button class="btn-ctrl" onclick="setView('top')">Top</button>
+  <button class="btn-ctrl" onclick="setView('iso')">ISO</button>
+  <button class="btn-ctrl" onclick="toggleWireframe()">Wireframe</button>
+  <button class="btn-ctrl" onclick="toggleCog()">CoG</button>
+</div>
+
+<!-- Three.js canvas -->
+<div id="viewer-canvas-wrap">
+  <canvas id="three-canvas" style="width:100%;height:100%;display:block;"></canvas>
+</div>
+
+<!-- Three.js CDN (r158 — stabile) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// VIEWER THREE.JS — ENOROSSI Paint Optimizer
+// ══════════════════════════════════════════════════════════════════
+
+const GLB_URL   = "{{ glb_url }}";
+const CODICE    = "{{ item.codice_art }}";
+const COG_Z     = {{ item.cog_z_mm | float }};
+const DIM_L     = {{ item.lunghezza_mm | float }};
+const DIM_W     = {{ item.larghezza_mm | float }};
+const DIM_H     = {{ item.altezza_mm | float }};
+
+// ── Scene setup ──────────────────────────────────────────────────
+const canvas    = document.getElementById('three-canvas');
+const renderer  = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.setClearColor(0x1C1F26);
+
+const scene     = new THREE.Scene();
+const camera    = new THREE.PerspectiveCamera(45, 1, 0.1, 100000);
+
+const controls  = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = true;
+
+// ── Lights ───────────────────────────────────────────────────────
+const ambLight = new THREE.AmbientLight(0xffffff, 0.55);
+scene.add(ambLight);
+
+const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.85);
+dirLight1.position.set(1, 2, 1.5);
+dirLight1.castShadow = true;
+scene.add(dirLight1);
+
+const dirLight2 = new THREE.DirectionalLight(0x6688aa, 0.35);
+dirLight2.position.set(-1, -0.5, -1);
+scene.add(dirLight2);
+
+// ── Grid helper ──────────────────────────────────────────────────
+const maxDim = Math.max(DIM_L, DIM_W, DIM_H);
+const gridSize = Math.ceil(maxDim / 100) * 100 * 3;
+const gridDiv  = Math.floor(gridSize / 100);
+const gridHelper = new THREE.GridHelper(gridSize, gridDiv, 0x2A2E38, 0x2A2E38);
+gridHelper.position.y = -DIM_H / 2;
+scene.add(gridHelper);
+
+// ── CoG sphere (verde) ───────────────────────────────────────────
+const cogGeo  = new THREE.SphereGeometry(Math.max(maxDim * 0.02, 5), 16, 16);
+const cogMat  = new THREE.MeshStandardMaterial({ color: 0x00C851, emissive: 0x00C851,
+                                                  emissiveIntensity: 0.4 });
+const cogMesh = new THREE.Mesh(cogGeo, cogMat);
+cogMesh.position.set(0, COG_Z - DIM_H/2, 0);
+cogMesh.visible = true;
+scene.add(cogMesh);
+
+// ── Bounding box outline ─────────────────────────────────────────
+const bbGeo  = new THREE.BoxGeometry(DIM_L, DIM_H, DIM_W);
+const bbEdges= new THREE.EdgesGeometry(bbGeo);
+const bbLine = new THREE.LineSegments(
+  bbEdges,
+  new THREE.LineBasicMaterial({ color: 0x00C851, opacity: 0.25, transparent: true })
+);
+scene.add(bbLine);
+
+// ── Variabili stato ──────────────────────────────────────────────
+let loadedMesh   = null;
+let wireframeOn  = false;
+let originalMats = [];
+
+// ── Funzioni controllo ───────────────────────────────────────────
+function fitCameraToObject(object) {
+  const box    = new THREE.Box3().setFromObject(object);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+  const maxSz  = Math.max(size.x, size.y, size.z);
+  const fov    = camera.fov * (Math.PI / 180);
+  let dist     = Math.abs(maxSz / Math.sin(fov / 2)) * 0.9;
+
+  camera.position.set(
+    center.x + dist * 0.6,
+    center.y + dist * 0.5,
+    center.z + dist * 0.7
+  );
+  controls.target.copy(center);
+  controls.update();
+}
+
+function resetCamera() {
+  if (loadedMesh) fitCameraToObject(loadedMesh);
+}
+
+function setView(v) {
+  if (!loadedMesh) return;
+  const box    = new THREE.Box3().setFromObject(loadedMesh);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+  const d      = Math.max(size.x, size.y, size.z) * 1.8;
+
+  controls.target.copy(center);
+  if (v === 'front') camera.position.set(center.x, center.y, center.z + d);
+  if (v === 'top')   camera.position.set(center.x, center.y + d, center.z);
+  if (v === 'iso')   camera.position.set(center.x + d*0.7, center.y + d*0.6, center.z + d*0.7);
+  controls.update();
+}
+
+function toggleWireframe() {
+  if (!loadedMesh) return;
+  wireframeOn = !wireframeOn;
+  loadedMesh.traverse(child => {
+    if (child.isMesh) {
+      if (wireframeOn) {
+        child.material.wireframe = true;
+      } else {
+        child.material.wireframe = false;
+      }
+    }
+  });
+}
+
+function toggleCog() {
+  cogMesh.visible = !cogMesh.visible;
+}
+
+// ── Barra progresso ──────────────────────────────────────────────
+function setProgress(p) {
+  document.getElementById('loading-fill').style.width = (p * 100) + '%';
+}
+
+// ── Carica GLB ───────────────────────────────────────────────────
+const loader = new THREE.GLTFLoader();
+loader.load(
+  GLB_URL,
+  (gltf) => {
+    loadedMesh = gltf.scene;
+
+    // Centra la mesh sull'origine
+    const box    = new THREE.Box3().setFromObject(loadedMesh);
+    const center = box.getCenter(new THREE.Vector3());
+    loadedMesh.position.sub(center);
+
+    // Materiale migliore se mesh è un bbox (colore metallo)
+    loadedMesh.traverse(child => {
+      if (child.isMesh) {
+        if (!child.material || child.material.type === 'MeshBasicMaterial') {
+          child.material = new THREE.MeshStandardMaterial({
+            color: 0x607080,
+            metalness: 0.45,
+            roughness: 0.55,
+          });
+        }
+        child.castShadow    = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    scene.add(loadedMesh);
+    fitCameraToObject(loadedMesh);
+
+    // Nascondi loading
+    document.getElementById('loading-overlay').style.display = 'none';
+  },
+  (xhr) => {
+    setProgress(xhr.loaded / (xhr.total || 1));
+  },
+  (err) => {
+    console.error('GLB load error:', err);
+    document.getElementById('loading-overlay').innerHTML =
+      `<div style="color:#D32F2F;font-size:.85rem;text-align:center">
+        Errore caricamento geometria<br>
+        <span style="color:#566880;font-size:.72rem">${err.message || ''}</span>
+      </div>`;
+  }
+);
+
+// ── Resize handler ───────────────────────────────────────────────
+function onResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+// ── Render loop ──────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+{% endblock %}
