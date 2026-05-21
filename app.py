@@ -2295,6 +2295,195 @@ def nesting_viewer():
     return render_template('nesting_viewer.html')
 
 
+@app.route('/api/nesting/lista_macchine')
+def api_nesting_lista_macchine():
+    """Ritorna lista macchine nel DB per il selettore nesting."""
+    macs = MacchinaCommessa.query.order_by(MacchinaCommessa.priorita, MacchinaCommessa.id).all()
+    return jsonify({'macchine': [{
+        'id':           m.id,
+        'nome_macchina':m.nome_macchina,
+        'commessa':     m.commessa,
+        'cliente':      m.cliente,
+        'colore':       m.colore,
+        'stato':        m.stato,
+        'n_componenti': len(m.componenti),
+    } for m in macs]})
+
+
+@app.route('/api/nesting/da_commessa/<int:mac_id>')
+def api_nesting_da_commessa(mac_id):
+    """Genera NDATA nesting da una MacchinaCommessa specifica."""
+    try:
+        from nesting_catena import alloca_pezzi, PezzoNesting
+    except ImportError:
+        return jsonify({'error': 'Modulo nesting_catena.py non trovato'}), 500
+
+    mac = MacchinaCommessa.query.get_or_404(mac_id)
+    cfg = get_config()
+
+    COLORS = [
+        '#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
+        '#69f0ae','#ffff00','#ff6e40','#b388ff','#18ffff'
+    ]
+    PASSO_MM = int(getattr(cfg, 'passo_gancio_mm', 400))
+    MAX_KG   = float(getattr(cfg, 'max_peso_gancio_kg', 60))
+    Z_MAX    = int(getattr(cfg, 'max_h_pezzo_mm', 2000))
+    GAP_MM   = 50
+
+    pezzi = []
+    for c in mac.componenti:
+        pezzi.append(PezzoNesting(
+            cod=c.codice or '?',
+            nome=c.descrizione or c.codice or '?',
+            L_mm=float(c.L_mm or 300),
+            H_mm=float(c.A_mm or 300),
+            P_mm=float(c.P_mm or 80),
+            peso_kg=float(c.peso_unitario or 1),
+            ganci_req=int(c.ganci_pdf or 1),
+            qty=int(c.qty or 1),
+        ))
+
+    if not pezzi:
+        return jsonify({'error': 'Nessun componente nella commessa'})
+
+    ganci = alloca_pezzi(pezzi, mac.ganci_slot or 7)
+
+    columns = []
+    for gi, gancio in enumerate(ganci):
+        col_pezzi = []
+        for p in gancio:
+            col_pezzi.append({
+                'nome':     p.nome if hasattr(p,'nome') else str(p),
+                'largh_mm': p.L_mm if hasattr(p,'L_mm') else 200,
+                'alt_mm':   p.H_mm if hasattr(p,'H_mm') else 200,
+                'D_mm':     p.P_mm if hasattr(p,'P_mm') else 80,
+                'peso_kg':  p.peso_kg if hasattr(p,'peso_kg') else 1,
+                'n_slots':  p.ganci_req if hasattr(p,'ganci_req') else 1,
+            })
+        columns.append({
+            'start_slot': gi,
+            'n_slots':    1,
+            'pezzi':      col_pezzi,
+            'peso':       sum(p.get('peso_kg',0) for p in col_pezzi),
+            'sat_pct':    min(100, sum(p.get('alt_mm',0)+GAP_MM for p in col_pezzi)/Z_MAX*100),
+            'color':      COLORS[gi % len(COLORS)],
+        })
+
+    total_slots = len(columns)
+    peso_tot    = sum(c['peso'] for c in columns)
+    sat_glob    = min(100, sum(
+        sum(p.get('alt_mm',0)+GAP_MM for p in c['pezzi'])/Z_MAX/max(total_slots,1)*100
+        for c in columns)) if columns else 0
+
+    return jsonify({
+        'ok':          True,
+        'sorgente':    f'Commessa {mac.commessa} — {mac.nome_macchina}',
+        'passo_mm':    PASSO_MM,
+        'z_max_mm':    Z_MAX,
+        'max_kg':      MAX_KG,
+        'gap_mm':      GAP_MM,
+        'total_slots': total_slots,
+        'columns':     columns,
+        'n_pezzi':     len(pezzi),
+        'peso_totale': round(peso_tot, 2),
+        'sat_globale': round(sat_glob, 1),
+    })
+
+
+@app.route('/api/nesting/da_db')
+def api_nesting_da_db():
+    """Genera NDATA nesting da una o più MacchinaCommessa selezionate."""
+    try:
+        from nesting_catena import alloca_pezzi, PezzoNesting
+    except ImportError:
+        return jsonify({'error': 'Modulo nesting_catena.py non trovato'}), 500
+
+    mac_ids_str = request.args.get('mac_ids', '')
+    if not mac_ids_str:
+        return jsonify({'error': 'Nessuna macchina selezionata'})
+
+    try:
+        mac_ids = [int(x) for x in mac_ids_str.split(',') if x.strip()]
+    except ValueError:
+        return jsonify({'error': 'mac_ids non validi'})
+
+    cfg = get_config()
+    COLORS = [
+        '#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
+        '#69f0ae','#ffff00','#ff6e40','#b388ff','#18ffff'
+    ]
+    PASSO_MM = int(getattr(cfg, 'passo_gancio_mm', 400))
+    MAX_KG   = float(getattr(cfg, 'max_peso_gancio_kg', 60))
+    Z_MAX    = int(getattr(cfg, 'max_h_pezzo_mm', 2000))
+    GAP_MM   = 50
+
+    # Raccogli tutti i pezzi da tutte le macchine selezionate
+    tutti_pezzi = []
+    for mac_id in mac_ids:
+        mac = MacchinaCommessa.query.get(mac_id)
+        if not mac:
+            continue
+        for c in mac.componenti:
+            tutti_pezzi.append(PezzoNesting(
+                cod=c.codice or '?',
+                nome=c.descrizione or c.codice or '?',
+                L_mm=float(c.L_mm or 300),
+                H_mm=float(c.A_mm or 300),
+                P_mm=float(c.P_mm or 80),
+                peso_kg=float(c.peso_unitario or 1),
+                ganci_req=int(c.ganci_pdf or 1),
+                qty=int(c.qty or 1),
+            ))
+
+    if not tutti_pezzi:
+        return jsonify({'error': 'Nessun componente nelle macchine selezionate'})
+
+    n_ganci_tot = sum(
+        (MacchinaCommessa.query.get(mid).ganci_slot or 7)
+        for mid in mac_ids
+        if MacchinaCommessa.query.get(mid)
+    )
+
+    ganci = alloca_pezzi(tutti_pezzi, n_ganci_tot)
+
+    columns = []
+    for gi, gancio in enumerate(ganci):
+        col_pezzi = []
+        for p in gancio:
+            col_pezzi.append({
+                'nome':     p.nome if hasattr(p,'nome') else str(p),
+                'largh_mm': p.L_mm if hasattr(p,'L_mm') else 200,
+                'alt_mm':   p.H_mm if hasattr(p,'H_mm') else 200,
+                'D_mm':     p.P_mm if hasattr(p,'P_mm') else 80,
+                'peso_kg':  p.peso_kg if hasattr(p,'peso_kg') else 1,
+                'n_slots':  p.ganci_req if hasattr(p,'ganci_req') else 1,
+            })
+        columns.append({
+            'start_slot': gi,
+            'n_slots':    1,
+            'pezzi':      col_pezzi,
+            'peso':       sum(p.get('peso_kg',0) for p in col_pezzi),
+            'sat_pct':    min(100, sum(p.get('alt_mm',0)+GAP_MM for p in col_pezzi)/Z_MAX*100),
+            'color':      COLORS[gi % len(COLORS)],
+        })
+
+    total_slots = len(columns)
+    peso_tot    = sum(c['peso'] for c in columns)
+
+    return jsonify({
+        'ok':          True,
+        'sorgente':    f'DB — {len(mac_ids)} macchine',
+        'passo_mm':    PASSO_MM,
+        'z_max_mm':    Z_MAX,
+        'max_kg':      MAX_KG,
+        'gap_mm':      GAP_MM,
+        'total_slots': total_slots,
+        'columns':     columns,
+        'n_pezzi':     len(tutti_pezzi),
+        'peso_totale': round(peso_tot, 2),
+    })
+
+
 @app.route('/api/nesting/config')
 def api_nesting_config():
     """Ritorna parametri impianto dal DB Configurazione."""
@@ -3447,6 +3636,12 @@ def commesse():
     return render_template('commesse.html', macchine=macs)
 
 
+@app.route('/carico_giornaliero_redirect')
+def carico_giornaliero_redirect():
+    """Redirect vecchio URL al nuovo."""
+    return redirect(url_for('pagina_produzione'))
+
+
 @app.route('/commessa/nuova_pdf', methods=['GET', 'POST'])
 def commessa_nuova_pdf():
     parsed = None
@@ -3615,7 +3810,59 @@ def carico_giornaliero_delete(log_id):
     db.session.delete(log)
     db.session.commit()
     flash('Registrazione eliminata.', 'success')
-    return redirect(url_for('carico_giornaliero'))
+    return redirect(url_for('pagina_produzione'))
+
+
+# ══════════════════════════════════════════════════════════════════
+# PAGINA PRODUZIONE UNIFICATA (Macchine + Carico Giornaliero)
+# ══════════════════════════════════════════════════════════════════
+
+@app.route('/produzione')
+def pagina_produzione():
+    """Pagina unificata: macchine DB + carico giornaliero + lancio nesting."""
+    import json
+    from datetime import date
+
+    oggi_str = date.today().isoformat()
+    oggi_fmt = date.today().strftime('%d/%m/%Y')
+
+    # Macchine (tutte per i modal, priorità per visualizzazione)
+    macchine_tutte = MacchinaCommessa.query.order_by(
+        MacchinaCommessa.priorita, MacchinaCommessa.id).all()
+    macchine_attive = [m for m in macchine_tutte if m.stato != 'completato']
+
+    n_macchine     = len(macchine_tutte)
+    n_da_verniciare = len([m for m in macchine_tutte if m.stato == 'da_verniciare'])
+    n_urgenti      = len([m for m in macchine_tutte if m.priorita and m.priorita <= 2])
+
+    # Carico giornaliero
+    log_oggi_raw = CaricoDailyLog.query.filter_by(data=oggi_str)\
+        .order_by(CaricoDailyLog.id.desc()).all()
+    log_oggi = [{
+        'id':             l.id,
+        'ora':            l.ora[:5] if l.ora else '',
+        'commessa':       l.commessa,
+        'operaio':        l.operaio,
+        'colore':         l.colore,
+        'n_ganci':        l.n_ganci,
+        'kg_totali':      l.kg_totali,
+        'costo_calcolato':l.costo_calcolato,
+    } for l in log_oggi_raw]
+
+    giri_oggi  = len(log_oggi_raw)
+    costo_oggi = sum(l.costo_calcolato or 0 for l in log_oggi_raw)
+
+    return render_template('pagina_produzione.html',
+        oggi=oggi_fmt,
+        macchine=macchine_attive,
+        macchine_tutte=macchine_tutte,
+        n_macchine=n_macchine,
+        n_da_verniciare=n_da_verniciare,
+        n_urgenti=n_urgenti,
+        log_oggi=log_oggi,
+        giri_oggi=giri_oggi,
+        costo_oggi=costo_oggi,
+    )
 
 
 @app.route('/api/carico/ocr', methods=['POST'])
