@@ -47,6 +47,12 @@ try:
     _HAS_MANUAL_ROUTES = True
 except ImportError:
     _HAS_MANUAL_ROUTES = False
+
+try:
+    from nesting_ordine_routes import register_ordine_nesting_routes
+    _HAS_ORDINE_NESTING = True
+except ImportError:
+    _HAS_ORDINE_NESTING = False
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
@@ -451,6 +457,9 @@ if _HAS_EXPORT_ROUTES:
 
 if _HAS_MANUAL_ROUTES:
     register_manual_routes(app, db, OrdineCAD, BOMAssembly, BOMRecordCAD, ItemMasterCAD, Configurazione)
+
+if _HAS_ORDINE_NESTING:
+    register_ordine_nesting_routes(app, db, OrdineOrdine, ItemMasterCAD, Configurazione)
 
 # ── ABC COSTING ─────────────────────────────────────────────────
 
