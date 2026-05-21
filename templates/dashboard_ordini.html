@@ -1,0 +1,2403 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MASTERLOGISTIC — Ordini di Vendita</title>
+    <style>
+        /* RESET E LAYOUT BASE */
+        body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; overflow: hidden; }
+        .sidebar { width: 300px; background: #151515; padding: 15px; border-right: 2px solid #333; overflow-y: auto; flex-shrink: 0; }
+        .main-container { flex-grow: 1; position: relative; background: #000; display: flex; flex-direction: column; }
+        
+        /* GRIGLIA PDF TOTEM */
+        .main { width: 100%; height: 100%; display: grid; gap: 8px; padding: 8px; box-sizing: border-box; align-content: start; }
+        .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .grid-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .slot { background: #111; border: 1px solid #222; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100%; }
+        iframe { width: 100%; height: 100%; border: none; background: white; }
+ 
+        /* VISTA CARDS */
+        #archive-view, #oa-view, #solleciti-grid { display: none; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; background: #0a0a0a; }
+        .card-grid { display: flex; flex-wrap: wrap; gap: 15px; }
+        .mini-card { background: #1a1a1a; border: 1px solid #333; padding: 15px; border-radius: 10px; border-top: 4px solid #007bff; width: 300px; cursor: pointer; }
+        .mini-card.expanded { width: 450px; }
+ 
+        /* SIDEBAR E COMPONENTI */
+        .stat-card { padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px; font-weight: bold; }
+        .file-card { background: #222; padding: 10px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #444; position: relative; }
+        .file-card.is-active { border-left-color: #28a745; background: #1e251e; }
+        .evadibilita-badge { position: absolute; top: 5px; right: 5px; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background: rgba(0,0,0,0.5); border: 1px solid currentColor; }
+        
+        /* TABELLA WMS */
+        #production-view { display: none; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; background: #0a0a0a; }
+        .prod-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .prod-table th { background: #222; color: #f0ad4e; padding: 12px; text-align: center; border-bottom: 2px solid #333; text-transform: uppercase; }
+        .prod-table td { padding: 10px; border-bottom: 1px solid #222; text-align: center; }
+ 
+        /* BOTTONI */
+        .btn-main { border: none; padding: 8px; border-radius: 5px; width: 100%; cursor: pointer; font-weight: bold; color: white; margin-top: 5px; }
+        .btn-slot { background: #333; color: #ccc; border: none; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; font-weight: bold; }
+        .btn-slot.on { background: #28a745; color: white; box-shadow: 0 0 6px #28a745; }
+        .btn-ok { background: #d9534f; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 0.7rem; }
+        
+        .lista-articoli { margin: 5px 0; background: #111; padding: 6px; border-radius: 5px; }
+        .articolo-row { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 3px 0; border-bottom: 1px solid #222; }
+        .evaso { opacity: 0.3; text-decoration: line-through; color: #28a745; }
+ 
+        /* ── OVERLAY CARD APERTA ── */
+        .mini-card-v2.open {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            width: min(90vw, 900px);
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.75), 0 0 40px rgba(0,123,255,0.3);
+            border: 1px solid #007bff55;
+            background: #111;
+        }
+ 
+        /* ── MINI-CARD V2 ESPANDIBILI ── */
+        .mini-card-v2 {
+            position: relative;
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-radius: 10px;
+            width: 280px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        .mini-card-v2.open { box-shadow: 0 0 0 2px #007bff55; }
+        .mc-header {
+            padding: 10px 12px 8px;
+            cursor: pointer;
+            border-left: 4px solid #007bff;
+            user-select: none;
+        }
+        .mc-progress-bar {
+            height: 3px;
+            background: #222;
+            border-radius: 2px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .mc-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #00ff88);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+        .mc-header-body { margin-bottom: 6px; }
+        .mc-cliente { font-weight: 900; font-size: 1.0rem; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mc-conf { font-size: 0.68rem; color: #555; margin-top: 2px; }
+        .mc-conferma { font-size: 0.95rem; font-weight: 900; color: #00d2ff; margin-top: 2px; }
+ 
+        /* Stato generale tag */
+        .sg-tag { font-size: 0.62rem; padding: 3px 9px; border-radius: 8px; font-weight: 900; white-space: nowrap; border: 1px solid; letter-spacing: 0.3px; }
+        /* ROSSO PIENO — scritta bianca che risalta */
+        .sg-daordinare  { background:#c0152a; color:#ffffff; border-color:#ff000066; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+        .sg-mancanoconf { background:rgba(255,140,0,0.2);  color:#ff8c00; border-color:#ff8c0055; }
+        /* VERDE PIENO come EVADIBILE */
+        .sg-ordinconferm{ background:#1a6e30; color:#ffffff; border-color:#28a74566; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+        .sg-ordinarrivo { background:rgba(0,160,255,0.2);  color:#60b8ff; border-color:#0080ff55; }
+        /* VERDE PIENO */
+        .sg-evadibile    { background:#1a6e30;  color:#ffffff; border-color:#28a74566; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+        .sg-assemblabile { background:#4a235a;  color:#c39bd3; border-color:#9b59b655; }
+        .btn-dichiara-mo {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: linear-gradient(135deg, #7b2d8b, #4a1060);
+            color: #fff; border: 1px solid #9d4edd;
+            padding: 4px 12px; border-radius: 14px;
+            font-size: 11px; font-weight: bold; text-decoration: none;
+            cursor: pointer; vertical-align: middle; margin-left: 4px;
+            transition: opacity 0.15s;
+        }
+        .btn-dichiara-mo:hover { opacity: 0.85; color: #fff; }
+        .sg-imballare   { background:rgba(0,123,255,0.2);  color:#7ab8ff; border-color:#007bff44; }
+        .sg-evaso       { background:rgba(40,167,69,0.15);  color:#28a745; border-color:#28a74533; }
+        .sg-imballare   { background:rgba(0,123,255,0.15);  color:#7ab8ff; border-color:#007bff33; }
+        .sg-evaso       { background:rgba(40,167,69,0.08);  color:#555;    border-color:#33333355; }
+        /* SCADUTO — rosso lampeggiante, massima priorità visiva */
+        .sg-scaduto     { background:#8b0000; color:#ffffff; border-color:#ff000088; text-shadow:0 1px 3px rgba(0,0,0,0.8); animation: pulse-scad 1.2s ease-in-out infinite; }
+        @keyframes pulse-scad { 0%,100%{opacity:1; box-shadow:0 0 6px #ff000066;} 50%{opacity:0.82; box-shadow:0 0 14px #ff0000aa;} }
+        /* Card con bordo rosso se scaduta */
+        .mini-card-v2.scaduta { border-color: #8b0000 !important; box-shadow: inset 0 0 0 1px #8b000055; }
+        .mini-card-v2.scaduta .mc-header { border-left-color: #dc3545 !important; }
+        /* Badge data consegna cliente */
+        .badge-consegna { display:inline-flex; align-items:center; gap:4px; font-size:0.62rem; padding:2px 7px; border-radius:8px; border:1px solid #00d2ff44; color:#00d2ff; background:rgba(0,210,255,0.08); white-space:nowrap; cursor:pointer; transition:background 0.15s; }
+        .badge-consegna:hover { background:rgba(0,210,255,0.18); border-color:#00d2ff88; }
+        .badge-consegna.scaduta { border-color:#dc354588; color:#ff4d5e; background:rgba(220,53,69,0.12); animation: pulse-scad 1.2s ease-in-out infinite; }
+        .badge-consegna.imminente { border-color:#ffc10788; color:#ffc107; background:rgba(255,193,7,0.12); }
+        .badge-consegna { font-size:0.78rem; font-weight:bold; padding:4px 10px; border-radius:8px; border:2px solid #00d2ff66; }
+        .badge-new { position:absolute; top:8px; right:8px; font-size:0.65rem; font-weight:900; padding:2px 8px; border-radius:8px; border:1.5px solid #00d2ff; color:#00d2ff; background:rgba(0,210,255,0.08); letter-spacing:0.05em; animation: blink-new 1.1s step-start infinite; z-index:10; }
+        @keyframes blink-new { 0%,100%{opacity:1} 50%{opacity:0.2} }
+        .badge-consegna-mancante { display:inline-flex; align-items:center; gap:5px; font-size:0.72rem; font-weight:bold; padding:4px 10px; border-radius:8px; border:2px dashed #f0ad4e88; color:#f0ad4e; background:rgba(240,173,78,0.08); white-space:nowrap; cursor:pointer; animation: pulse-scad 1.5s ease-in-out infinite; }
+        .badge-consegna-mancante:hover { background:rgba(240,173,78,0.2); border-color:#f0ad4e; }
+ 
+        /* Filtri stato */
+        .filtri-stato { display:flex; gap:5px; flex-wrap:wrap; }
+        .filtro-btn { background:#1a1a1a; border:1px solid #333; color:#666; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:bold; cursor:pointer; }
+        .filtro-btn.active { background:#007bff22; border-color:#007bff; color:#7ab8ff; }
+        .filtro-btn.f-daordinare.active  { background:rgba(220,53,69,0.15);  border-color:#dc3545; color:#ff4d5e; }
+        .filtro-btn.f-lavorazione.active { background:rgba(255,140,0,0.15);  border-color:#ff8c00; color:#ff8c00; }
+        .filtro-btn.f-ordinconferm.active{ background:rgba(40,167,69,0.15);  border-color:#28a745; color:#28a745; }
+        .filtro-btn.f-ordinarrivo.active { background:rgba(0,160,255,0.15);  border-color:#60b8ff; color:#60b8ff; }
+        .filtro-btn.f-evadibile.active   { background:rgba(40,167,69,0.15);  border-color:#28a745; color:#28a745; }
+        .filtro-btn.f-imballare.active   { background:rgba(0,123,255,0.15);  border-color:#007bff; color:#7ab8ff; }
+        .filtro-btn.f-evaso.active       { background:rgba(100,100,100,0.15);border-color:#555;    color:#aaa; }
+        .filtro-btn.f-scaduto.active     { background:rgba(139,0,0,0.25);    border-color:#dc3545; color:#ff4d5e; font-weight:900; }
+ 
+        /* Tag imballaggio */
+        .tag-imballato  { background:rgba(23,162,184,0.15); color:#17a2b8; border:1px solid #17a2b833; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-daimballare{ background:rgba(0,123,255,0.15);  color:#7ab8ff; border:1px solid #007bff33; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+ 
+        /* Bottoni azione riga tabella */
+        .btn-imb    { background:#1a2a1a; color:#28a745; border:1px solid #28a74544; padding:2px 7px; border-radius:5px; font-size:0.75rem; text-decoration:none; }
+        .btn-imb-ok { background:#1a2030; color:#00d2ff; border-color:#00d2ff44; }
+        .mc-badges { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+        .mc-badge-evaso { font-size: 0.65rem; background: rgba(40,167,69,0.15); color: #28a745; border: 1px solid #28a74544; padding: 2px 6px; border-radius: 10px; }
+        .mc-badge-evad { font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; border: 1px solid; }
+        .evad-ok  { background: rgba(40,167,69,0.1);  color: #28a745; border-color: #28a74533; }
+        .evad-warn{ background: rgba(240,173,78,0.1); color: #f0ad4e; border-color: #f0ad4e33; }
+        .evad-ko  { background: rgba(220,53,69,0.1);  color: #dc3545; border-color: #dc354533; }
+        .mc-chevron { margin-left: auto; color: #444; font-size: 0.6rem; transition: transform 0.2s; }
+        .mini-card-v2.open .mc-chevron { transform: rotate(180deg); color: #007bff; }
+ 
+        .mc-body {
+            display: none;
+            padding: 8px 12px 12px;
+            border-top: 1px solid #1e1e1e;
+        }
+        .mini-card-v2.open .mc-body { display: block; }
+ 
+        .mc-art-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 0.78rem;
+        }
+        .mc-art-codice { color: #ccc; }
+        .mc-art-stato  { text-align: right; }
+ 
+        .tag-incasa    { background: rgba(40,167,69,0.15);  color: #28a745; border: 1px solid #28a74533; padding: 2px 7px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; }
+        .tag-ordinato  { background: rgba(0,123,255,0.12);  color: #7ab8ff; border: 1px solid #007bff33; padding: 2px 7px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; }
+        .tag-daordinare{ background: rgba(220,53,69,0.12);  color: #ff6b7a; border: 1px solid #dc354533; padding: 2px 7px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; }
+ 
+        /* Nuovi tag stato ordine */
+        .tag-evaso      { color:#28a745; font-size:0.65rem; font-weight:bold; }
+        .tag-confermato  { background:rgba(40,167,69,0.15);  color:#28a745; border:1px solid #28a74533; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-assemblabile{ background:rgba(155,89,182,0.15); color:#c39bd3; border:1px solid #9b59b633; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-ritirabile { background:rgba(255,193,7,0.15);  color:#ffc107; border:1px solid #ffc10733; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-inarrivo   { background:rgba(0,210,255,0.15);  color:#00d2ff; border:1px solid #00d2ff33; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-ordinatonc { background:rgba(255,123,0,0.15);  color:#ff8c00; border:1px solid #ff8c0033; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-daordinare    { background:rgba(220,53,69,0.15);  color:#ff4d5e; border:1px solid #dc354533; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-mancanoconf   { background:rgba(255,123,0,0.15);  color:#ff8c00; border:1px solid #ff8c0033; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-ordinconferm  { background:rgba(0,210,255,0.15);  color:#00d2ff; border:1px solid #00d2ff33; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+        .tag-ordinarrivo   { background:rgba(0,160,255,0.15);  color:#60b8ff; border:1px solid #0080ff33; padding:2px 6px; border-radius:6px; font-size:0.62rem; font-weight:bold; white-space:nowrap; }
+ 
+        /* Tabella card espansa */
+        .mc-table { width:100%; border-collapse:collapse; font-size:0.72rem; margin-top:6px; }
+        .mc-table th { background:#1a1a1a; color:#666; padding:5px 6px; text-align:left; font-size:0.6rem; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #2a2a2a; white-space:nowrap; }
+        .mc-table td { padding:5px 6px; border-bottom:1px solid #181818; vertical-align:middle; }
+        .mc-table tr:last-child td { border-bottom:none; }
+        .mc-tr-bom td { background:rgba(155,89,182,0.04); font-size:0.68rem; }
+        .mc-tr-bom td:first-child { border-left:3px solid #9b59b6 !important; padding-left:14px; }
+        .mc-tr-bom-L2 td:first-child { border-left:3px solid #6c3483 !important; padding-left:22px; }
+        .tag-bom-disp   { background:rgba(40,167,69,0.15);   color:#28a745; border:1px solid #28a74533; padding:1px 5px; border-radius:4px; font-size:0.6rem; white-space:nowrap; }
+        .tag-bom-parz   { background:rgba(240,173,78,0.15);  color:#f0ad4e; border:1px solid #f0ad4e33; padding:1px 5px; border-radius:4px; font-size:0.6rem; white-space:nowrap; }
+        .tag-bom-prod   { background:rgba(155,89,182,0.15);  color:#9b59b6; border:1px solid #9b59b633; padding:1px 5px; border-radius:4px; font-size:0.6rem; white-space:nowrap; }
+        .tag-bom-acquis { background:rgba(220,53,69,0.15);   color:#ff4d5e; border:1px solid #dc354533; padding:1px 5px; border-radius:4px; font-size:0.6rem; white-space:nowrap; }
+        .tag-bom-ordin  { background:rgba(0,210,255,0.12);   color:#00d2ff; border:1px solid #00d2ff44; padding:1px 5px; border-radius:4px; font-size:0.6rem; white-space:nowrap; }
+        .mc-tr-evaso td { opacity:0.3; text-decoration:line-through; }
+        .mc-tr-DA_ORDINARE td:first-child    { border-left:3px solid #dc3545; }
+        .mc-tr-MANCANO_CONFERME td:first-child { border-left:3px solid #ff8c00; }
+        .mc-tr-ORDINI_CONFERMATI td:first-child { border-left:3px solid #00d2ff; }
+        .mc-tr-ORDINI_IN_ARRIVO td:first-child  { border-left:3px solid #60b8ff; }
+        .mc-tr-ORDINATO_NC td:first-child { border-left:3px solid #ff8c00; }
+        .mc-tr-ORDINE_CONFERMATO td:first-child { border-left:3px solid #28a745; }
+        .mc-tr-IN_ARRIVO td:first-child { border-left:3px solid #00d2ff; }
+        .mc-tr-RITIRABILE td:first-child { border-left:3px solid #ffc107; }
+ 
+        .oa-style { border-left-color: #f0ad4e !important; }
+        .btn-slot-oa { background: #443322; color: #f0ad4e; border: 1px solid #664422; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; font-weight: bold; font-size: 10px; }
+        .btn-slot-oa.on { background: #f0ad4e; color: black; box-shadow: 0 0 6px #f0ad4e; }
+ 
+        /* PRE-BOLLE MARCELLO */
+        #prebolla-view { display: none; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; background: #0a0a0a; }
+        .pb-card { background: #161b22; border: 1px solid #333; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-left: 5px solid #e74c3c; }
+        .pb-card.fatta { border-left-color: #28a745; opacity: 0.5; }
+        .pb-cliente { font-size: 1.05rem; font-weight: 900; color: #00d2ff; margin-bottom: 4px; }
+        .pb-dettagli { font-size: 0.85rem; color: #ccc; margin-bottom: 6px; }
+        .pb-data { font-size: 0.75rem; color: #555; margin-bottom: 10px; }
+        .btn-bolla-fatta { background: #00ff88; color: #000; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 900; font-size: 0.95rem; cursor: pointer; width: 100%; }
+        .btn-bolla-fatta:hover { background: #00cc6a; }
+        .badge-fatta { background: #28a745; color: #fff; padding: 2px 10px; border-radius: 10px; font-size: 0.75rem; font-weight: bold; margin-left: 8px; }
+        .pb-badge-count { background: #e74c3c; color: white; border-radius: 50%; padding: 1px 7px; font-size: 0.75rem; font-weight: bold; margin-left: 6px; display: inline-block; }
+        /* ── DRAG & DROP PRIORITÀ ── */
+        .mini-card-v2.dragging { opacity: 0.35; transform: scale(0.97); }
+        .mini-card-v2.drag-over { border-color: #f0ad4e !important; box-shadow: 0 0 0 2px #f0ad4e44; }
+        .drag-handle {
+            cursor: grab; color: #333; font-size: 1rem;
+            padding: 2px 5px; border-radius: 4px;
+            margin-right: 5px; display: inline-block;
+            vertical-align: middle; user-select: none;
+        }
+        .drag-handle:hover { color: #f0ad4e; }
+        .card-lavoro-wrapper { position:relative; }
+        .priorita-badge {
+            display: inline-block; background: #111; color: #444;
+            border: 1px solid #2a2a2a; border-radius: 10px;
+            font-size: 0.62rem; padding: 1px 7px; margin-right: 4px;
+            vertical-align: middle; font-weight: bold; font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+ 
+<div class="sidebar">
+    <!-- ══ NAVIGAZIONE 4 MACROCATEGORIE ══ -->
+    <div style="display:flex; gap:5px; margin-bottom:5px;">
+        <a href="/" style="flex:1; display:block; text-align:center; background:#007bff; color:#fff; text-decoration:none; padding:7px 2px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #007bff;">🧾 VENDITE</a>
+        <a href="/acquisti" style="flex:1; display:block; text-align:center; background:#1a1a1a; color:#f0ad4e; text-decoration:none; padding:7px 2px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #f0ad4e44;">🛒 ACQUISTI</a>
+        <a href="/magazzino" style="flex:1; display:block; text-align:center; background:#1a1a1a; color:#28a745; text-decoration:none; padding:7px 2px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #28a74544;">📦 MAGAZZ.</a>
+    </div>
+    <div style="display:flex; gap:5px; margin-bottom:12px;">
+        <a href="/distinta_base" style="flex:1; display:block; text-align:center; background:#1a1a1a; color:#9b59b6; text-decoration:none; padding:7px 2px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #9b59b644;">🔩 DISTINTA</a>
+        <a href="/tasks" style="flex:1.4; display:block; text-align:center; background:#1a2a1a; color:#28a745; text-decoration:none; padding:7px 2px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #28a74544;">✅ TASK</a>
+    </div>
+    <div style="display:flex; gap:5px; margin-bottom:8px;">
+        <a href="/dichiarazioni_produzione" style="flex:1; display:block; text-align:center; background:rgba(74,35,90,0.35); color:#c39bd3; text-decoration:none; padding:7px 4px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #9b59b644;">🏭 MO / PROD.</a>
+        <a href="/programma_ritiro" style="flex:1.4; display:block; text-align:center; background:rgba(220,53,69,0.12); color:#ff4d5e; text-decoration:none; padding:7px 4px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #dc354544;">🚚 RITIRO</a>
+    </div>
+ 
+    <button onclick="goToPrebolle()" class="btn-main" style="background:#e74c3c; height: 42px; margin-bottom:6px; font-size: 0.95rem;">
+        📦 PRE-BOLLE MARCELLO <span class="pb-badge-count" id="badge-prebolla">{{ da_fare_count }}</span>
+    </button>
+ 
+    <form action="/upload" method="post" enctype="multipart/form-data" id="form-co">
+        <input type="file" name="file" id="file-co" accept=".pdf" style="display:none" onchange="document.getElementById('form-co').submit()">
+        <button type="button" onclick="document.getElementById('file-co').click()" class="btn-main" style="background:#007bff; height: 35px;">📄 CARICA CONFERMA ORDINE (CO)</button>
+        <div style="font-size:0.62rem;color:#555;text-align:center;margin-top:3px;">⚠ Ti verrà mostrata un'anteprima prima dell'inserimento</div>
+    </form>
+ 
+    <div style="border:1px solid #17a2b833; border-radius:7px; padding:8px; margin-top:6px;">
+        <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">DDT Vendita (chiusura ordine)</div>
+        <input type="file" name="file" id="file-ddt" accept=".pdf" style="display:none">
+        <button type="button" id="btn-ddt-unico" onclick="document.getElementById('file-ddt').click()" class="btn-main" style="background:#17a2b8; padding:8px 6px; font-size:0.78rem; line-height:1.3;">
+            📥 CARICA &amp; ELABORA DDT
+        </button>
+        <div id="ddt-status" style="font-size:0.7rem; color:#aaa; margin-top:4px; display:none;">⏳ Caricamento in corso...</div>
+    </div>
+    <script>
+    document.getElementById('file-ddt').addEventListener('change', function() {
+        if (!this.files.length) return;
+        const btn = document.getElementById('btn-ddt-unico');
+        const status = document.getElementById('ddt-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Caricamento...';
+        status.style.display = 'block';
+        const formData = new FormData();
+        formData.append('file', this.files[0]);
+        fetch('/upload_ddt_consegna', { method: 'POST', body: formData })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(data) {
+                if (data.ok && data.redirect) {
+                    status.textContent = '🔍 Apertura anteprima...';
+                    window.location.href = data.redirect;
+                } else {
+                    throw new Error(data.error || 'Errore sconosciuto');
+                }
+            })
+            .catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = '📥 CARICA & ELABORA DDT';
+                status.textContent = '❌ ' + err.message;
+                status.style.color = '#ff4d5e';
+            });
+    });
+    </script>
+ 
+ 
+    <div style="height:10px;"></div>
+ 
+ 
+ 
+    <div id="side-clienti">
+        <h4 style="color: #666; font-size: 0.7rem; margin-top: 10px; margin-bottom: 5px;"><div style="margin-bottom:8px;">
+        <a href="/valida_portafoglio" style="display:block; text-align:center; background:rgba(240,173,78,0.12); color:#f0ad4e; text-decoration:none; padding:7px 4px; border-radius:7px; font-weight:900; font-size:0.68rem; border:2px solid #f0ad4e44;">📋 VALIDA PORTAFOGLIO</a>
+    </div>
+    MONITORAGGIO CLIENTI</h4>
+        {% for lavoro in consegne + in_essere %}
+            {% if lavoro.in_slots %}
+            <div class="file-card is-active">
+                <div class="evadibilita-badge" style="color: {% if lavoro.evadibilita == 100 %}#28a745{% else %}#f0ad4e{% endif %}; border: 1px solid currentColor; padding: 2px 5px; border-radius: 4px;">
+        {{ lavoro.evadibilita }}%
+    </div>
+    
+    <b style="color:#28a745; font-size: 0.8rem;">{{ lavoro.conferma }}</b>
+                <div style="font-size: 10px; color: #aaa;">{{ lavoro.cliente }}</div>
+                
+                <div class="lista-articoli">
+                    {% for art in lavoro.articoli %}
+                    <div class="articolo-row {% if art.evaso %}evaso{% endif %}">
+                        <span>{{ art.codice }} <small>(x{{ art.qta }})</small></span>
+                        {% if not art.evaso %}<button class="btn-ok" onclick="location.href='/evadi_articolo/{{lavoro.filename}}/{{art.codice}}'">OK</button>{% else %}✔️{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+ 
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                    <div style="display:flex; gap:2px;">
+                        {% for i in range(1, 7) %}
+                        <button class="btn-slot {% if i in lavoro.in_slots %}on{% endif %}" onclick="location.href='/set_active/{{i}}/{{lavoro.filename}}'">{{ i }}</button>
+                        {% endfor %}
+                    </div>
+                    <button class="btn-main" style="background:#444; width: 28px; height: 28px; margin:0;" onclick="location.href='/set_active/0/{{lavoro.filename}}'">✖</button>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+ 
+    <div id="side-fornitori" style="display:none;">
+        <h4 style="color: #f0ad4e; font-size: 0.7rem; margin-top: 10px; margin-bottom: 5px; border-bottom: 1px solid #f0ad4e;">SOLLECITI IN CORSO</h4>
+        {% for ordine in ordini_acquisto %}
+            {% if ordine.in_slots %}
+            <div class="file-card oa-style is-active">
+                <b style="color:#f0ad4e;">OA: {{ ordine.ordine_n }}</b>
+                <div style="font-size: 10px;">Fornitore: {{ ordine.fornitore }}</div>
+                <div class="lista-articoli">
+                    {% for art in ordine.articoli %}
+                    <div class="articolo-row"><span>{{ art.codice }}</span><span>x{{ art.qta }}</span></div>
+                    {% endfor %}
+                </div>
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                    <div style="display:flex; gap:2px;">
+                        {% for i in range(1, 7) %}
+                        <button class="btn-slot-oa {% if i in ordine.in_slots %}on{% endif %}" onclick="location.href='/set_sollecito_active/{{i}}/{{ordine.filename}}'">{{ i }}</button>
+                        {% endfor %}
+                    </div>
+                    <button class="btn-main" style="background:#444; width: 28px; height: 28px; margin:0;" onclick="location.href='/set_sollecito_active/0/{{ordine.filename}}'">✖</button>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+ 
+<div class="main-container">
+    <div id="archive-view" style="display:block;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+            <h2 style="color:#007bff; margin:0;">🗂️ Ordini In Essere</h2>
+            <div style="position:relative; flex:1; min-width:200px; max-width:320px;">
+                <input type="text" id="search-cliente"
+                    placeholder="🔍 Cerca cliente..."
+                    oninput="cercaCliente(this.value)"
+                    style="width:100%; padding:7px 12px 7px 32px; background:#1a1a1a; border:1px solid #333; border-radius:20px; color:#e0e0e0; font-size:0.85rem; box-sizing:border-box;">
+                <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#555; font-size:0.8rem;">🔍</span>
+                <button onclick="document.getElementById('search-cliente').value=''; cercaCliente('');"
+                    style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#555; cursor:pointer; font-size:0.85rem;">✖</button>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+            <div class="filtri-stato">
+                <button class="filtro-btn active" onclick="filtraStato('TUTTI', this)">TUTTI</button>
+                <button class="filtro-btn f-scaduto" onclick="filtraStato('SCADUTO', this)">🚨 SCADUTI</button>
+                <button class="filtro-btn f-daordinare" onclick="filtraStato('ORDINARE_ARTICOLI', this)">🔴 ORDINARE ARTICOLI</button>
+                <button class="filtro-btn f-lavorazione" onclick="filtraStato('MANCANO_CONFERME', this)">🟠 MANCANO CONFERME</button>
+                <button class="filtro-btn f-ordinconferm" onclick="filtraStato('ORDINI_CONFERMATI', this)">🔵 ORDINI CONFERMATI</button>
+                <button class="filtro-btn f-ordinarrivo" onclick="filtraStato('ORDINI_IN_ARRIVO', this)">🚢 ORDINI IN ARRIVO</button>
+                <button class="filtro-btn f-evadibile" onclick="filtraStato('EVADIBILE', this)">✅ EVADIBILE</button>
+                <button class="filtro-btn f-imballare" onclick="filtraStato('DA_IMBALLARE', this)">📦 IMBALLARE</button>
+                <button class="filtro-btn f-evaso" onclick="filtraStato('EVASO', this)">✔ EVASI</button>
+            </div>
+        </div>
+        <div class="card-grid" id="cards-container">
+            {% for lavoro in consegne + in_essere %}
+                {% if not lavoro.in_slots %}
+ 
+                {# ── Calcola % evasione (articoli evasi / totale) ── #}
+                {% set tot = lavoro.articoli | length %}
+                {% set evasi_count = lavoro.articoli | selectattr('evaso') | list | length %}
+                {% set perc_evasione = ((evasi_count / tot * 100) | round(0) | int) if tot > 0 else 0 %}
+ 
+                <div class="mini-card-v2{% if lavoro.scaduto %} scaduta{% endif %}" 
+                     id="mc-{{ loop.index }}"
+                     draggable="true"
+                     data-stato="{{ lavoro.stato_generale }}"
+                     data-in-transito="{{ '1' if lavoro.ha_oa_in_transito else '0' }}"
+                     data-conferma="{{ lavoro.conferma }}"
+                     data-filename="{{ lavoro.filename }}"
+                     data-cliente="{{ lavoro.cliente | replace('"', '&quot;') }}"
+                     data-consegna="{{ lavoro.data_consegna_cliente }}">
+                    {%- if lavoro.is_new %}<span class="badge-new">NEW</span>{% endif %}
+ 
+                    {# ══ TESTATA MINI (sempre visibile) ══ #}
+                    <div class="mc-header" onclick="toggleCard('mc-{{ loop.index }}')">
+ 
+                        {# Barra progresso evasione #}
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill" style="width: {{ perc_evasione }}%;"></div>
+                        </div>
+ 
+                        <div class="mc-header-body">
+                            <div class="mc-cliente">
+                                <span class="drag-handle" onclick="event.stopPropagation()" title="Trascina per cambiare priorità">⠿</span>
+                                <span class="priorita-badge" id="badge-{{ loop.index }}">#{{ loop.index }}</span>
+                                {{ lavoro.cliente }}
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                <div class="mc-conferma">{{ lavoro.conferma }}</div>
+                                {% if lavoro.nota %}
+                                <div style="font-size:0.65rem; color:#f0ad4e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;" title="{{ lavoro.nota }}">
+                                    📝 {{ lavoro.nota[:40] }}{% if lavoro.nota|length > 40 %}…{% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+ 
+                        <div class="mc-badges">
+                            <span class="mc-badge-evaso">✔ {{ perc_evasione }}%</span>
+                            <span class="mc-badge-evad {% if lavoro.evadibilita == 100 %}evad-ok{% elif lavoro.evadibilita >= 50 %}evad-warn{% else %}evad-ko{% endif %}">
+                                📦 {{ lavoro.evadibilita }}%
+                            </span>
+                            {# STATO GENERALE #}
+                            {% if lavoro.stato_generale == 'SCADUTO' %}
+                                <span class="sg-tag sg-scaduto">🚨 SCADUTO</span>
+                            {% elif lavoro.stato_generale == 'ORDINARE_ARTICOLI' %}
+                                <span class="sg-tag sg-daordinare">🔴 ORDINARE ARTICOLI</span>
+                            {% elif lavoro.stato_generale == 'MANCANO_CONFERME' %}
+                                <span class="sg-tag sg-mancanoconf">🟠 MANCANO CONFERME</span>
+                            {% elif lavoro.stato_generale == 'ORDINI_CONFERMATI' %}
+                                <span class="sg-tag sg-ordinconferm">🔵 ORDINI CONFERMATI</span>
+                            {% elif lavoro.stato_generale == 'ORDINI_IN_ARRIVO' %}
+                                <span class="sg-tag sg-ordinarrivo">🚢 ORDINI IN ARRIVO</span>
+                            {% elif lavoro.stato_generale == 'DA_IMBALLARE' %}
+                                <span class="sg-tag sg-imballare">📦 DA IMBALLARE</span>
+                            {% elif lavoro.stato_generale == 'ASSEMBLABILE' %}
+                                <span class="sg-tag sg-assemblabile">🔧 ASSEMBLABILE</span>
+                                {# Pulsante MO — apre form dichiarazione produzione precompilato #}
+                                {% for art in lavoro.articoli if art.ha_distinta and not art.bom_bypassed %}
+                                <a href="/nuova_dp?conferma={{ lavoro.conferma }}&codice={{ art.codice }}&qta={{ art.qta_richiesta }}"
+                                   onclick="event.stopPropagation()"
+                                   class="btn-dichiara-mo"
+                                   title="Apri Manufacturing Order per {{ art.codice }}">
+                                    🏭 M.O. / Dichiara Produzione
+                                </a>
+                                {% endfor %}
+                            {% elif lavoro.stato_generale == 'EVADIBILE' %}
+                                <span class="sg-tag sg-evadibile">✅ EVADIBILE</span>
+                            {% elif lavoro.stato_generale == 'EVASO' %}
+                                <span class="sg-tag sg-evaso">✔ EVASO</span>
+                            {% else %}
+                                <span class="sg-tag sg-daordinare">🔴 ORDINARE ARTICOLI</span>
+                            {% endif %}
+                            {# BADGE DATA CONSEGNA CLIENTE — sempre visibile #}
+                            {% if lavoro.data_consegna_cliente %}
+                                <span class="badge-consegna{% if lavoro.scaduto %} scaduta{% endif %}"
+                                      onclick="event.stopPropagation(); apriDataConsegna('{{ lavoro.conferma }}', '{{ lavoro.data_consegna_cliente }}', 'mc-{{ loop.index }}')"
+                                      title="Data consegna concordata col cliente — clicca per modificare">
+                                    📅 {{ lavoro.data_consegna_cliente }}{% if lavoro.scaduto %} ⚠{% endif %}
+                                </span>
+                            {% else %}
+                                <span class="badge-consegna-mancante"
+                                      data-conferma="{{ lavoro.conferma }}"
+                                      data-cardid="mc-{{ loop.index }}"
+                                      onclick="event.stopPropagation(); apriModalDataCliente('{{ lavoro.conferma }}', 'mc-{{ loop.index }}')"
+                                      title="Nessuna data concordata — clicca per inserirla">
+                                    📅 Inserire data
+                                </span>
+                            {% endif %}
+                            <span class="mc-chevron">▼</span>
+                        </div>
+                    </div>
+ 
+                    {# ══ DETTAGLIO ESPANSO ══ #}
+                    <div class="mc-body">
+                        <table class="mc-table">
+                            <thead>
+                                <tr>
+                                    <th>Codice</th>
+                                    <th>Descrizione</th>
+                                    <th>Q.Ord</th>
+                                    <th>Q.Evasa</th>
+                                    <th>Q.Imb</th>
+                                    <th>In Casa</th>
+                                    <th>Stato</th>
+                                    <th>Fornitore</th>
+                                    <th>OA N°</th>
+                                    <th>In Arrivo</th>
+                                    <th>Data Arrivo</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for art in lavoro.articoli %}
+                            {# ── RIGA PRINCIPALE ARTICOLO ── #}
+                            <tr class="mc-tr-{{ art.stato_ordine }}">
+                                <td><b>{{ art.codice }}</b></td>
+                                <td><small>{{ art.desc }}</small></td>
+                                <td>{{ art.qta }}</td>
+                                <td>{{ art.qta_evasa if art.qta_evasa else '—' }}</td>
+                                <td>{{ art.qta_imballare if art.qta_imballare else '—' }}</td>
+                                {# In Casa: stock fisico allocato. Se 0, mostra —  #}
+                                <td style="font-weight:bold; color:{% if art.in_casa > 0 %}#28a745{% else %}#444{% endif %};">
+                                    {{ art.in_casa if art.in_casa > 0 else '—' }}
+                                </td>
+                                {# Stato: IN CASA / PARZIALE / stato OA / DA ORDINARE #}
+                                {# qta_res = quantità residua da evadere per questo articolo #}
+                                {% set qta_res = (art.qta | int) - (art.qta_evasa | int) %}
+                                <td>
+                                    {% if art.stato_ordine == 'EVASO' %}
+                                        <span class="tag-evaso">✔ EVASO</span>
+                                    {% elif art.stato_ordine == 'IMBALLATO' %}
+                                        <span class="tag-imballato">🚚 IMBALLATO</span>
+                                    {% elif art.stato_ordine == 'DA_IMBALLARE' %}
+                                        <span class="tag-daimballare">📦 DA IMBALLARE</span>
+                                    {% elif art.stato_ordine == 'DA_ORDINARE' %}
+                                        {# FIX: DA_ORDINARE comanda su tutto — anche se c'è BOM o OA parziale #}
+                                        <span class="tag-daordinare">🔴 DA ORDINARE</span>
+                                    {% elif art.bom_componenti %}
+                                        {# ── ARTICOLO CON DISTINTA BASE: stato dai componenti ── #}
+                                        {% set stati_bom = art.bom_componenti | map(attribute='stato') | list %}
+                                        {% if 'DA_ACQUISTARE' in stati_bom %}
+                                            <span class="tag-daordinare">🔴 DA ORDINARE</span>
+                                        {% elif 'PARZIALE' in stati_bom %}
+                                            <span class="tag-inarrivo">🔵 PARZIALE</span>
+                                        {% else %}
+                                            {# Tutti DISPONIBILE, ORDINATO o PRODUCIBILE — guarda OA componenti #}
+                                            {% set oa_comp = [] %}
+                                            {% for c in art.bom_componenti %}
+                                                {% if c.oa_dettaglio %}{% set _ = oa_comp.append(c.oa_dettaglio[0]) %}{% endif %}
+                                            {% endfor %}
+                                            {% if oa_comp %}
+                                                {% set primo_oa_c = oa_comp[0] %}
+                                                {% if '🚚' in primo_oa_c.stato_oa %}
+                                                    <span class="tag-ordinconferm">🚚 DA RITIRARE</span>
+                                                {% elif '📦' in primo_oa_c.stato_oa %}
+                                                    <span class="tag-ordinconferm">📦 IN CONSEGNA</span>
+                                                {% elif '🚢' in primo_oa_c.stato_oa %}
+                                                    <span class="tag-ordinarrivo">🚢 IN ARRIVO</span>
+                                                {% elif '✅' in primo_oa_c.stato_oa %}
+                                                    {% if art.in_casa > 0 %}
+                                                        <span class="tag-ordinconferm">✅ PARZ. + CONF.</span>
+                                                    {% else %}
+                                                        <span class="tag-confermato">✅ CONFERMATO</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="tag-ordinatonc">🔄 DA CONFERMARE</span>
+                                                {% endif %}
+                                            {% elif 'DISPONIBILE' in stati_bom or 'PRODUCIBILE' in stati_bom %}
+                                                <span class="tag-assemblabile">🔧 ASSEMBLABILE</span>
+                                            {% else %}
+                                                <span class="tag-ordinatonc">🔄 DA CONFERMARE</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% elif art.in_casa >= qta_res and qta_res > 0 and not art.oa_dettaglio %}
+                                        {# Tutto coperto fisicamente in magazzino, nessun OA aperto #}
+                                        <span class="tag-confermato">✅ IN CASA</span>
+                                    {% elif art.oa_dettaglio %}
+                                        {# C'è un OA attivo: mostra sempre lo stato dell'OA (anche se parte è già in casa) #}
+                                        {% set primo_oa = art.oa_dettaglio[0] %}
+                                        {% if art.in_casa > 0 %}
+                                            {# Parziale in casa + OA in corso: mostra stato OA con indicazione parziale #}
+                                            {% if '🚚' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinconferm">🚚 DA RITIRARE</span>
+                                            {% elif '📦' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinconferm">📦 IN CONSEGNA</span>
+                                            {% elif '🚢' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinarrivo">🚢 IN ARRIVO</span>
+                                            {% elif '✅' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinconferm">✅ PARZ. + CONF.</span>
+                                            {% else %}
+                                                <span class="tag-ordinatonc">🔄 PARZ. + OA</span>
+                                            {% endif %}
+                                        {% else %}
+                                            {# Nessuna merce fisica — mostra solo stato OA #}
+                                            {% if '🚚' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinconferm">🚚 DA RITIRARE</span>
+                                            {% elif '📦' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinconferm">📦 IN CONSEGNA</span>
+                                            {% elif '🚢' in primo_oa.stato_oa %}
+                                                <span class="tag-ordinarrivo">🚢 IN ARRIVO</span>
+                                            {% elif '✅' in primo_oa.stato_oa %}
+                                                <span class="tag-confermato">✅ CONFERMATO</span>
+                                            {% else %}
+                                                <span class="tag-ordinatonc">🔄 DA CONFERMARE</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% elif art.in_casa > 0 %}
+                                        {# Merce parzialmente in casa, nessun OA attivo #}
+                                        <span class="tag-inarrivo">🔵 PARZIALE</span>
+                                    {% else %}
+                                        <span class="tag-daordinare">🔴 DA ORDINARE</span>
+                                    {% endif %}
+                                </td>
+                                {# Prima riga OA (o vuoto se nessun OA) #}
+                                {% if art.oa_dettaglio %}
+                                    {% set oa = art.oa_dettaglio[0] %}
+                                    <td><small style="color:#f0ad4e;">{{ oa.fornitore }}</small></td>
+                                    <td>
+                                        {% if oa.filename_oa %}
+                                        <a href="/ordini_acquisto/elaborati/{{ oa.filename_oa }}" target="_blank"
+                                           onclick="event.stopPropagation();"
+                                           style="color:#f0ad4e; font-weight:bold; font-size:0.75rem; text-decoration:none;
+                                                  background:rgba(240,173,78,0.12); border:1px solid #f0ad4e44;
+                                                  padding:2px 7px; border-radius:5px; white-space:nowrap;">
+                                            📄 OA {{ oa.oa_n }}
+                                        </a>
+                                        {% else %}
+                                        <small style="color:#f0ad4e;">OA {{ oa.oa_n }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td style="color:#00d2ff;font-weight:bold;">{{ oa.qta }}</td>
+                                    <td><small style="color:#28a745;">{{ oa.data_arr if oa.data_arr else '—' }}</small></td>
+                                {% else %}
+                                    <td><small style="color:#444;">{{ art.fornitore }}</small></td>
+                                    <td><small style="color:#444;">—</small></td>
+                                    <td style="color:#444;">—</td>
+                                    <td><small style="color:#444;">—</small></td>
+                                {% endif %}
+                                <td>
+                                    {% if art.in_casa >= 1 and art.stato_ordine not in ['EVASO', 'IMBALLATO', 'DA_IMBALLARE'] %}
+                                        <button onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); mandaImballaggio(c.dataset.filename, '{{ art.codice }}', c.id)"
+                                           class="btn-imb" style="border:none; cursor:pointer;">📦</button>
+                                    {% elif art.stato_ordine == 'DA_IMBALLARE' %}
+                                        <div style="display:flex; gap:3px;">
+                                            <a href="/conferma_imballato/{{ lavoro.filename }}/{{ art.codice }}"
+                                               onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); if(c) sessionStorage.setItem('cardAperta', c.id);"
+                                               class="btn-imb btn-imb-ok">🚚</a>
+                                            <a href="/annulla_imballaggio/{{ lavoro.filename }}/{{ art.codice }}"
+                                               onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); if(c) sessionStorage.setItem('cardAperta', c.id);"
+                                               class="btn-imb" style="color:#ff4d5e; border-color:#dc354533;">↩️</a>
+                                        </div>
+                                    {% elif art.stato_ordine == 'IMBALLATO' %}
+                                        <a href="/annulla_imballaggio/{{ lavoro.filename }}/{{ art.codice }}"
+                                           onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); if(c) sessionStorage.setItem('cardAperta', c.id);"
+                                           class="btn-imb" style="color:#ff4d5e; border-color:#dc354533;">↩️</a>
+                                    {% endif %}
+                                    {# Pulsante Acquista finito: visibile per articoli con distinta base #}
+                                    {% if art.ha_distinta %}
+                                    <button onclick="event.stopPropagation(); toggleBomBypass('{{ lavoro.conferma }}','{{ art.codice }}',this)"
+                                        title="{% if art.bom_bypassed %}BOM ignorata — clicca per ripristinare la distinta{% else %}Ignora la distinta e acquista il prodotto finito direttamente{% endif %}"
+                                        style="margin-top:3px; display:block; width:100%; font-size:0.55rem; padding:2px 4px; border-radius:4px; cursor:pointer; white-space:nowrap;
+                                               {% if art.bom_bypassed %}background:rgba(255,193,7,0.15); color:#ffc107; border:1px solid #ffc10733;
+                                               {% else %}background:rgba(155,89,182,0.1); color:#9b59b6; border:1px solid #9b59b633;{% endif %}">
+                                        {% if art.bom_bypassed %}🔄 Ripristina BOM{% else %}🛒 Acquista finito{% endif %}
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {# Righe aggiuntive per OA 2,3,4... — solo colonne fornitore/oa/arrivo/data #}
+                            {% if art.oa_dettaglio and art.oa_dettaglio|length > 1 %}
+                                {% for oa in art.oa_dettaglio[1:] %}
+                                <tr class="mc-tr-{{ art.stato_ordine }}" style="opacity:0.75;">
+                                    <td colspan="7"></td>
+                                    <td><small style="color:#f0ad4e;">{{ oa.fornitore }}</small></td>
+                                    <td>
+                                        {% if oa.filename_oa %}
+                                        <a href="/ordini_acquisto/elaborati/{{ oa.filename_oa }}" target="_blank"
+                                           onclick="event.stopPropagation();"
+                                           style="color:#f0ad4e; font-weight:bold; font-size:0.75rem; text-decoration:none;
+                                                  background:rgba(240,173,78,0.12); border:1px solid #f0ad4e44;
+                                                  padding:2px 7px; border-radius:5px; white-space:nowrap;">
+                                            📄 OA {{ oa.oa_n }}
+                                        </a>
+                                        {% else %}
+                                        <small style="color:#f0ad4e;">OA {{ oa.oa_n }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td style="color:#00d2ff;font-weight:bold;">{{ oa.qta }}</td>
+                                    <td><small style="color:#28a745;">{{ oa.data_arr if oa.data_arr else '—' }}</small></td>
+                                    <td></td>
+                                </tr>
+                                {% endfor %}
+                            {% endif %}
+                            {# ── RIGHE COMPONENTI BOM (distinta base esplosa) ── #}
+                            {% if art.bom_componenti %}
+                            {% for comp in art.bom_componenti %}
+                            {% set indent_class = 'mc-tr-bom-L2' if comp.livello > 1 else 'mc-tr-bom' %}
+                            <tr class="{{ indent_class }}">
+                                <td style="color:#9b59b6; font-family:monospace; font-size:0.65rem; padding-left:{{ comp.livello * 10 + 8 }}px;">
+                                    {% for _ in range(comp.livello) %}└ {% endfor %}{{ comp.codice }}
+                                </td>
+                                <td style="color:#888; font-size:0.65rem;">{{ comp.desc }}</td>
+                                <td style="color:#aaa;">
+                                    {% if comp.qta_necessaria % 1 == 0 %}{{ comp.qta_necessaria | int }}{% else %}{{ comp.qta_necessaria | round(2) }}{% endif %}
+                                </td>
+                                <td>—</td>
+                                <td>—</td>
+                                <td style="color:{% if comp.qta_disponibile > 0 %}#28a745{% else %}#444{% endif %}; font-weight:bold;">
+                                    {{ comp.qta_disponibile | int if comp.qta_disponibile > 0 else '—' }}
+                                </td>
+                                <td>
+                                    {% if comp.stato == 'DISPONIBILE' %}
+                                        <span class="tag-confermato">✅ IN CASA</span>
+                                    {% elif comp.stato == 'ORDINATO' %}
+                                        {# Controlla stato OA del componente per dettaglio #}
+                                        {% if comp.oa_dettaglio %}
+                                            {% set oa_c = comp.oa_dettaglio[0] %}
+                                            {% if '🚚' in oa_c.stato_oa %}
+                                                <span class="tag-ordinconferm">🚚 DA RITIRARE</span>
+                                            {% elif '📦' in oa_c.stato_oa %}
+                                                <span class="tag-ordinconferm">📦 IN CONSEGNA</span>
+                                            {% elif '🚢' in oa_c.stato_oa %}
+                                                <span class="tag-ordinarrivo">🚢 IN ARRIVO</span>
+                                            {% elif '✅' in oa_c.stato_oa %}
+                                                <span class="tag-confermato">✅ CONFERMATO</span>
+                                            {% else %}
+                                                <span class="tag-ordinatonc">🔄 DA CONFERMARE</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="tag-ordinatonc">🔄 DA CONFERMARE</span>
+                                        {% endif %}
+                                    {% elif comp.stato == 'PARZIALE' %}
+                                        <span class="tag-inarrivo">🔵 PARZIALE</span>
+                                        {% if comp.qta_mancante > 0 %}
+                                        <span style="color:#ff4d5e; font-size:0.6rem; margin-left:3px;">−{{ comp.qta_mancante | int if comp.qta_mancante % 1 == 0 else comp.qta_mancante | round(2) }}</span>
+                                        {% endif %}
+                                    {% elif comp.stato == 'PRODUCIBILE' %}
+                                        <span class="tag-ordinatonc">🔩 PRODUCIBILE</span>
+                                    {% else %}
+                                        <span class="tag-daordinare">🔴 DA ORDINARE</span>
+                                        {% if comp.qta_mancante > 0 %}
+                                        <span style="color:#ff4d5e; font-size:0.6rem; margin-left:3px;">−{{ comp.qta_mancante | int if comp.qta_mancante % 1 == 0 else comp.qta_mancante | round(2) }}</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                {# OA del componente se presente #}
+                                {% if comp.oa_dettaglio %}
+                                {% set oa_c = comp.oa_dettaglio[0] %}
+                                <td><small style="color:#f0ad4e; font-size:0.6rem;">{{ oa_c.fornitore }}</small></td>
+                                <td>
+                                    {% if oa_c.filename_oa %}
+                                    <a href="/ordini_acquisto/elaborati/{{ oa_c.filename_oa }}" target="_blank"
+                                       onclick="event.stopPropagation();"
+                                       style="color:#f0ad4e; font-weight:bold; font-size:0.62rem; text-decoration:none;
+                                              background:rgba(240,173,78,0.1); border:1px solid #f0ad4e44;
+                                              padding:1px 5px; border-radius:4px; white-space:nowrap;">
+                                        📄 {{ oa_c.oa_n }}
+                                    </a>
+                                    {% else %}<small style="color:#f0ad4e;">OA {{ oa_c.oa_n }}</small>{% endif %}
+                                </td>
+                                <td style="color:#00d2ff;">{{ oa_c.qta }}</td>
+                                <td><small style="color:#28a745;">{{ oa_c.data_arr or '—' }}</small></td>
+                                {% else %}
+                                <td colspan="4" style="color:#444; font-size:0.6rem;">
+                                    {% if comp.stato == 'DA_ACQUISTARE' %}
+                                    <span style="color:#ff4d5e;">⚠ Nessun OA — da ordinare</span>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td></td>
+                            </tr>
+                            {% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+ 
+                        {# Nota libera #}
+                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a;">
+                            <div style="font-size:0.65rem; color:#555; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">📝 NOTE INTERNE</div>
+                            <textarea id="nota-{{ lavoro.conferma }}"
+                                placeholder="Aggiungi una nota per questo ordine..."
+                                style="width:100%; background:#0d1117; border:1px solid #2a2a2a; border-radius:6px; color:#aaa; padding:8px; font-size:0.8rem; resize:vertical; min-height:50px; box-sizing:border-box;"
+                                onclick="event.stopPropagation()">{{ lavoro.nota }}</textarea>
+                            <button onclick="event.stopPropagation(); salvaNota('{{ lavoro.conferma }}')"
+                                style="margin-top:5px; background:#1a2a1a; color:#28a745; border:1px solid #28a74544; padding:4px 12px; border-radius:5px; font-size:0.75rem; cursor:pointer; width:100%;">
+                                💾 SALVA NOTA
+                            </button>
+                        </div>
+ 
+                        {# ══ DIARIO ACCORDI CLIENTE ══ #}
+                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                                <div style="font-size:0.65rem; color:#555; text-transform:uppercase; letter-spacing:0.5px;">📋 Diario Accordi Cliente</div>
+                                <button onclick="event.stopPropagation(); toggleDiarioCliente('{{ lavoro.conferma }}')"
+                                    style="font-size:0.6rem; background:#1a1a2a; color:#a0a8ff; border:1px solid #4444aa44; padding:2px 8px; border-radius:8px; cursor:pointer;">
+                                    ✏️ + Aggiungi
+                                </button>
+                            </div>
+                            <div id="diaform-{{ lavoro.conferma | replace('/', '_') }}" style="display:none; margin-bottom:8px;">
+                                <div style="display:flex; gap:6px; align-items:center; margin-bottom:5px;">
+                                    <span style="font-size:0.62rem; color:#555;">Chi:</span>
+                                    <input type="text" id="dia-utente-{{ lavoro.conferma | replace('/', '_') }}"
+                                        placeholder="Nome / iniziali"
+                                        onclick="event.stopPropagation()"
+                                        style="background:#111; border:1px solid #2a2a2a; color:#a0a8ff; border-radius:5px; padding:4px 8px; font-size:0.72rem; font-family:inherit; width:160px;">
+                                </div>
+                                <textarea id="dia-testo-{{ lavoro.conferma | replace('/', '_') }}"
+                                    placeholder="Scrivi l'accordo o la nota verbale col cliente..."
+                                    onclick="event.stopPropagation()"
+                                    style="width:100%; background:#111; border:1px solid #2a2a2a; color:#ddd; border-radius:5px; padding:6px 8px; font-size:0.75rem; font-family:inherit; resize:vertical; min-height:52px; box-sizing:border-box;"></textarea>
+                                <div style="display:flex; gap:6px; justify-content:flex-end; margin-top:5px;">
+                                    <button onclick="event.stopPropagation(); toggleDiarioCliente('{{ lavoro.conferma }}')"
+                                        style="font-size:0.7rem; background:#1a1a1a; color:#555; border:1px solid #333; padding:3px 10px; border-radius:5px; cursor:pointer;">Annulla</button>
+                                    <button onclick="event.stopPropagation(); salvaAccordoCliente('{{ lavoro.conferma }}')"
+                                        style="font-size:0.72rem; background:#1a1a2a; color:#a0a8ff; border:1px solid #4444aa55; padding:4px 12px; border-radius:5px; font-weight:bold; cursor:pointer;">
+                                        💾 Registra
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="dialist-{{ lavoro.conferma | replace('/', '_') }}">
+                                <div style="font-size:0.65rem; color:#333; text-align:center; padding:6px;">Nessun accordo registrato.</div>
+                            </div>
+                        </div>
+ 
+                        {# ══ DATA CONSEGNA CONCORDATA COL CLIENTE ══ #}
+                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a;">
+                            <div style="font-size:0.65rem; color:#555; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">📅 DATA CONSEGNA CONCORDATA</div>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <input type="date" id="data-cons-{{ lavoro.conferma | replace('/', '_') }}"
+                                    value="{{ lavoro.data_consegna_cliente | dmyToIso }}"
+                                    onclick="event.stopPropagation()"
+                                    onchange="event.stopPropagation()"
+                                    style="flex:1; background:#0d1117; border:1px solid {% if lavoro.scaduto %}#dc354566{% else %}#2a2a2a{% endif %}; border-radius:6px; color:{% if lavoro.scaduto %}#ff4d5e{% else %}#00d2ff{% endif %}; padding:7px 10px; font-size:0.82rem; box-sizing:border-box; color-scheme:dark;">
+                                <button onclick="event.stopPropagation(); salvaDataConsegna('{{ lavoro.conferma }}', 'mc-{{ loop.index }}')"
+                                    style="background:#1a2030; color:#00d2ff; border:1px solid #00d2ff44; padding:6px 14px; border-radius:6px; font-size:0.75rem; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                                    💾 SALVA
+                                </button>
+                                {% if lavoro.data_consegna_cliente %}
+                                <button onclick="event.stopPropagation(); cancellaDataConsegna('{{ lavoro.conferma }}', 'mc-{{ loop.index }}')"
+                                    style="background:#2a1a1a; color:#ff4d5e; border:1px solid #dc354533; padding:6px 10px; border-radius:6px; font-size:0.75rem; cursor:pointer;">
+                                    ✕
+                                </button>
+                                {% endif %}
+                            </div>
+                            {% if lavoro.scaduto %}
+                            <div style="margin-top:5px; font-size:0.7rem; color:#ff4d5e; font-weight:bold;">
+                                🚨 CONSEGNA SCADUTA — Chiamare il cliente e riprogrammare
+                            </div>
+                            {% endif %}
+                        </div>
+ 
+                        {# ══ DDT EMESSI (COLLEGATI ALL'ORDINE) ══ #}
+                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a;">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                <span style="font-size:0.65rem; color:#17a2b8; text-transform:uppercase; letter-spacing:0.5px; font-weight:bold;">🚚 DDT EMESSI</span>
+                                {% if lavoro.ddt_consegna_list %}
+                                <span style="background:rgba(23,162,184,0.18); color:#17a2b8; border:1px solid #17a2b844; padding:1px 7px; border-radius:8px; font-size:0.62rem; font-weight:bold; margin-left:auto;">
+                                    {{ lavoro.ddt_consegna_list | length }} DDT
+                                </span>
+                                {% endif %}
+                            </div>
+                            {% if not lavoro.ddt_consegna_list %}
+                            <div style="font-size:0.68rem; color:#333; padding:6px 0; text-align:center; font-style:italic;">
+                                Nessun DDT emesso
+                            </div>
+                            {% else %}
+                            <div style="display:flex; flex-direction:column; gap:5px;">
+                                {% for ddt in lavoro.ddt_consegna_list %}
+                                <div style="display:flex; align-items:center; gap:8px; background:rgba(23,162,184,0.06); border:1px solid #17a2b822; border-radius:6px; padding:6px 10px;">
+                                    <span style="font-size:0.7rem; color:#17a2b8; font-weight:bold; min-width:80px;">{{ ddt.numero_ddt }}</span>
+                                    <span style="font-size:0.65rem; color:#555; flex:1;">{{ ddt.data_ddt }}</span>
+                                    <span style="font-size:0.62rem; color:#444; background:#1a1a1a; padding:2px 6px; border-radius:4px;">{{ ddt.n_righe }} art.</span>
+                                    {% if ddt.ha_pdf %}
+                                    <a href="/api/pdf_scarico/{{ ddt.id }}" target="_blank"
+                                       onclick="event.stopPropagation()"
+                                       style="font-size:0.62rem; color:#17a2b8; background:rgba(23,162,184,0.12); border:1px solid #17a2b844; padding:2px 8px; border-radius:5px; text-decoration:none; white-space:nowrap;">
+                                        📄 PDF
+                                    </a>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+ 
+                        {# ══ FASCICOLO DIGITALE ══ #}
+                        <div id="fasc-{{ lavoro.conferma | replace('/', '_') }}"
+                             style="margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a;">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                <span style="font-size:0.65rem; color:#9b59b6; text-transform:uppercase; letter-spacing:0.5px; font-weight:bold;">📁 FASCICOLO DOCUMENTALE</span>
+                                {% if lavoro.fascicolo %}
+                                <span style="font-size:0.62rem; color:{% if lavoro.fascicolo.completo %}#28a745{% else %}#f0ad4e{% endif %}; margin-left:auto;">
+                                    {{ lavoro.fascicolo.presenti }}/{{ lavoro.fascicolo.totale }} documenti
+                                </span>
+                                {% endif %}
+                            </div>
+ 
+                            {# Barra avanzamento documentale #}
+                            {% if lavoro.fascicolo %}
+                            <div style="height:4px; background:#222; border-radius:2px; margin-bottom:10px; overflow:hidden;">
+                                <div style="height:100%; width:{{ lavoro.fascicolo.perc }}%;
+                                     background:{% if lavoro.fascicolo.completo %}#28a745{% elif lavoro.fascicolo.perc >= 60 %}#f0ad4e{% else %}#dc3545{% endif %};
+                                     border-radius:2px; transition:width 0.4s;"></div>
+                            </div>
+ 
+                            {# Badge documenti #}
+                            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;" id="fasc-docs-{{ lavoro.conferma | replace('/', '_') }}">
+                                {% for doc in lavoro.fascicolo.docs %}
+                                <div style="display:flex; align-items:center; gap:4px;">
+                                    {% if doc.ok %}
+                                    <a href="/api/fascicolo/apri/{{ lavoro.conferma }}/{{ doc.key }}" target="_blank"
+                                       style="background:rgba(40,167,69,0.15); color:#28a745; border:1px solid #28a74533;
+                                              padding:3px 8px; border-radius:8px; font-size:0.62rem; font-weight:bold;
+                                              text-decoration:none; white-space:nowrap;">
+                                        ✅ {{ doc.label }}
+                                    </a>
+                                    {% else %}
+                                    <label style="background:rgba(100,100,100,0.1); color:#555; border:1px dashed #333;
+                                                  padding:3px 8px; border-radius:8px; font-size:0.62rem; font-weight:bold;
+                                                  white-space:nowrap; cursor:pointer;"
+                                           title="Clicca per caricare">
+                                        📎 {{ doc.label }}
+                                        <input type="file" accept=".pdf" style="display:none"
+                                               onchange="uploadFascicoloDoc('{{ lavoro.conferma }}', '{{ doc.key }}', this)">
+                                    </label>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+ 
+                        {# Pulsanti PDF, STAMPA, IMBALLAGGIO MASSIVO e ELIMINA #}
+                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a; display:flex; gap:8px; flex-wrap:wrap;">
+                            <a href="/uploads/{{ lavoro.filename }}" target="_blank"
+                               style="flex:1; display:block; text-align:center; background:#1a2a3a; color:#00d2ff; border:1px solid #00d2ff44; padding:8px; border-radius:8px; text-decoration:none; font-size:0.8rem; font-weight:bold;">
+                                📄 APRI PDF
+                            </a>
+                            <button onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); stampaOrdineAcquisto(c.dataset.conferma, c.dataset.cliente)"
+                                style="flex:1; background:#1a1a2a; color:#f0ad4e; border:1px solid #f0ad4e44; padding:8px; border-radius:8px; font-size:0.8rem; font-weight:bold; cursor:pointer;">
+                                🖨️ STAMPA
+                            </button>
+                            <button onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); if(confirm('Mandare TUTTO in imballaggio per ' + c.dataset.cliente + '?')) imballaggioMassivo(c.dataset.filename, c.id)"
+                                style="flex:1; background:#1a2a1a; color:#00ff88; border:1px solid #00ff8844; padding:8px; border-radius:8px; font-size:0.8rem; font-weight:bold; cursor:pointer;">
+                                📦 TUTTO IN IMBALLAGGIO
+                            </button>
+                            <button onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); modificaOrdine(c.dataset.filename, c.dataset.conferma, c.id)"
+                                style="flex:1; background:#1a1f2a; color:#5bc0f8; border:1px solid #5bc0f844; padding:8px; border-radius:8px; font-size:0.8rem; font-weight:bold; cursor:pointer;">
+                                ✏️ MODIFICA
+                            </button>
+                            <button onclick="event.stopPropagation(); var c=this.closest('.mini-card-v2'); annullaOrdine(c.dataset.conferma, c.dataset.filename, c.id)"
+                                style="background:#2a1a1a; color:#ff4d5e; border:1px solid #dc354533; padding:8px 12px; border-radius:8px; font-size:0.8rem; font-weight:bold; cursor:pointer;">
+                                🗑️ ELIMINA
+                            </button>
+                        </div>
+ 
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+ 
+    <div id="production-view">
+        <h2 style="color:#f0ad4e;">🏭 WMS - Controllo Disponibilità Reale</h2>
+        <table class="prod-table">
+            <thead>
+                <tr>
+                    <th>Codice</th>
+                    <th>Descrizione</th>
+                    <th>STOCK</th>
+                    <th>SCORTA MIN.</th>
+                    <th>IMPEGNATO</th>
+                    <th>FABBISOGNO</th>
+                    <th>ORDINATI</th>
+                    <th>DISPO. NETTA</th>
+                    <th>FORNITORE</th>
+                    <th>✏️</th>
+                </tr>
+            </thead>
+            <tbody id="prod-body"></tbody>
+        </table>
+    </div>
+ 
+    <div id="oa-view">
+        <h2 style="color:#f0ad4e;">📝 Archivio Ordini d'Acquisto (Non in Totem)</h2>
+        <div class="card-grid">
+            {% for ordine in ordini_acquisto %}
+                {% if not ordine.in_slots %}
+                <div class="mini-card oa-style">
+                    <b style="color:#f0ad4e;">{{ ordine.fornitore }}</b><br><small>OA: {{ ordine.ordine_n }}</small>
+                    <div style="margin-top: 10px; display: flex; gap: 2px;">
+                        {% for i in range(1, 7) %}
+                        <button class="btn-slot-oa" onclick="location.href='/set_sollecito_active/{{i}}/{{ordine.filename}}'">{{ i }}</button>
+                        {% endfor %}
+                    </div>
+                    <div class="lista-articoli">
+                        {% for art in ordine.articoli %}
+                        <div class="articolo-row"><span>{{ art.codice }}</span><span>x{{ art.qta }}</span></div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+ 
+ 
+    <div id="prebolla-view">
+        <h2 style="color:#e74c3c; margin-bottom: 20px;">📦 PRE-BOLLE DA MARCELLO</h2>
+ 
+        <h3 style="color:#00ff88; margin-bottom: 12px;">⏳ DA FARE
+            <span id="pb-count-live" style="font-size:0.85rem; color:#e74c3c;"></span>
+        </h3>
+        <div id="pb-da-fare">
+            {% for pb in pre_bolle_da_fare %}
+            <div class="pb-card" id="pbcard-{{ pb.id }}">
+                <div class="pb-cliente">{{ pb.cliente }}</div>
+                <div class="pb-dettagli">📦 {{ pb.dettagli }}</div>
+                <div class="pb-data">Ricevuta: {{ pb.ricevuta_il.strftime('%d/%m/%Y %H:%M') }}</div>
+                <button class="btn-bolla-fatta" onclick="confermaPreBolla({{ pb.id }}, '{{ pb.cliente }}')">
+                    ✅ BOLLA FATTA
+                </button>
+            </div>
+            {% else %}
+            <div id="pb-empty" style="color:#555; text-align:center; padding: 30px; font-size: 1.1rem;">
+                ✅ Nessuna pre-bolla in attesa
+            </div>
+            {% endfor %}
+        </div>
+ 
+        <h3 style="color:#555; margin: 25px 0 12px;">📋 GIÀ FATTE (ultime 20)</h3>
+        <div>
+            {% for pb in pre_bolle_fatte %}
+            <div class="pb-card fatta">
+                <div class="pb-cliente">{{ pb.cliente }} <span class="badge-fatta">FATTA</span></div>
+                <div class="pb-dettagli">{{ pb.dettagli }}</div>
+                <div class="pb-data">
+                    Ricevuta: {{ pb.ricevuta_il.strftime('%d/%m/%Y %H:%M') }} —
+                    Confermata: {{ pb.confermata_il.strftime('%d/%m/%Y %H:%M') if pb.confermata_il else '—' }}
+                </div>
+            </div>
+            {% else %}
+            <div style="color:#333; text-align:center; padding:15px;">Nessuna bolla ancora completata</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+ 
+ 
+</div>
+ 
+<div id="modalModificaOrdine" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,0.75); z-index:9999; overflow-y:auto;">
+  <div style="background:#1a1a2e; border:1px solid #5bc0f855; border-radius:16px; max-width:680px;
+              margin:60px auto; padding:28px; position:relative;">
+    <button onclick="chiudiModalModifica()"
+            style="position:absolute; top:14px; right:18px; background:none; border:none;
+                   color:#aaa; font-size:1.4rem; cursor:pointer; line-height:1;">✖</button>
+    <h3 id="modale-titolo" style="color:#5bc0f8; margin:0 0 20px 0; font-size:1.1rem;">
+      ✏️ MODIFICA ORDINE
+    </h3>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.85rem;" id="modale-tabella">
+        <thead>
+          <tr style="color:#888; border-bottom:1px solid #333;">
+            <th style="text-align:left; padding:6px 8px;">Codice</th>
+            <th style="text-align:left; padding:6px 8px;">Descrizione</th>
+            <th style="text-align:center; padding:6px 8px;">Qty PDF</th>
+            <th style="text-align:center; padding:6px 8px; color:#00ff88;">Evasi ✏️</th>
+            <th style="text-align:center; padding:6px 8px;">Qty Nuova</th>
+            <th style="text-align:center; padding:6px 8px;">Rimuovi</th>
+          </tr>
+        </thead>
+        <tbody id="modale-tbody">
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px;">
+      <button onclick="aggiungiRigaNuova()"
+              style="background:#1a2a3a; color:#5bc0f8; border:1px solid #5bc0f844;
+                     padding:7px 16px; border-radius:8px; font-size:0.82rem; cursor:pointer;">
+        ➕ Aggiungi articolo
+      </button>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end;">
+      <button onclick="chiudiModalModifica()"
+              style="background:#2a2a3a; color:#aaa; border:1px solid #555; padding:8px 20px;
+                     border-radius:8px; font-size:0.85rem; cursor:pointer;">
+        ✖ Annulla
+      </button>
+      <button id="btn-salva-modifica" onclick="salvaModificaOrdine()"
+              style="background:#1a3a1a; color:#00ff88; border:1px solid #00ff8844;
+                     padding:8px 24px; border-radius:8px; font-size:0.85rem;
+                     font-weight:bold; cursor:pointer;">
+        💾 SALVA MODIFICHE
+      </button>
+    </div>
+    <div id="modale-msg" style="margin-top:12px; font-size:0.8rem; color:#f0ad4e; min-height:18px;"></div>
+  </div>
+</div>
+ 
+<script>
+{% raw %}
+    function imballaggioMassivo(filename, cardId) {
+        sessionStorage.setItem('cardAperta', cardId);
+        fetch('/imballaggio_massivo/' + filename, { method: 'POST' })
+            .then(() => location.reload());
+    }
+ 
+    function annullaOrdine(conferma, filename, cardId) {
+        if (!confirm(`Eliminare l'ordine ${conferma}?\n\nGli articoli già evasi rimarranno. Quelli non evasi verranno rimossi dall'impegno e dalla card.`)) return;
+        sessionStorage.setItem('cardAperta', cardId);
+        fetch('/annulla_ordine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conferma: conferma, filename: filename })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                if (data.tipo === 'totale') {
+                    document.querySelectorAll('.mini-card-v2').forEach(card => {
+                        if (card.dataset.conferma === conferma) {
+                            card.style.transition = 'opacity 0.3s';
+                            card.style.opacity = '0';
+                            setTimeout(() => card.remove(), 300);
+                        }
+                    });
+                    sessionStorage.removeItem('cardAperta');
+                } else {
+                    location.reload();
+                }
+            } else if (data.chiedi_conferma) {
+                // FIX: ordine ha articoli già consegnati — chiedi conferma
+                if (confirm('⚠️ ' + data.error)) {
+                    // Richiama con forza=true
+                    fetch('/elimina_ordine', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ conferma, filename, forza: true })
+                    })
+                    .then(r => r.json())
+                    .then(d2 => {
+                        if (d2.ok) {
+                            document.querySelectorAll('.mini-card-v2').forEach(card => {
+                                if (card.dataset.conferma === conferma) {
+                                    card.style.transition = 'opacity 0.3s';
+                                    card.style.opacity = '0';
+                                    setTimeout(() => card.remove(), 300);
+                                }
+                            });
+                        } else {
+                            alert('⚠️ ' + d2.error);
+                        }
+                    });
+                }
+            } else {
+                alert('⚠️ ' + data.error);
+            }
+        });
+    }
+ 
+    async function toggleBomBypass(conferma, codice, btn) {
+        try {
+            const res = await fetch('/api/bom_bypass', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({conferma, codice})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                // Ricarica la pagina per aggiornare stati e righe BOM
+                var c = btn.closest('.mini-card-v2');
+                if (c) sessionStorage.setItem('cardAperta', c.id);
+                location.reload();
+            } else {
+                alert('Errore: ' + (data.error || 'sconosciuto'));
+            }
+        } catch(e) { alert('Errore di rete: ' + e); }
+    }
+ 
+    function mandaImballaggio(filename, codice, cardId) {
+        sessionStorage.setItem('cardAperta', cardId);
+        fetch('/manda_imballaggio/' + filename + '/' + codice, {
+            method: 'POST'
+        }).then(() => location.reload());
+    }
+ 
+    // ── NOTA ORDINE ──────────────────────────────────────────
+    function salvaNota(conferma) {
+        const textarea = document.getElementById('nota-' + conferma);
+        if (!textarea) return;
+        fetch('/salva_nota', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conferma: conferma, nota: textarea.value })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                textarea.style.borderColor = '#28a745';
+                setTimeout(() => textarea.style.borderColor = '#2a2a2a', 1500);
+            } else {
+                alert('Errore salvataggio nota: ' + data.error);
+            }
+        })
+        .catch(e => alert('Errore: ' + e));
+    }
+ 
+    // ── HELPERS CONVERSIONE DATE ─────────────────────────────────────────────
+    // ISO (YYYY-MM-DD) → GG/MM/AAAA  (per inviare al backend)
+    function isoToDmy(iso) {
+        if (!iso) return '';
+        const p = iso.split('-');
+        if (p.length !== 3) return '';
+        return p[2] + '/' + p[1] + '/' + p[0];
+    }
+    // GG/MM/AAAA → ISO (YYYY-MM-DD)  (per valorizzare type=date)
+    function dmyToIso(dmy) {
+        if (!dmy) return '';
+        const p = dmy.split('/');
+        if (p.length !== 3) return '';
+        return p[2] + '-' + p[1] + '-' + p[0];
+    }
+ 
+    // ── DATA CONSEGNA CONCORDATA COL CLIENTE ─────────────────────────────────
+ 
+    function _aggiornaCardDopoData(cardId, conferma, dataVal, scaduto) {
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        card.dataset.consegna = dataVal;
+        const badges = card.querySelector('.mc-badges');
+        if (badges) {
+            let badgeEl = badges.querySelector('.badge-consegna');
+            if (dataVal) {
+                if (!badgeEl) {
+                    badgeEl = document.createElement('span');
+                    badgeEl.className = 'badge-consegna';
+                    badgeEl.onclick = (e) => {
+                        e.stopPropagation();
+                        apriDataConsegna(conferma, card.dataset.consegna, cardId);
+                    };
+                    const chev = badges.querySelector('.mc-chevron');
+                    if (chev) badges.insertBefore(badgeEl, chev);
+                    else badges.appendChild(badgeEl);
+                }
+                badgeEl.textContent = '📅 ' + dataVal + (scaduto ? ' ⚠' : '');
+                badgeEl.className = 'badge-consegna' + (scaduto ? ' scaduta' : '');
+            } else {
+                if (badgeEl) badgeEl.remove();
+            }
+        }
+        if (scaduto) {
+            card.dataset.stato = 'SCADUTO';
+            card.classList.add('scaduta');
+            const sgTag = card.querySelector('.sg-tag');
+            if (sgTag) { sgTag.className = 'sg-tag sg-scaduto'; sgTag.textContent = '🚨 SCADUTO'; }
+        } else {
+            card.classList.remove('scaduta');
+        }
+    }
+ 
+    function salvaDataConsegna(conferma, cardId) {
+        const confKey = conferma.replace('/', '_');
+        const input = document.getElementById('data-cons-' + confKey);
+        if (!input) return;
+        // type=date restituisce YYYY-MM-DD — convertiamo in GG/MM/AAAA per il backend
+        const valIso = input.value.trim();
+        const valDmy = isoToDmy(valIso);
+        fetch('/api/data_consegna_cliente', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conferma: conferma, data: valDmy })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                input.style.borderColor = '#28a745';
+                setTimeout(() => input.style.borderColor = valDmy && data.scaduto ? '#dc3545' : '#2a2a2a', 1500);
+                _aggiornaCardDopoData(cardId, conferma, valDmy, data.scaduto);
+            } else {
+                alert('Errore: ' + data.error);
+            }
+        })
+        .catch(e => alert('Errore di rete: ' + e));
+    }
+ 
+    function cancellaDataConsegna(conferma, cardId) {
+        if (!confirm('Rimuovere la data di consegna per questo ordine?')) return;
+        const confKey = conferma.replace('/', '_');
+        const input = document.getElementById('data-cons-' + confKey);
+        if (input) input.value = '';
+        fetch('/api/data_consegna_cliente', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conferma: conferma, data: '' })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) _aggiornaCardDopoData(cardId, conferma, '', false);
+        });
+    }
+ 
+    function apriDataConsegna(conferma, dataAttuale, cardId) {
+        const card = document.getElementById(cardId);
+        if (card && !card.classList.contains('open')) {
+            toggleCard(cardId);
+        }
+        setTimeout(() => {
+            const confKey = conferma.replace('/', '_');
+            const input = document.getElementById('data-cons-' + confKey);
+            if (input) { input.focus(); input.showPicker && input.showPicker(); }
+        }, 150);
+    }
+ 
+    // ── RICERCA CLIENTE ───────────────────────────────────────
+    function cercaCliente(query) {
+        const q = query.toLowerCase().trim();
+        // FIX BUG 2: quando si svuota la ricerca, rispetta il filtro stato attivo
+        // invece di mostrare tutto (inclusi gli EVASI che erano nascosti)
+        const filtroAttivo = document.querySelector('.filtro-btn.active');
+        const statoAttivo  = filtroAttivo
+            ? (filtroAttivo.getAttribute('onclick').match(/'([^']+)'/) || [])[1] || 'TUTTI'
+            : 'TUTTI';
+        document.querySelectorAll('.mini-card-v2').forEach(card => {
+            const cliente = card.querySelector('.mc-cliente');
+            // Verifica filtro stato
+            let visibilePerStato;
+            if (statoAttivo === 'TUTTI') {
+                visibilePerStato = card.dataset.stato !== 'EVASO';
+            } else if (statoAttivo === 'DA_IMBALLARE') {
+                visibilePerStato = card.dataset.stato === 'DA_IMBALLARE' ||
+                    card.querySelector('.tag-daimballare') !== null ||
+                    card.querySelector('.tag-imballato') !== null;
+            } else {
+                visibilePerStato = card.dataset.stato === statoAttivo;
+            }
+            if (!visibilePerStato) { card.style.display = 'none'; return; }
+            // Verifica ricerca testo
+            if (!q || (cliente && cliente.textContent.toLowerCase().includes(q))) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+ 
+    // ── STAMPA ORDINE DA ACQUISTARE ───────────────────────────
+    function stampaOrdineAcquisto(conferma, cliente) {
+        // Trova la card aperta e raccoglie gli articoli DA ORDINARE
+        const cards = document.querySelectorAll('.mini-card-v2');
+        let righe = '';
+        cards.forEach(card => {
+            const conf = card.querySelector('.mc-conferma');
+            if (conf && conf.textContent.trim() === conferma) {
+                const rows = card.querySelectorAll('tr.mc-tr-DA_ORDINARE');
+                rows.forEach(row => {
+                    const tds = row.querySelectorAll('td');
+                    if (tds.length >= 6) {
+                        const codice = tds[0].textContent.trim();
+                        const desc   = tds[1].textContent.trim();
+                        const qta    = tds[2].textContent.trim();
+                        const qEvasa = tds[3].textContent.trim();
+                        const qtaDaOrdinare = (parseInt(qta) || 0) - (parseInt(qEvasa) || 0);
+                        righe += `<tr>
+                            <td style="padding:8px; border-bottom:1px solid #ddd; font-family:monospace; font-weight:bold;">${codice}</td>
+                            <td style="padding:8px; border-bottom:1px solid #ddd;">${desc}</td>
+                            <td style="padding:8px; border-bottom:1px solid #ddd; text-align:center;">${qtaDaOrdinare}</td>
+                        </tr>`;
+                    }
+                });
+            }
+        });
+ 
+        if (!righe) {
+            alert('Nessun articolo DA ORDINARE in questo ordine!');
+            return;
+        }
+ 
+        const cssStampa = [
+            "body { font-family: 'Segoe UI', sans-serif; padding: 30px; color: #000; }",
+            "h2 { color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 8px; }",
+            "table { width: 100%; border-collapse: collapse; margin-top: 20px; }",
+            "th { background: #007bff; color: white; padding: 10px; text-align: left; }",
+            "tr:nth-child(even) { background: #f5f5f5; }",
+            ".header-info { margin-bottom: 20px; font-size: 0.9rem; color: #555; }",
+            "@media print { button { display: none; } }"
+        ].join('\n');
+ 
+        const win = window.open('', '_blank');
+        win.document.write(
+            '<!DOCTYPE html><html><head>' +
+            '<title>Ordine Acquisto \u2014 ' + conferma + '</title>' +
+            '<style>' + cssStampa + '</style></head><body>' +
+            '<h2>\uD83D\uDED2 ARTICOLI DA ORDINARE</h2>' +
+            '<div class="header-info">' +
+            '<strong>Conferma:</strong> ' + conferma + ' &nbsp;|&nbsp; ' +
+            '<strong>Cliente:</strong> ' + cliente + ' &nbsp;|&nbsp; ' +
+            '<strong>Data:</strong> ' + new Date().toLocaleDateString('it-IT') +
+            '</div>' +
+            '<table><thead><tr><th>Codice</th><th>Descrizione</th><th>Qt\u00E0 da Ordinare</th></tr></thead>' +
+            '<tbody>' + righe + '</tbody></table>' +
+            '<br><button onclick="window.print()" style="background:#007bff;color:white;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-size:1rem;">\uD83D\uDDB8\uFE0F STAMPA</button>' +
+            '</body></html>'
+        );
+        win.document.close();
+    }
+ 
+    // ── OVERLAY CARD ──────────────────────────────────────────
+    function filtraStato(stato, btn) {
+        document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.mini-card-v2').forEach(card => {
+            if (stato === 'TUTTI') {
+                card.style.display = card.dataset.stato === 'EVASO' ? 'none' : '';
+            } else if (stato === 'DA_IMBALLARE') {
+                const hasImb = card.dataset.stato === 'DA_IMBALLARE' ||
+                               card.querySelector('.tag-daimballare') !== null ||
+                               card.querySelector('.tag-imballato') !== null;
+                card.style.display = hasImb ? '' : 'none';
+            } else if (stato === 'ORDINI_IN_ARRIVO') {
+                // PROBLEMA 4: mostra anche ordini con stato ORDINARE_ARTICOLI
+                // ma che hanno almeno un OA fisicamente in transito (🚢/🚚/📦)
+                const matchStato   = card.dataset.stato === 'ORDINI_IN_ARRIVO';
+                const hasTransito  = card.dataset.inTransito === '1';
+                card.style.display = (matchStato || hasTransito) ? '' : 'none';
+            } else {
+                card.style.display = card.dataset.stato === stato ? '' : 'none';
+            }
+        });
+    }
+ 
+    function toggleCard(id) {
+        const card = document.getElementById(id);
+        if (!card) return;
+        const isOpen = card.classList.contains('open');
+        // Chiudi tutte le altre
+        document.querySelectorAll('.mini-card-v2.open').forEach(c => c.classList.remove('open'));
+        if (!isOpen) card.classList.add('open');
+    }
+ 
+    // Chiudi overlay cliccando fuori
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.mini-card-v2')) {
+            document.querySelectorAll('.mini-card-v2.open').forEach(c => c.classList.remove('open'));
+        }
+    });
+ 
+    // ── VISTE: 0=cards, 1=produzione, 2=oa-view ──────────────
+    let viewMode = 0;
+    let inPrebolle = false;
+ 
+    const VIEWS = ['archive-view', 'production-view', 'oa-view'];
+ 
+    function showView(idx) {
+        VIEWS.forEach((id, i) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = (i === idx) ? 'block' : 'none';
+        });
+        const pb = document.getElementById('prebolla-view');
+        if (pb) pb.style.display = 'none';
+ 
+        const sideC = document.getElementById('side-clienti');
+        const sideF = document.getElementById('side-fornitori');
+        if (idx === 2) {
+            if(sideC) sideC.style.display = 'none';
+            if(sideF) sideF.style.display = 'block';
+        } else {
+            if(sideC) sideC.style.display = 'block';
+            if(sideF) sideF.style.display = 'none';
+        }
+        if (idx === 1) updateProduction();
+    }
+ 
+    function toggleView() {
+        inPrebolle = false;
+        viewMode = (viewMode + 1) % VIEWS.length;
+        showView(viewMode);
+    }
+ 
+    function goToPrebolle() {
+        inPrebolle = true;
+        VIEWS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        document.getElementById('prebolla-view').style.display = 'block';
+        const sideC = document.getElementById('side-clienti');
+        const sideF = document.getElementById('side-fornitori');
+        if(sideC) sideC.style.display = 'block';
+        if(sideF) sideF.style.display = 'none';
+    }
+ 
+    function confermaPreBolla(id, cliente) {
+        if (!confirm('Confermi BOLLA FATTA per ' + cliente + '?')) return;
+        fetch('/conferma_prebolla/' + id, { method: 'POST' })
+            .then(r => {
+                if (r.ok || r.redirected) {
+                    const card = document.getElementById('pbcard-' + id);
+                    if (card) {
+                        card.style.transition = 'opacity 0.4s';
+                        card.style.opacity = '0';
+                        setTimeout(() => { card.remove(); aggiornaBadge(); }, 400);
+                    }
+                }
+            })
+            .catch(e => console.error(e));
+    }
+ 
+    function aggiornaBadge() {
+        const rimaste = document.querySelectorAll('#pb-da-fare .pb-card').length;
+        const badge = document.getElementById('badge-prebolla');
+        if (badge) badge.innerText = rimaste;
+        const countLive = document.getElementById('pb-count-live');
+        if (countLive) countLive.innerText = rimaste > 0 ? '(' + rimaste + ' in attesa)' : '';
+        if (rimaste === 0) {
+            const container = document.getElementById('pb-da-fare');
+            if (container) container.innerHTML = '<div style="color:#555; text-align:center; padding:30px; font-size:1.1rem;">✅ Nessuna pre-bolla in attesa</div>';
+        }
+    }
+ 
+    function updateProduction() {
+        fetch('/get_produzione').then(r => r.json()).then(data => {
+            const body = document.getElementById('prod-body');
+            if(!body) return;
+            body.innerHTML = "";
+            for (const [cod, info] of Object.entries(data)) {
+                const fabbColor  = info.fabbisogno_netto > 0 ? '#ff4d4d' : '#555';
+                const dispoColor = info.dispo_netta >= 0 ? '#28a745' : '#ff4d4d';
+                const nOrdini    = (info.ordini || []).length;
+                body.innerHTML += `
+                <tr id="row-${cod}">
+                    <td><b>${cod}</b></td>
+                    <td style="text-align:left;"><small>${info.desc}</small></td>
+                    <td style="color:#28a745; font-weight:bold;">${info.stock}</td>
+                    <td style="color:#aaa;">${info.scorta_minima ?? 5}</td>
+                    <td style="color:#fff; font-weight:bold; cursor:pointer; text-decoration:underline dotted;"
+                        title="Clicca per vedere gli ordini che impegnano questo articolo"
+                        onclick="mostraImpegni('${cod}')">
+                        ${info.impegnato}
+                        ${nOrdini > 0 ? `<span style="font-size:0.6rem; color:#aaa; margin-left:3px;">(${nOrdini} ord.)</span>` : ''}
+                    </td>
+                    <td style="color:${fabbColor}; font-weight:bold;">${info.fabbisogno_netto}</td>
+                    <td style="color:#f0ad4e;">${info.ordinati || 0}</td>
+                    <td style="color:${dispoColor}; font-weight:bold;">${info.dispo_netta}</td>
+                    <td><small style="color:#666;">${info.fornitore}</small></td>
+                    <td>
+                        <button onclick="apriRettifica('${cod}', ${info.stock}, ${info.scorta_minima ?? 5})"
+                            style="background:#1a2a1a; color:#28a745; border:1px solid #28a74544; padding:3px 8px; border-radius:5px; cursor:pointer; font-size:0.75rem;">
+                            ✏️
+                        </button>
+                    </td>
+                </tr>
+                <tr id="rett-${cod}" style="display:none; background:#0d1a0d;">
+                    <td colspan="10" style="padding:10px 20px;">
+                        <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                            <span style="color:#f0ad4e; font-weight:bold; font-size:0.8rem;">✏️ RETTIFICA: ${cod}</span>
+                            <label style="color:#aaa; font-size:0.75rem;">Stock:
+                                <input type="number" id="inp-stock-${cod}" value="${info.stock}"
+                                    style="width:70px; background:#111; border:1px solid #28a745; color:#28a745; padding:4px 6px; border-radius:5px; margin-left:5px;">
+                            </label>
+                            <label style="color:#aaa; font-size:0.75rem;">Scorta Min.:
+                                <input type="number" id="inp-scorta-${cod}" value="${info.scorta_minima ?? 5}"
+                                    style="width:60px; background:#111; border:1px solid #aaa; color:#aaa; padding:4px 6px; border-radius:5px; margin-left:5px;">
+                            </label>
+                            <button onclick="salvaRettifica('${cod}')"
+                                style="background:#28a745; color:#000; border:none; padding:5px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">
+                                ✅ SALVA
+                            </button>
+                            <button onclick="chiudiRettifica('${cod}')"
+                                style="background:#333; color:#aaa; border:none; padding:5px 10px; border-radius:6px; cursor:pointer;">
+                                ✖
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }
+        });
+    }
+ 
+    function mostraImpegni(cod) {
+        fetch('/get_produzione')
+            .then(r => r.json())
+            .then(data => {
+                const info = data[cod];
+                if (!info || !info.ordini || info.ordini.length === 0) {
+                    alert('Nessun impegno trovato per ' + cod);
+                    return;
+                }
+                const old = document.getElementById('popup-impegni');
+                if (old) old.remove();
+ 
+                let righe = info.ordini.map(o => `
+                    <tr>
+                        <td style="padding:6px 10px; border-bottom:1px solid #222; font-family:monospace; color:#00d2ff;">${o.conferma}</td>
+                        <td style="padding:6px 10px; border-bottom:1px solid #222;">${o.cliente}</td>
+                        <td style="padding:6px 10px; border-bottom:1px solid #222; text-align:center;">${o.qta_ord}</td>
+                        <td style="padding:6px 10px; border-bottom:1px solid #222; text-align:center; color:#28a745;">${o.qta_evasa}</td>
+                        <td style="padding:6px 10px; border-bottom:1px solid #222; text-align:center; color:#ff4d4d; font-weight:bold;">${o.qta_residua}</td>
+                    </tr>`).join('');
+ 
+                const popup = document.createElement('div');
+                popup.id = 'popup-impegni';
+                popup.style.cssText = `
+                    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+                    background:#161b22; border:1px solid #007bff55; border-radius:12px;
+                    padding:20px; z-index:2000; min-width:500px; max-width:90vw;
+                    box-shadow: 0 0 0 9999px rgba(0,0,0,0.7), 0 0 30px rgba(0,123,255,0.3);`;
+                popup.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0; color:#00d2ff;">📋 Impegni per <b>${cod}</b> — totale: ${info.impegnato} pz</h3>
+                        <button onclick="document.getElementById('popup-impegni').remove()"
+                            style="background:#333; color:#aaa; border:none; border-radius:5px; padding:4px 10px; cursor:pointer; font-size:1rem;">✖</button>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+                        <thead>
+                            <tr style="background:#222;">
+                                <th style="padding:6px 10px; text-align:left; color:#f0ad4e;">Conferma</th>
+                                <th style="padding:6px 10px; text-align:left; color:#f0ad4e;">Cliente</th>
+                                <th style="padding:6px 10px; color:#f0ad4e;">Q.Ord</th>
+                                <th style="padding:6px 10px; color:#f0ad4e;">Evasa</th>
+                                <th style="padding:6px 10px; color:#f0ad4e;">Residua</th>
+                            </tr>
+                        </thead>
+                        <tbody>${righe}</tbody>
+                    </table>`;
+                document.body.appendChild(popup);
+                setTimeout(() => {
+                    document.addEventListener('click', function chiudi(e) {
+                        if (!popup.contains(e.target)) {
+                            popup.remove();
+                            document.removeEventListener('click', chiudi);
+                        }
+                    });
+                }, 100);
+            });
+    }
+ 
+    let _modaleFilename = '';
+    let _modaleConferma = '';
+    let _modaleCardId   = '';
+ 
+    function modificaOrdine(filename, conferma, cardId) {
+        _modaleFilename = filename;
+        _modaleConferma = conferma;
+        _modaleCardId   = cardId;
+        document.getElementById('modale-titolo').textContent =
+            '✏️ MODIFICA ORDINE — ' + conferma;
+        document.getElementById('modale-tbody').innerHTML =
+            '<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">Caricamento...</td></tr>';
+        document.getElementById('modale-msg').textContent = '';
+        document.getElementById('modalModificaOrdine').style.display = 'block';
+ 
+        fetch('/get_dati_ordine/' + encodeURIComponent(filename))
+            .then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + r.statusText);
+                return r.json();
+            })
+            .then(data => {
+                if (!data.ok) {
+                    document.getElementById('modale-tbody').innerHTML =
+                        '<tr><td colspan="6" style="text-align:center;color:#ff4d5e;padding:20px;">❌ ' + data.error + '</td></tr>';
+                    return;
+                }
+                if (!data.articoli || data.articoli.length === 0) {
+                    document.getElementById('modale-tbody').innerHTML =
+                        '<tr><td colspan="6" style="text-align:center;color:#f0ad4e;padding:20px;">⚠️ Nessun articolo trovato per questo ordine</td></tr>';
+                    return;
+                }
+                const tbody = document.getElementById('modale-tbody');
+                tbody.innerHTML = '';
+                data.articoli.forEach((art, artIdx) => {
+                    // FIX 1: usa indice progressivo per rowId univoco anche se stesso codice appare più volte
+                    const rowId  = 'mod-row-' + artIdx + '-' + art.codice.replace(/[^a-zA-Z0-9]/g, '_');
+                    const rimosso = art.rimosso;
+                    const minQta  = art.qta_evasa > 0 ? art.qta_evasa : 1;
+                    const tr = document.createElement('tr');
+                    tr.id = rowId;
+                    tr.dataset.codice = art.codice;  // salva codice nel dataset
+                    tr.style.cssText = 'border-bottom:1px solid #2a2a3a; opacity:' + (rimosso ? '0.4' : '1');
+
+                    let rowHtml = '<td style="padding:7px 8px; color:#5bc0f8; font-family:monospace;">' + art.codice + '</td>';
+                    rowHtml += '<td style="padding:7px 8px; color:#ddd; font-size:0.78rem; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + art.desc + '">' + art.desc + '</td>';
+                    rowHtml += '<td style="text-align:center; padding:7px 8px; color:#888;">' + art.qta_originale + '</td>';
+
+                    // FIX 3: Evasi editabili — input numerico con salvataggio diretto
+                    rowHtml += '<td style="text-align:center; padding:7px 8px;">'
+                        + '<input type="number" id="evasi-' + rowId + '" value="' + art.qta_evasa + '" min="0" '
+                        + 'style="width:60px; background:#0d1117; color:#00ff88; border:1px solid #00ff8833; border-radius:6px; padding:3px 5px; text-align:center; font-size:0.82rem; font-weight:bold;" '
+                        + 'title="Modifica la quantità evasa — verrà aggiornata nel DB" '
+                        + 'onchange="aggiornaMinQtaRiga(\'' + rowId + '\')">'
+                        + '</td>';
+
+                    rowHtml += '<td style="text-align:center; padding:7px 8px;"><input type="number" id="qty-' + rowId + '" value="' + (rimosso ? art.qta_originale : art.qta_attuale) + '" min="' + minQta + '" style="width:65px; background:#0d1117; color:#fff; border:1px solid #444; border-radius:6px; padding:4px 6px; text-align:center; font-size:0.85rem;" ' + (rimosso ? 'disabled' : '') + '></td>';
+                    rowHtml += '<td style="text-align:center; padding:7px 8px;"><input type="checkbox" id="rm-' + rowId + '" ' + (rimosso ? 'checked' : '') + ' onchange="toggleRimuoviRiga(\'' + rowId + '\', ' + minQta + ')" style="width:16px; height:16px; cursor:pointer;"></td>';
+
+                    tr.innerHTML = rowHtml;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                document.getElementById('modale-tbody').innerHTML =
+                    '<tr><td colspan="6" style="text-align:center;color:#ff4d5e;padding:20px;">❌ Errore caricamento: ' + err.message + '</td></tr>';
+                console.error('[modificaOrdine] fetch error:', err);
+            });
+    }
+ 
+    function aggiornaMinQtaRiga(rowId) {
+        // Quando l'utente cambia gli evasi, aggiorna il min del campo qty
+        const inpEvasi = document.getElementById('evasi-' + rowId);
+        const inpQty   = document.getElementById('qty-'   + rowId);
+        if (inpEvasi && inpQty) {
+            const nuovoMin = Math.max(1, parseInt(inpEvasi.value) || 0);
+            inpQty.min = nuovoMin;
+            if (parseInt(inpQty.value) < nuovoMin) inpQty.value = nuovoMin;
+        }
+    }
+
+    function toggleRimuoviRiga(rowId, minQta) {
+        const cb  = document.getElementById('rm-'  + rowId);
+        const inp = document.getElementById('qty-' + rowId);
+        const row = document.getElementById(rowId);
+        if (cb.checked) {
+            inp.disabled = true;
+            row.style.opacity = '0.4';
+        } else {
+            inp.disabled = false;
+            inp.value = minQta;
+            row.style.opacity = '1';
+        }
+    }
+ 
+    function salvaModificaOrdine() {
+        const tbody = document.getElementById('modale-tbody');
+        const rows  = tbody.querySelectorAll('tr[id]');
+        const modifiche = [];
+        const evasi_modificati = [];   // [{id_art, qta_evasa}]
+        rows.forEach(tr => {
+            const rowId  = tr.id;
+            // Righe NUOVE aggiunte manualmente (id inizia con "new-row-")
+            if (rowId.startsWith('new-row-')) {
+                const idx    = rowId.replace('new-row-', '');
+                const codice = (document.getElementById('new-cod-' + idx) || {}).value || '';
+                const qta    = parseInt((document.getElementById('new-qty-' + idx) || {}).value) || 1;
+                if (codice.trim()) {
+                    const desc = (document.getElementById('new-desc-' + idx) || {}).value || '';
+                    modifiche.push({ codice: codice.trim(), desc: desc.trim(), qta_nuova: qta });
+                }
+                return;
+            }
+            // Righe ESISTENTI — codice letto dal dataset (non dal testo, evita ambiguità)
+            const codice   = tr.dataset.codice || tr.querySelector('td:first-child').textContent.trim();
+            const cbRm     = document.getElementById('rm-'    + rowId);
+            const inpQty   = document.getElementById('qty-'   + rowId);
+            const inpEvasi = document.getElementById('evasi-' + rowId);
+            const rimosso  = cbRm && cbRm.checked;
+            const qta_nuova = rimosso ? 0 : (inpQty ? parseInt(inpQty.value) || 1 : 1);
+            modifiche.push({ codice: codice, qta_nuova: qta_nuova });
+            // Raccoglie evasi modificati
+            if (inpEvasi) {
+                const nuovi_evasi = parseInt(inpEvasi.value) || 0;
+                evasi_modificati.push({ codice: codice, qta_evasa: nuovi_evasi, conferma: _modaleConferma });
+            }
+        });
+        document.getElementById('btn-salva-modifica').disabled = true;
+        document.getElementById('modale-msg').textContent = 'Salvataggio...';
+        sessionStorage.setItem('cardAperta', _modaleCardId);
+        if (!_modaleConferma) {
+            document.getElementById('modale-msg').textContent = '⚠️ Errore: conferma non impostata, riapri la modale';
+            document.getElementById('btn-salva-modifica').disabled = false;
+            return;
+        }
+        if (modifiche.length === 0) {
+            document.getElementById('modale-msg').textContent = '⚠️ Nessuna modifica da salvare';
+            document.getElementById('btn-salva-modifica').disabled = false;
+            return;
+        }
+        // Salva modifiche ordine + evasi modificati in parallelo
+        const promises = [
+            fetch('/salva_modifica_ordine', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ conferma: _modaleConferma, modifiche: modifiche })
+            }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        ];
+        if (evasi_modificati.length > 0) {
+            promises.push(
+                fetch('/api/aggiorna_evasi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ evasi: evasi_modificati })
+                }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            );
+        }
+        Promise.all(promises)
+        .then(results => {
+            const allOk = results.every(r => r.ok);
+            if (allOk) {
+                document.getElementById('modalModificaOrdine').style.display = 'none';
+                location.reload();
+            } else {
+                const err = results.find(r => !r.ok);
+                document.getElementById('modale-msg').textContent = '⚠️ ' + (err ? err.error : 'Errore');
+                document.getElementById('btn-salva-modifica').disabled = false;
+            }
+        })
+        .catch(err => {
+            document.getElementById('modale-msg').textContent = '⚠️ Errore rete: ' + err.message;
+            document.getElementById('btn-salva-modifica').disabled = false;
+        });
+    }
+ 
+    let _nuovaRigaIdx = 0;
+
+    function aggiungiRigaNuova() {
+        _nuovaRigaIdx++;
+        const idx = _nuovaRigaIdx;
+        const rowId = 'new-row-' + idx;
+        const tbody = document.getElementById('modale-tbody');
+        const tr = document.createElement('tr');
+        tr.id = rowId;
+        tr.style.cssText = 'border-bottom:1px solid #2a2a3a; background:#0d1a0d; position:relative;';
+
+        // Cella codice con autocomplete
+        const tdCod = document.createElement('td');
+        tdCod.style.cssText = 'padding:6px 5px; position:relative;';
+        const inpCod = document.createElement('input');
+        inpCod.type = 'text'; inpCod.id = 'new-cod-' + idx; inpCod.placeholder = 'Codice';
+        inpCod.autocomplete = 'off';
+        inpCod.style.cssText = 'width:100px; background:#0d1117; color:#5bc0f8; border:1px solid #5bc0f855; border-radius:6px; padding:4px 6px; font-size:0.82rem; font-family:monospace;';
+        const dropdown = document.createElement('div');
+        dropdown.id = 'ac-drop-' + idx;
+        // FIX: agganciato al body con position:fixed per evitare clipping da overflow del modal/tabella
+        dropdown.style.cssText = 'position:fixed; z-index:99999; background:#1a1a2e; border:1px solid #5bc0f8; border-radius:6px; min-width:300px; display:none; max-height:220px; overflow-y:auto; box-shadow:0 8px 32px #000d;';
+        document.body.appendChild(dropdown);
+        function _posizionaDropdown() {
+            const r = inpCod.getBoundingClientRect();
+            dropdown.style.left  = r.left + 'px';
+            dropdown.style.top   = (r.bottom + 3) + 'px';
+            dropdown.style.width = Math.max(320, r.width) + 'px';
+        }
+        let _acTimer = null;
+        let _selecting = false;  // flag: l'utente sta cliccando una voce del dropdown
+
+        inpCod.addEventListener('input', function() {
+            clearTimeout(_acTimer);
+            const q = this.value.trim();
+            if (q.length < 1) { dropdown.style.display = 'none'; dropdown.innerHTML = ''; return; }
+            _acTimer = setTimeout(() => {
+                fetch('/api/articoli_autocomplete?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(items => {
+                    dropdown.innerHTML = '';
+                    if (!items.length) {
+                        dropdown.innerHTML = '<div style="padding:10px 14px;color:#666;font-size:0.82rem;">Nessun risultato per "' + q + '"</div>';
+                        _posizionaDropdown();
+                        dropdown.style.display = 'block';
+                        return;
+                    }
+                    items.forEach(it => {
+                        const d = document.createElement('div');
+                        d.style.cssText = 'padding:8px 12px; cursor:pointer; font-size:0.82rem; border-bottom:1px solid #1e2d3d; display:flex; gap:10px; align-items:center;';
+                        d.innerHTML = '<span style="color:#5bc0f8; font-family:monospace; font-weight:700; min-width:80px;">' + it.sku + '</span>'
+                                    + '<span style="color:#ccc; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (it.desc||'') + '</span>'
+                                    + '<span style="color:#444; font-size:0.72rem; flex-shrink:0;">stk:' + it.stock + '</span>';
+                        // mousedown: setta flag PRIMA che blur scatti
+                        d.addEventListener('mousedown', function(e) {
+                            _selecting = true;
+                            e.preventDefault();
+                        });
+                        // click: assegna i valori e chiude (sicuro: dopo mousedown)
+                        d.addEventListener('click', function() {
+                            inpCod.value = it.sku;
+                            const inpDesc = document.getElementById('new-desc-' + idx);
+                            if (inpDesc) inpDesc.value = it.desc || '';
+                            dropdown.style.display = 'none';
+                            _selecting = false;
+                            inpCod.focus();
+                        });
+                        d.addEventListener('mouseover', function() { this.style.background='#1e2d3d'; });
+                        d.addEventListener('mouseout',  function() { this.style.background=''; });
+                        dropdown.appendChild(d);
+                    });
+                    _posizionaDropdown();
+                    dropdown.style.display = 'block';
+                })
+                .catch(function() {
+                    dropdown.innerHTML = '<div style="padding:10px 14px;color:#f66;font-size:0.82rem;">Errore caricamento articoli</div>';
+                    _posizionaDropdown();
+                    dropdown.style.display = 'block';
+                });
+            }, 180);
+        });
+        // blur: chiude il dropdown SOLO se non si sta selezionando una voce
+        inpCod.addEventListener('blur', function() {
+            if (_selecting) return;
+            setTimeout(() => { if (!_selecting) dropdown.style.display = 'none'; }, 200);
+        });
+        inpCod.addEventListener('focus', function() {
+            if (inpCod.value.trim().length >= 1 && dropdown.children.length) {
+                _posizionaDropdown(); dropdown.style.display = 'block';
+            }
+        });
+        tdCod.appendChild(inpCod);
+        // dropdown è nel body, NON in tdCod
+
+        // Cella descrizione
+        const tdDesc = document.createElement('td');
+        tdDesc.style.cssText = 'padding:6px 5px;';
+        const inpDesc = document.createElement('input');
+        inpDesc.type = 'text'; inpDesc.id = 'new-desc-' + idx; inpDesc.placeholder = 'Descrizione';
+        inpDesc.style.cssText = 'width:190px; background:#0d1117; color:#ddd; border:1px solid #444; border-radius:6px; padding:4px 6px; font-size:0.82rem;';
+        tdDesc.appendChild(inpDesc);
+
+        // Celle placeholder
+        const tdP1 = document.createElement('td'); tdP1.style.cssText = 'text-align:center; padding:6px 5px; color:#555;'; tdP1.textContent = '—';
+        const tdP2 = document.createElement('td'); tdP2.style.cssText = 'text-align:center; padding:6px 5px; color:#555;'; tdP2.textContent = '—';
+
+        // Cella qty
+        const tdQty = document.createElement('td');
+        tdQty.style.cssText = 'text-align:center; padding:6px 5px;';
+        const inpQty = document.createElement('input');
+        inpQty.type = 'number'; inpQty.id = 'new-qty-' + idx; inpQty.value = '1'; inpQty.min = '1';
+        inpQty.style.cssText = 'width:65px; background:#0d1117; color:#fff; border:1px solid #444; border-radius:6px; padding:4px 6px; text-align:center; font-size:0.85rem;';
+        tdQty.appendChild(inpQty);
+
+        // Cella elimina
+        const tdDel = document.createElement('td');
+        tdDel.style.cssText = 'text-align:center; padding:6px 5px;';
+        const btnDel = document.createElement('button');
+        btnDel.textContent = '🗑'; btnDel.style.cssText = 'background:none; border:none; color:#ff4444; font-size:1rem; cursor:pointer;';
+        btnDel.onclick = function() { dropdown.remove(); tr.remove(); };
+        tdDel.appendChild(btnDel);
+
+        tr.appendChild(tdCod); tr.appendChild(tdDesc); tr.appendChild(tdP1); tr.appendChild(tdP2); tr.appendChild(tdQty); tr.appendChild(tdDel);
+        tbody.appendChild(tr);
+        inpCod.focus();
+    }
+
+    function chiudiModalModifica() {
+        document.querySelectorAll('[id^="ac-drop-"]').forEach(function(el){ el.remove(); });
+        document.getElementById('modalModificaOrdine').style.display = 'none';
+        _nuovaRigaIdx = 0;
+    }
+ 
+    function apriRettifica(cod, stock, scorta) {
+        // Chiudi eventuali altre rettifiche aperte
+        document.querySelectorAll('[id^="rett-"]').forEach(r => r.style.display = 'none');
+        const row = document.getElementById('rett-' + cod);
+        if (row) row.style.display = '';
+    }
+ 
+    function chiudiRettifica(cod) {
+        const row = document.getElementById('rett-' + cod);
+        if (row) row.style.display = 'none';
+    }
+ 
+    function salvaRettifica(cod) {
+        const stock  = document.getElementById('inp-stock-'  + cod).value;
+        const scorta = document.getElementById('inp-scorta-' + cod).value;
+        fetch('/rettifica_magazzino', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sku: cod, stock: parseInt(stock), scorta_minima: parseInt(scorta) })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                chiudiRettifica(cod);
+                updateProduction();  // ricarica tabella
+            } else {
+                alert('Errore: ' + data.error);
+            }
+        })
+        .catch(e => alert('Errore di rete: ' + e));
+    }
+ 
+    // Avvio: vista cards di default
+    window.onload = () => {
+        showView(0);
+        // Applica subito il filtro TUTTI (nasconde gli EVASI) al caricamento pagina
+        const activeFiltroBtn = document.querySelector('.filtro-btn.active');
+        if (activeFiltroBtn) filtraStato(activeFiltroBtn.getAttribute('onclick').match(/'([^']+)'/)[1], activeFiltroBtn);
+        const cardId = sessionStorage.getItem('cardAperta');
+        if (cardId) {
+            sessionStorage.removeItem('cardAperta');
+            setTimeout(() => {
+                const card = document.getElementById(cardId);
+                if (card) card.classList.add('open');
+            }, 100);
+        }
+    };
+ 
+ 
+    // ── FASCICOLO DIGITALE ──────────────────────────────────────────────────
+    function uploadFascicoloDoc(conferma, tipoDoc, inputEl) {
+        const file = inputEl.files[0];
+        if (!file) return;
+        const label = inputEl.closest('label');
+        label.style.color = '#f0ad4e';
+        label.childNodes[0].textContent = '⏳ Caricamento...';
+ 
+        const fd = new FormData();
+        fd.append('file', file);
+        fetch('/api/fascicolo/upload/' + conferma + '/' + tipoDoc, {
+            method: 'POST',
+            body: fd
+        })
+        .then(r => {
+            // Leggi prima come testo per evitare SyntaxError se il server risponde con HTML
+            return r.text().then(txt => {
+                try {
+                    return { ok: r.ok, status: r.status, data: JSON.parse(txt) };
+                } catch(e) {
+                    // Risposta non-JSON (errore HTML Flask) — mostra i primi 200 caratteri
+                    return { ok: false, status: r.status, data: { ok: false, error: 'Errore server ' + r.status + ': ' + txt.substring(0, 200).replace(/<[^>]+>/g,'') } };
+                }
+            });
+        })
+        .then(({ ok, status, data }) => {
+            if (data.ok) {
+                const slug = conferma.replace('/', '_');
+                const container = document.getElementById('fasc-docs-' + slug);
+                if (container) {
+                    const docData = data.fascicolo.docs.find(d => d.key === tipoDoc);
+                    if (docData && docData.ok) {
+                        const a = document.createElement('a');
+                        a.href = '/api/fascicolo/apri/' + conferma + '/' + tipoDoc;
+                        a.target = '_blank';
+                        a.style.cssText = 'background:rgba(40,167,69,0.15);color:#28a745;border:1px solid #28a74533;padding:3px 8px;border-radius:8px;font-size:0.62rem;font-weight:bold;text-decoration:none;white-space:nowrap;';
+                        a.textContent = '✅ ' + docData.label;
+                        label.parentNode.replaceChild(a, label);
+                    }
+                }
+                const fascDiv = document.getElementById('fasc-' + slug);
+                if (fascDiv) {
+                    const bar = fascDiv.querySelector('div[style*="height:4px"] > div');
+                    if (bar) bar.style.width = data.fascicolo.perc + '%';
+                }
+            } else {
+                alert('Errore upload: ' + (data.error || 'errore sconosciuto'));
+                label.style.color = '#555';
+                label.childNodes[0].textContent = '📎 ';
+            }
+        })
+        .catch(e => {
+            alert('Errore di rete: ' + e);
+            label.style.color = '#555';
+            label.childNodes[0].textContent = '📎 ';
+        });
+    }
+ 
+{% endraw %}
+</script>
+ 
+ 
+<script>
+// ── DRAG & DROP PRIORITÀ ORDINI ──────────────────────────────────────────────
+(function() {
+    var dragSrc = null;
+    var container = document.getElementById('cards-container');
+    if (!container) return;
+ 
+    function getCards() {
+        return Array.from(container.querySelectorAll('.mini-card-v2[data-filename]'));
+    }
+ 
+    function aggiornaBadge() {
+        getCards().forEach(function(card, i) {
+            var badge = card.querySelector('.priorita-badge');
+            if (badge) badge.textContent = '#' + (i + 1);
+        });
+    }
+ 
+    function salvaPriorita() {
+        // Manda le CONFERME (non i filename) — sono la chiave nel DB
+        var ordine = getCards().map(function(c) { return c.dataset.conferma; });
+        fetch('/api/priorita_ordini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ordine: ordine })
+        }).then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                // Ricarica la pagina per ricalcolare impegni e disponibilità
+                window.location.reload();
+            } else {
+                console.error('Errore salvataggio priorità:', d.error);
+                alert('Errore nel salvataggio della priorità: ' + d.error);
+            }
+        }).catch(function(e) {
+            console.error('Fetch error:', e);
+            alert('Errore di rete nel salvataggio priorità.');
+        });
+    }
+ 
+    container.addEventListener('dragstart', function(e) {
+        var card = e.target.closest('.mini-card-v2[data-filename]');
+        if (!card) return;
+        dragSrc = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', card.dataset.filename);
+    });
+ 
+    container.addEventListener('dragend', function(e) {
+        var card = e.target.closest('.mini-card-v2[data-filename]');
+        if (!card) return;
+        card.classList.remove('dragging');
+        getCards().forEach(function(c) { c.classList.remove('drag-over'); });
+        dragSrc = null;
+        salvaPriorita();
+    });
+ 
+    container.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        var card = e.target.closest('.mini-card-v2[data-filename]');
+        if (card && card !== dragSrc) {
+            getCards().forEach(function(c) { c.classList.remove('drag-over'); });
+            card.classList.add('drag-over');
+        }
+    });
+ 
+    container.addEventListener('dragleave', function(e) {
+        var card = e.target.closest('.mini-card-v2[data-filename]');
+        if (card) card.classList.remove('drag-over');
+    });
+ 
+    container.addEventListener('drop', function(e) {
+        e.preventDefault();
+        var card = e.target.closest('.mini-card-v2[data-filename]');
+        if (!card || !dragSrc || card === dragSrc) return;
+        card.classList.remove('drag-over');
+        // Inserisce dragSrc prima o dopo card in base alla posizione
+        var cards  = getCards();
+        var srcIdx = cards.indexOf(dragSrc);
+        var dstIdx = cards.indexOf(card);
+        if (srcIdx < dstIdx) {
+            container.insertBefore(dragSrc, card.nextSibling);
+        } else {
+            container.insertBefore(dragSrc, card);
+        }
+        aggiornaBadge();
+    });
+ 
+    // Init badge al caricamento
+    document.addEventListener('DOMContentLoaded', aggiornaBadge);
+})();
+</script>
+ 
+<script>
+// ── DIARIO ACCORDI CLIENTE ──
+function _confToId(conferma) { return conferma.replace(/\//g, '_'); }
+ 
+function toggleDiarioCliente(conferma) {
+    const id  = _confToId(conferma);
+    const form = document.getElementById('diaform-' + id);
+    if (!form) return;
+    const aperto = form.style.display !== 'none';
+    form.style.display = aperto ? 'none' : 'block';
+    if (!aperto) {
+        setTimeout(() => { const u = document.getElementById('dia-utente-' + id); if (u) u.focus(); }, 50);
+    }
+}
+ 
+function caricaDiarioCliente(conferma) {
+    const id = _confToId(conferma);
+    fetch('/api/diario_accordi_cliente/' + encodeURIComponent(conferma))
+    .then(r => r.json()).then(voci => {
+        const list = document.getElementById('dialist-' + id);
+        if (!list) return;
+        if (!voci.length) {
+            list.innerHTML = '<div style="font-size:0.65rem;color:#333;text-align:center;padding:6px;">Nessun accordo registrato.</div>';
+            return;
+        }
+        list.innerHTML = voci.map(v => `
+            <div style="background:#0d1117;border:1px solid #1e1e1e;border-left:3px solid #a0a8ff44;border-radius:6px;padding:7px 10px;margin-bottom:6px;position:relative;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <span style="font-size:0.62rem;font-weight:900;color:#a0a8ff;background:rgba(160,168,255,0.12);border:1px solid #a0a8ff33;border-radius:10px;padding:1px 7px;">👤 ${v.utente}</span>
+                    <span style="font-size:0.6rem;color:#444;">🕐 ${v.registrato_il}</span>
+                </div>
+                <div style="font-size:0.75rem;color:#ccc;line-height:1.4;">${v.testo.replace(/\n/g,'<br>')}</div>
+                <button onclick="event.stopPropagation(); eliminaAccordoCliente(${v.id},'${conferma}')"
+                    style="position:absolute;top:6px;right:8px;background:none;border:none;color:#333;cursor:pointer;font-size:0.65rem;" title="Elimina">✕</button>
+            </div>`).join('');
+    }).catch(() => {});
+}
+ 
+function salvaAccordoCliente(conferma) {
+    const id     = _confToId(conferma);
+    const utente = (document.getElementById('dia-utente-' + id)?.value || '').trim();
+    const testo  = (document.getElementById('dia-testo-'  + id)?.value || '').trim();
+    if (!utente) { alert('Inserisci il tuo nome o le iniziali.'); return; }
+    if (!testo)  { alert('Scrivi il testo dell\'accordo.'); return; }
+    fetch('/api/diario_accordi_cliente', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({conferma, utente, testo}) })
+    .then(r => r.json()).then(data => {
+        if (data.ok) {
+            document.getElementById('dia-testo-'  + id).value = '';
+            document.getElementById('diaform-' + id).style.display = 'none';
+            caricaDiarioCliente(conferma);
+        } else alert('Errore: ' + data.error);
+    });
+}
+ 
+function eliminaAccordoCliente(id_voce, conferma) {
+    if (!confirm('Eliminare questa voce dal diario?')) return;
+    fetch('/api/diario_accordi_cliente/' + id_voce, { method:'DELETE' })
+    .then(r => r.json()).then(data => {
+        if (data.ok) caricaDiarioCliente(conferma);
+        else alert('Errore: ' + data.error);
+    });
+}
+ 
+// Carica diario quando la card si apre — hook su toggleCard esistente
+const _origOpenCard = window.apriCard || null;
+document.addEventListener('click', function(e) {
+    const card = e.target.closest('.mini-card-v2');
+    if (card && card.classList.contains('open')) {
+        const conferma = card.dataset.conferma;
+        if (conferma) caricaDiarioCliente(conferma);
+    }
+});
+</script>
+ 
+<!-- MODALE DATA OBBLIGATORIA ORDINE CLIENTE -->
+<div id="modal-data-cliente" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,0.88); z-index:20000; align-items:center; justify-content:center;">
+  <div style="background:#141414; border:2px solid #00d2ff66; border-radius:16px; width:92%; max-width:420px;
+              padding:28px; position:relative; box-shadow:0 0 50px rgba(0,210,255,0.15);">
+    <h3 style="color:#00d2ff; margin:0 0 6px; font-size:1rem;">📅 INSERISCI DATA CONSEGNA CLIENTE</h3>
+    <p style="color:#666; font-size:0.75rem; margin:0 0 6px;">
+        Conferma: <b style="color:#aaa;" id="dc-modal-conferma-label"></b>
+    </p>
+    <p style="color:#555; font-size:0.72rem; margin:0 0 14px; line-height:1.5;">
+        Inserisci la data di consegna concordata col cliente.<br>
+        <b style="color:#00d2ff;">Anche una stima va bene</b> — potrai aggiornarla in seguito.<br>
+        Senza data non è possibile monitorare scadenze e ritardi.
+    </p>
+    <input type="date" id="dc-modal-input"
+           style="width:100%; background:#0d1117; border:2px solid #00d2ff44;
+                  border-radius:8px; color:#00d2ff; padding:12px; font-size:1.1rem; font-weight:bold;
+                  box-sizing:border-box; color-scheme:dark; text-align:center; margin-bottom:14px;">
+    <input type="hidden" id="dc-modal-conferma">
+    <input type="hidden" id="dc-modal-cardid">
+    <div style="display:flex; gap:10px;">
+        <button onclick="saltaDataCliente()"
+                style="flex:1; background:#1a1a1a; color:#555; border:1px solid #333;
+                       padding:10px; border-radius:8px; cursor:pointer; font-size:0.8rem;">
+            ⏭ Salta
+        </button>
+        <button onclick="salvaDataClienteModal()"
+                style="flex:2; background:#001a2a; color:#00d2ff; border:1px solid #00d2ff44;
+                       padding:10px; border-radius:8px; cursor:pointer; font-weight:900; font-size:0.9rem;">
+            💾 SALVA DATA
+        </button>
+    </div>
+    <div id="dc-modal-result" style="display:none; margin-top:10px; color:#ff4d5e; font-size:0.75rem;"></div>
+  </div>
+</div>
+ 
+<script>
+// ── DATA OBBLIGATORIA ORDINI CLIENTI ─────────────────────────────────────
+let _dcQueue = [];
+let _dcIdx   = 0;
+ 
+function _apriProssimaDC() {
+    if (_dcIdx >= _dcQueue.length) return;
+    const item = _dcQueue[_dcIdx];
+    document.getElementById('dc-modal-conferma').value         = item.conferma;
+    document.getElementById('dc-modal-cardid').value           = item.cardId;
+    document.getElementById('dc-modal-conferma-label').textContent = item.conferma;
+    document.getElementById('dc-modal-input').value            = '';
+    document.getElementById('dc-modal-result').style.display   = 'none';
+    document.getElementById('modal-data-cliente').style.display = 'flex';
+    document.getElementById('dc-modal-input').focus();
+}
+ 
+function apriModalDataCliente(conferma, cardId) {
+    // Apertura manuale da click su badge "Inserire data"
+    document.getElementById('dc-modal-conferma').value         = conferma;
+    document.getElementById('dc-modal-cardid').value           = cardId;
+    document.getElementById('dc-modal-conferma-label').textContent = conferma;
+    document.getElementById('dc-modal-input').value            = '';
+    document.getElementById('dc-modal-result').style.display   = 'none';
+    document.getElementById('modal-data-cliente').style.display = 'flex';
+    document.getElementById('dc-modal-input').focus();
+}
+ 
+function salvaDataClienteModal() {
+    const conferma = document.getElementById('dc-modal-conferma').value;
+    const cardId   = document.getElementById('dc-modal-cardid').value;
+    const inputEl  = document.getElementById('dc-modal-input');
+    const valIso   = inputEl.value.trim();
+    if (!valIso) { inputEl.style.borderColor = '#ff4d5e'; return; }
+    inputEl.style.borderColor = '#00d2ff44';
+ 
+    // YYYY-MM-DD → GG/MM/AAAA
+    const p      = valIso.split('-');
+    const valDmy = p[2] + '/' + p[1] + '/' + p[0];
+ 
+    fetch('/api/data_consegna_cliente', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ conferma: conferma, data: valDmy })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            document.getElementById('modal-data-cliente').style.display = 'none';
+ 
+            // Aggiorna badge e card via _aggiornaCardDopoData (già esiste nel file)
+            _aggiornaCardDopoData(cardId, conferma, valDmy, data.scaduto || false);
+ 
+            // Rimuovi badge "Inserire data" e sostituisci con badge normale
+            const card = document.getElementById(cardId);
+            if (card) {
+                const bm = card.querySelector('.badge-consegna-mancante');
+                if (bm) bm.remove();
+                // Aggiorna anche input nel body card
+                const confKey = conferma.replace(/\//g, '_');
+                const inp = document.getElementById('data-cons-' + confKey);
+                if (inp) inp.value = valIso;
+                card.dataset.consegna = valDmy;
+            }
+ 
+            // Prossimo nella coda automatica
+            _dcIdx++;
+            setTimeout(_apriProssimaDC, 200);
+        } else {
+            document.getElementById('dc-modal-result').style.display = 'block';
+            document.getElementById('dc-modal-result').textContent = 'Errore: ' + (data.error || 'sconosciuto');
+        }
+    })
+    .catch(e => {
+        document.getElementById('dc-modal-result').style.display = 'block';
+        document.getElementById('dc-modal-result').textContent = 'Errore di rete: ' + e;
+    });
+}
+ 
+function saltaDataCliente() {
+    document.getElementById('modal-data-cliente').style.display = 'none';
+    _dcIdx++;
+    setTimeout(_apriProssimaDC, 200);
+}
+ 
+// Avvia coda automatica al caricamento pagina
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.badge-consegna-mancante').forEach(function(badge) {
+        const conferma = badge.dataset.conferma;
+        const cardId   = badge.dataset.cardid;
+        if (conferma && cardId) {
+            _dcQueue.push({ conferma: conferma, cardId: cardId });
+        }
+    });
+    if (_dcQueue.length > 0) {
+        setTimeout(_apriProssimaDC, 800);
+    }
+ 
+    // Enter / Escape nel modale
+    const inp = document.getElementById('dc-modal-input');
+    if (inp) {
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter')  salvaDataClienteModal();
+            if (e.key === 'Escape') saltaDataCliente();
+        });
+    }
+});
+</script>
+ 
+</body>
+</html>
