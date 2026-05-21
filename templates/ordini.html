@@ -16,7 +16,7 @@
 <div class="card">
   <div class="card-body" style="padding:0">
     <table class="tbl">
-      <thead><tr><th>N. Ordine</th><th>Codice</th><th>Colore</th><th>Qtà</th><th>Priorità</th><th>Stato</th><th>Centro</th><th></th></tr></thead>
+      <thead><tr><th>N. Ordine</th><th>Codice</th><th>Colore</th><th>Qtà</th><th>Priorità</th><th>Stato</th><th>Centro</th><th>Nesting</th><th></th></tr></thead>
       <tbody>
       {% for o in ordini %}
       <tr>
@@ -27,6 +27,13 @@
         <td><span class="bdg {% if o.priorita<=2 %}bdg-red{% elif o.priorita<=4 %}bdg-yel{% else %}bdg-grn{% endif %}">P{{ o.priorita }}</span></td>
         <td><span class="bdg bdg-gray">{{ o.stato }}</span></td>
         <td style="font-size:.72rem;color:var(--muted)">{{ o.centro_lavoro }}</td>
+        <td>
+          <a href="{{ url_for('ordine_nesting_hub', ordine_id=o.id) }}"
+             class="btn-out" style="font-size:.7rem;padding:.2rem .5rem;text-decoration:none;display:inline-flex;align-items:center;gap:4px"
+             title="Nesting">
+            <i class="bi bi-layout-wtf"></i> Nesting
+          </a>
+        </td>
         <td>
           <form method="POST" action="{{ url_for('ordine_delete', ordine_id=o.id) }}" onsubmit="return confirm('Eliminare?')" style="display:inline">
             <button class="btn-out" style="font-size:.7rem;padding:.2rem .4rem;color:var(--red);border-color:rgba(200,16,46,.2)"><i class="bi bi-trash"></i></button>

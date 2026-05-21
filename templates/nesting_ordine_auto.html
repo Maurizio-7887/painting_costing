@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Nesting Auto — Ordine {{ ordine.numero_ordine }}{% endblock %}
+{% block page_title %}Nesting Automatico{% endblock %}
+
+{% block content %}
+<style>
+.auto-shell{max-width:900px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:18px}
+.auto-back{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);text-decoration:none;margin-bottom:4px}
+.auto-back:hover{color:var(--txt)}
+.result-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;overflow:hidden}
+.result-hdr{padding:14px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px}
+.result-hdr-title{font-size:.88rem;font-weight:700;color:#fff}
+.result-body{padding:20px}
+
+/* KPI row */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--bdr);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.kpi-cell{background:var(--bg2);padding:14px 10px;text-align:center}
+.kpi-v{font-size:1.3rem;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi-l{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:2px}
+
+/* Hooks table */
+.hooks-tbl{width:100%;border-collapse:collapse}
+.hooks-tbl th{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+  padding:6px 10px;border-bottom:1px solid var(--bdr);text-align:left}
+.hooks-tbl td{font-size:.75rem;padding:7px 10px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+.hooks-tbl tr:last-child td{border-bottom:none}
+.hook-num{font-weight:700;color:var(--muted);font-size:.68rem}
+.parts-list{display:flex;gap:4px;flex-wrap:wrap}
+.part-chip{padding:2px 8px;border-radius:12px;font-size:.65rem;font-weight:700;color:#fff}
+.weight-bar-wrap{width:80px}
+.weight-bar{height:4px;border-radius:2px;background:var(--bdr);overflow:hidden}
+.weight-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#00d464,#ffab00)}
+
+/* Error box */
+.err-box{background:rgba(200,16,46,.1);border:1px solid rgba(200,16,46,.3);border-radius:8px;
+  padding:16px 20px;font-size:.82rem;color:#c8102e}
+
+/* Actions */
+.actions-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;
+  font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;text-decoration:none;border:none}
+.btn-grn{background:#00d464;color:#000}
+.btn-grn:hover{background:#00e670;color:#000}
+.btn-out{background:transparent;border:1px solid var(--bdr2);color:var(--txt)}
+.btn-out:hover{background:var(--bg2)}
+.btn-yel{background:rgba(255,171,0,.15);border:1px solid rgba(255,171,0,.4);color:#ffab00}
+.btn-yel:hover{background:rgba(255,171,0,.25)}
+
+/* Match badge */
+.match-info{font-size:.72rem;color:var(--muted);padding:8px 16px;
+  background:var(--bg1);border-radius:7px;display:flex;align-items:center;gap:6px}
+</style>
+
+<div class="auto-shell">
+
+  <a href="{{ url_for('ordine_nesting_hub', ordine_id=ordine.id) }}" class="auto-back">
+    <i class="bi bi-arrow-left"></i> Torna al hub nesting
+  </a>
+
+  {# Match info #}
+  {% if match_type == 'exact' %}
+  <div class="match-info">
+    <i class="bi bi-check2-circle" style="color:#00d464"></i>
+    Geometria trovata esatta per <strong>{{ ordine.codice_prodotto }}</strong> →
+    <strong>{{ palette_entry.nome }}</strong>
+  </div>
+  {% elif match_type in ('ilike','nome') %}
+  <div class="match-info" style="border:1px solid rgba(255,171,0,.3)">
+    <i class="bi bi-search" style="color:#ffab00"></i>
+    Geometria approssimata: <strong>{{ palette_entry.nome }}</strong>
+    ({{ palette_entry.L_mm|int }}×{{ palette_entry.H_mm|int }}×{{ palette_entry.W_mm|int }} mm · {{ palette_entry.peso_kg }} kg/pz)
+  </div>
+  {% else %}
+  <div class="match-info" style="border:1px solid rgba(200,16,46,.3)">
+    <i class="bi bi-exclamation-triangle" style="color:#c8102e"></i>
+    Nessuna geometria trovata per <strong>{{ ordine.codice_prodotto }}</strong> —
+    usate dimensioni placeholder ({{ palette_entry.L_mm|int }}×{{ palette_entry.H_mm|int }}×{{ palette_entry.W_mm|int }} mm).
+    <a href="{{ url_for('cad_upload') }}" style="color:#ffab00;margin-left:auto">
+      <i class="bi bi-upload"></i> Carica STP →
+    </a>
+  </div>
+  {% endif %}
+
+  {# Result o errore #}
+  {% if error_msg %}
+  <div class="err-box">
+    <i class="bi bi-exclamation-triangle"></i> {{ error_msg }}
+  </div>
+
+  {% elif result_json %}
+  {% set result = result_json|tojson|safe %}
+  <div class="result-card" id="result-card">
+    <div class="result-hdr">
+      <i class="bi bi-lightning-charge" style="color:#00d464"></i>
+      <span class="result-hdr-title">Nesting automatico — Ordine {{ ordine.numero_ordine }}</span>
+    </div>
+    <div class="result-body" id="result-body">
+      {# Popolato da JS #}
+    </div>
+  </div>
+  {% endif %}
+
+  {# Actions #}
+  <div class="actions-row">
+    <a href="{{ url_for('ordine_nesting_manuale', ordine_id=ordine.id) }}" class="btn btn-yel">
+      <i class="bi bi-hand-index"></i> Passa a Manuale
+    </a>
+    <a href="{{ url_for('ordine_nesting_hub', ordine_id=ordine.id) }}" class="btn btn-out">
+      <i class="bi bi-arrow-left"></i> Hub
+    </a>
+  </div>
+
+</div>
+
+{% if result_json %}
+<script>
+const RESULT = {{ result_json|safe }};
+const PALETTE_ENTRY = {{ palette_entry|tojson }};
+const MAX_KG = {{ max_kg_hook }};
+
+const COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
+
+document.addEventListener('DOMContentLoaded', () => {
+  const kpi = RESULT.kpi || {};
+  const hooks = RESULT.hooks || [];
+
+  const body = document.getElementById('result-body');
+  if (!body) return;
+
+  // KPI row
+  const satColor = kpi.saturazione_pct>=80?'#00d464':kpi.saturazione_pct>=50?'#ffab00':'#c8102e';
+  const balColor = (kpi.bilanciamento||0)>=85?'#00d464':(kpi.bilanciamento||0)>=60?'#ffab00':'#c8102e';
+
+  body.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-cell">
+        <div class="kpi-v" style="color:#00d464">${kpi.saturazione_pct ?? '—'}%</div>
+        <div class="kpi-l">Saturazione</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-v" style="color:${balColor}">${kpi.bilanciamento ?? '—'}%</div>
+        <div class="kpi-l">Bilanciamento</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-v">${kpi.n_ganci_usati ?? hooks.length}</div>
+        <div class="kpi-l">Ganci usati</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-v">${kpi.n_pezzi ?? '—'}</div>
+        <div class="kpi-l">Pezzi piazzati</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-v">${(kpi.peso_totale_kg ?? 0).toFixed(1)} kg</div>
+        <div class="kpi-l">Peso totale</div>
+      </div>
+    </div>
+
+    <table class="hooks-tbl">
+      <thead>
+        <tr>
+          <th>Gancio</th>
+          <th>Pezzi</th>
+          <th>Peso</th>
+          <th>Saturazione gancio</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${hooks.map((h, i) => {
+          const w = h.peso_kg || 0;
+          const pct = Math.min(100, Math.round(w / MAX_KG * 100));
+          const color = COLORS[i % COLORS.length];
+          return `
+            <tr>
+              <td><span class="hook-num">G-${String(h.hook_idx+1).padStart(2,'0')}</span></td>
+              <td>
+                <div class="parts-list">
+                  ${(h.parts||[]).map(p =>
+                    `<span class="part-chip" style="background:${color}90;border:1px solid ${color}">${p.slice(-5)}</span>`
+                  ).join('')}
+                </div>
+              </td>
+              <td>${w.toFixed(1)} kg</td>
+              <td>
+                <div class="weight-bar-wrap">
+                  <div style="font-size:.62rem;color:var(--muted);margin-bottom:2px">${pct}%</div>
+                  <div class="weight-bar">
+                    <div class="weight-bar-fill" style="width:${pct}%"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+});
+</script>
+{% endif %}
+
+{% endblock %}

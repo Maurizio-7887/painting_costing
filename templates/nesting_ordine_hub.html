@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Nesting — Ordine {{ ordine.numero_ordine }}{% endblock %}
+{% block page_title %}Nesting Ordine{% endblock %}
+
+{% block content %}
+<style>
+/* ── Hub layout ─────────────────────────────────────────────────── */
+.hub-shell{max-width:860px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:18px}
+.hub-back{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);text-decoration:none;margin-bottom:4px}
+.hub-back:hover{color:var(--txt)}
+
+/* ── Ordine card ─────────────────────────────────────────────────── */
+.ord-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:18px 22px}
+.ord-title{font-size:1rem;font-weight:700;color:#fff;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.ord-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.ord-field{display:flex;flex-direction:column;gap:2px}
+.ord-field-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ord-field-val{font-size:.82rem;color:var(--txt);font-weight:600}
+.match-badge{font-size:.58rem;padding:2px 7px;border-radius:20px;font-weight:700}
+.match-exact{background:rgba(0,212,100,.12);border:1px solid rgba(0,212,100,.3);color:#00d464}
+.match-ilike,.match-nome{background:rgba(255,171,0,.12);border:1px solid rgba(255,171,0,.3);color:#ffab00}
+.match-placeholder{background:rgba(200,16,46,.12);border:1px solid rgba(200,16,46,.3);color:#c8102e}
+
+/* ── Scelta modalità ─────────────────────────────────────────────── */
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.mode-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:22px;
+  display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;
+  transition:border-color .2s,transform .1s;cursor:pointer;text-decoration:none;color:var(--txt)}
+.mode-card:hover{border-color:var(--bdr2);transform:translateY(-2px)}
+.mode-card.auto{border-color:rgba(0,212,100,.3)}
+.mode-card.auto:hover{border-color:#00d464}
+.mode-card.manual{border-color:rgba(255,171,0,.3)}
+.mode-card.manual:hover{border-color:#ffab00}
+.mode-icon{font-size:2.2rem}
+.mode-title{font-size:.95rem;font-weight:700}
+.mode-desc{font-size:.72rem;color:var(--muted);line-height:1.5}
+.mode-time{font-size:.62rem;color:var(--muted);margin-top:4px;font-style:italic}
+
+/* ── CBR suggestion ──────────────────────────────────────────────── */
+.cbr-card{background:var(--bg2);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:16px 20px}
+.cbr-title{font-size:.75rem;font-weight:700;color:#818cf8;margin-bottom:10px;
+  display:flex;align-items:center;gap:8px}
+.cbr-body{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.cbr-sim{font-size:1.8rem;font-weight:800;color:#818cf8}
+.cbr-info{display:flex;flex-direction:column;gap:3px;font-size:.72rem;color:var(--muted)}
+.cbr-info strong{color:var(--txt)}
+.cbr-load-btn{margin-left:auto;padding:8px 18px;border-radius:7px;
+  background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.4);
+  color:#818cf8;font-size:.75rem;font-weight:700;cursor:pointer;
+  transition:background .2s;text-decoration:none;display:inline-block}
+.cbr-load-btn:hover{background:rgba(99,102,241,.3);color:#818cf8}
+.cbr-none{font-size:.75rem;color:var(--muted);font-style:italic}
+
+/* ── ML progress ─────────────────────────────────────────────────── */
+.ml-card{background:var(--bg1);border:1px solid var(--bdr);border-radius:10px;padding:14px 18px}
+.ml-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ml-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.ml-ready{font-size:.6rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:auto}
+.ml-ready.yes{background:rgba(0,212,100,.12);border:1px solid rgba(0,212,100,.3);color:#00d464}
+.ml-ready.no{background:rgba(var(--muted-rgb),.1);border:1px solid var(--bdr);color:var(--muted)}
+.ml-stats{display:flex;gap:24px;flex-wrap:wrap;font-size:.72rem}
+.ml-stat{display:flex;flex-direction:column;gap:2px}
+.ml-stat-v{font-size:1rem;font-weight:700;color:#fff}
+.ml-stat-l{color:var(--muted)}
+.ml-bar-wrap{margin-top:10px}
+.ml-bar-track{height:4px;background:var(--bdr);border-radius:2px}
+.ml-bar-fill{height:4px;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:2px;transition:width .6s}
+.ml-bar-label{font-size:.6rem;color:var(--muted);margin-top:4px}
+
+/* ── Last saved ──────────────────────────────────────────────────── */
+.latest-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:14px 18px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.latest-icon{font-size:1.4rem}
+.latest-info{flex:1;font-size:.75rem;color:var(--muted)}
+.latest-info strong{color:var(--txt);font-size:.82rem}
+.badge-src{font-size:.6rem;padding:2px 7px;border-radius:20px;font-weight:700}
+.badge-manual{background:rgba(255,171,0,.12);border:1px solid rgba(255,171,0,.3);color:#ffab00}
+.badge-auto{background:rgba(0,212,100,.12);border:1px solid rgba(0,212,100,.3);color:#00d464}
+</style>
+
+<div class="hub-shell">
+
+  <a href="{{ url_for('ordini') }}" class="hub-back">
+    <i class="bi bi-arrow-left"></i> Tutti gli ordini
+  </a>
+
+  {# ── Ordine info card ────────────────────────────────────────────── #}
+  <div class="ord-card">
+    <div class="ord-title">
+      <i class="bi bi-box-seam"></i>
+      Ordine {{ ordine.numero_ordine }}
+      {% if match_type == 'exact' %}
+        <span class="match-badge match-exact"><i class="bi bi-check2"></i> Geometria trovata</span>
+      {% elif match_type in ('ilike','nome') %}
+        <span class="match-badge match-ilike"><i class="bi bi-search"></i> Geometria approssimata</span>
+      {% else %}
+        <span class="match-badge match-placeholder"><i class="bi bi-exclamation-triangle"></i> Nessuna geometria — placeholder</span>
+      {% endif %}
+    </div>
+    <div class="ord-grid">
+      <div class="ord-field">
+        <span class="ord-field-lbl">Codice prodotto</span>
+        <span class="ord-field-val">{{ ordine.codice_prodotto }}</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Quantità</span>
+        <span class="ord-field-val">{{ ordine.quantita }} pz</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Colore</span>
+        <span class="ord-field-val">{{ ordine.colore }}</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Priorità</span>
+        <span class="ord-field-val">P{{ ordine.priorita }}</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Dim. articolo (L×H×W)</span>
+        <span class="ord-field-val">{{ palette_entry.L_mm|int }}×{{ palette_entry.H_mm|int }}×{{ palette_entry.W_mm|int }} mm</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Peso unitario</span>
+        <span class="ord-field-val">{{ palette_entry.peso_kg }} kg</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Peso totale stimato</span>
+        <span class="ord-field-val">{{ (palette_entry.peso_kg * ordine.quantita)|round(1) }} kg</span>
+      </div>
+      <div class="ord-field">
+        <span class="ord-field-lbl">Origine</span>
+        <span class="ord-field-val">{{ ordine.origine }}</span>
+      </div>
+    </div>
+  </div>
+
+  {# ── Ultimo layout salvato ────────────────────────────────────────── #}
+  {% if latest %}
+  <div class="latest-card">
+    <div class="latest-icon">💾</div>
+    <div class="latest-info">
+      <strong>Layout salvato</strong> —
+      <span class="badge-src badge-{{ latest.source }}">{{ latest.source|upper }}</span>
+      &nbsp;·&nbsp;Saturazione <strong>{{ latest.layout.get('kpi',{}).get('saturazione_pct','—') }}%</strong>
+      &nbsp;·&nbsp;{{ latest.salvato_il[:16]|replace('T',' ') if latest.salvato_il else '' }}
+    </div>
+    <a href="{{ url_for('ordine_nesting_manuale', ordine_id=ordine.id) }}"
+       class="cbr-load-btn">
+      <i class="bi bi-pencil-square"></i> Riapri in Manuale
+    </a>
+  </div>
+  {% endif %}
+
+  {# ── Scelta modalità ──────────────────────────────────────────────── #}
+  <div class="mode-grid">
+    <a href="{{ url_for('ordine_nesting_auto', ordine_id=ordine.id) }}" class="mode-card auto">
+      <div class="mode-icon">⚡</div>
+      <div class="mode-title">Nesting Automatico</div>
+      <div class="mode-desc">
+        Il sistema posiziona i {{ ordine.quantita }} pezzi
+        sulla barra in modo ottimale.<br>
+        Risultato immediato, massima saturazione.
+      </div>
+      <div class="mode-time">⏱ ~2 secondi</div>
+    </a>
+
+    <a href="{{ url_for('ordine_nesting_manuale', ordine_id=ordine.id) }}" class="mode-card manual">
+      <div class="mode-icon">✋</div>
+      <div class="mode-title">Nesting Manuale</div>
+      <div class="mode-desc">
+        Posizioni tu i pezzi sui ganci con drag&amp;drop.<br>
+        Snap magnetico, collision detection, KPI live.
+        Il sistema impara dalle tue scelte.
+      </div>
+      <div class="mode-time">🧠 Contribuisce all'apprendimento automatico</div>
+    </a>
+  </div>
+
+  {# ── Suggerimento CBR ─────────────────────────────────────────────── #}
+  <div class="cbr-card">
+    <div class="cbr-title">
+      <i class="bi bi-cpu"></i>
+      Suggerimento intelligente (CBR)
+    </div>
+    {% if suggestion %}
+    <div class="cbr-body">
+      <div class="cbr-sim">{{ suggestion.similarity_pct }}%</div>
+      <div class="cbr-info">
+        <span>Similarità con ordine storico <strong>{{ suggestion.session_key }}</strong></span>
+        <span>Saturazione storica: <strong>{{ suggestion.score_sat }}%</strong></span>
+        <span>Bilanciamento: <strong>{{ suggestion.score_bal }}%</strong></span>
+        <span>Salvato il: <strong>{{ suggestion.salvato_il[:10] if suggestion.salvato_il else '—' }}</strong></span>
+      </div>
+      <a href="{{ url_for('ordine_nesting_manuale', ordine_id=ordine.id) }}?cbr=1"
+         class="cbr-load-btn">
+        <i class="bi bi-lightning-charge"></i> Usa come base
+      </a>
+    </div>
+    {% else %}
+    <div class="cbr-none">
+      <i class="bi bi-info-circle"></i>
+      Nessun layout simile trovato nello storico.
+      Più nesting manuali vengono salvati, più il sistema diventa preciso.
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── ML progress ──────────────────────────────────────────────────── #}
+  <div class="ml-card">
+    <div class="ml-header">
+      <i class="bi bi-graph-up" style="color:var(--muted)"></i>
+      <span class="ml-title">🧠 Stato apprendimento automatico</span>
+      {% if stats.ml_ready %}
+        <span class="ml-ready yes"><i class="bi bi-check2"></i> ML Attivo</span>
+      {% else %}
+        <span class="ml-ready no">In addestramento</span>
+      {% endif %}
+    </div>
+    <div class="ml-stats">
+      <div class="ml-stat">
+        <span class="ml-stat-v">{{ stats.total }}</span>
+        <span class="ml-stat-l">Layout totali</span>
+      </div>
+      <div class="ml-stat">
+        <span class="ml-stat-v">{{ stats.manual }}</span>
+        <span class="ml-stat-l">Da operatori</span>
+      </div>
+      <div class="ml-stat">
+        <span class="ml-stat-v">{{ stats.auto }}</span>
+        <span class="ml-stat-l">Automatici</span>
+      </div>
+      <div class="ml-stat">
+        <span class="ml-stat-v">{{ stats.avg_sat }}%</span>
+        <span class="ml-stat-l">Saturazione media</span>
+      </div>
+    </div>
+    <div class="ml-bar-wrap">
+      <div class="ml-bar-track">
+        <div class="ml-bar-fill" style="width:{{ stats.ml_progress }}%"></div>
+      </div>
+      <div class="ml-bar-label">
+        {{ stats.manual }}/{{ stats.ml_threshold }} layout manuali
+        {% if stats.ml_ready %}
+          — Il modello AI è pronto! 🎉
+        {% else %}
+          — ancora {{ stats.ml_threshold - stats.manual }} per attivare il modello AI avanzato
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
