@@ -134,7 +134,128 @@ body.light .tv { color:#1a5e52 !important; }
 
 </style>
 
-<div id="app">
+<!-- ══════════════════════════════════════════════════════
+     BARRA SORGENTE (sopra tutto)
+══════════════════════════════════════════════════════ -->
+<div id="src-bar" style="background:#0d1117;border-bottom:1px solid #1a2633;
+     padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;z-index:50;position:relative">
+
+  <span style="font-size:.65rem;color:#4a6070;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap">
+    Sorgente dati:
+  </span>
+
+  <!-- Tab STP -->
+  <button id="src-stp" class="src-tab active" onclick="selSrc('stp')">
+    📐 File STP
+  </button>
+  <!-- Tab DB -->
+  <button id="src-db" class="src-tab" onclick="selSrc('db')">
+    🗄️ Macchine DB
+  </button>
+  <!-- Tab Commessa -->
+  <button id="src-commessa" class="src-tab" onclick="selSrc('commessa')">
+    📋 Da Commessa
+  </button>
+
+  <!-- Separatore -->
+  <div style="width:1px;height:24px;background:#1a2633;margin:0 4px"></div>
+
+  <!-- Controllo Gap 2D -->
+  <div style="display:flex;align-items:center;gap:6px">
+    <label style="font-size:.65rem;color:#4a6070;white-space:nowrap">
+      <i>Gap min. pezzi:</i>
+    </label>
+    <input id="gap-input" type="number" value="50" min="0" max="500" step="10"
+           style="width:64px;background:#111b27;border:1px solid #1a2633;color:#80cbc4;
+                  border-radius:5px;padding:3px 6px;font-size:.72rem;text-align:right"
+           onchange="aggiornaGap()" title="Spazio minimo tra i pezzi (mm)">
+    <span style="font-size:.65rem;color:#4a6070">mm</span>
+    <span id="gap-badge" style="display:none;font-size:.6rem;padding:2px 7px;border-radius:10px;
+          font-weight:700;background:rgba(244,67,54,.2);border:1px solid rgba(244,67,54,.4);
+          color:#ef5350">⚠ Collisioni!</span>
+  </div>
+
+  <!-- Toggle 2D -->
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <label style="font-size:.65rem;color:#4a6070;white-space:nowrap">Vista 2D</label>
+    <label style="position:relative;display:inline-block;width:36px;height:18px;cursor:pointer">
+      <input type="checkbox" id="toggle-2d" style="opacity:0;width:0;height:0"
+             onchange="toggleVista2D(this.checked)">
+      <span style="position:absolute;inset:0;background:#1a2633;border-radius:9px;transition:.2s"></span>
+      <span id="toggle-knob" style="position:absolute;top:2px;left:2px;width:14px;height:14px;
+            background:#4a6070;border-radius:50%;transition:.2s"></span>
+    </label>
+  </div>
+
+</div>
+
+<!-- Pannello DB macchine (nascosto di default) -->
+<div id="panel-db" style="display:none;background:#0d1117;border-bottom:1px solid #1a2633;
+     padding:10px 16px;max-height:240px;overflow-y:auto">
+  <div style="font-size:.65rem;color:#4a6070;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">
+    Seleziona le macchine dal database
+  </div>
+  <div id="db-list" style="display:flex;flex-direction:column;gap:4px">
+    <div style="color:#4a6070;font-size:.72rem">Caricamento...</div>
+  </div>
+  <div style="margin-top:10px">
+    <button onclick="caricaDaDB()" style="background:#00e676;color:#080c0e;border:none;
+            border-radius:6px;padding:6px 18px;font-weight:700;cursor:pointer;font-size:.72rem">
+      ⛓ Avvia Nesting
+    </button>
+  </div>
+</div>
+
+<!-- Pannello Commessa (nascosto di default) -->
+<div id="panel-commessa" style="display:none;background:#0d1117;border-bottom:1px solid #1a2633;
+     padding:10px 16px;max-height:240px;overflow-y:auto">
+  <div style="font-size:.65rem;color:#4a6070;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">
+    Seleziona la commessa
+  </div>
+  <div id="commessa-list" style="display:flex;flex-direction:column;gap:4px">
+    <div style="color:#4a6070;font-size:.72rem">Caricamento...</div>
+  </div>
+</div>
+
+<!-- Canvas 2D spaziatura (nascosto di default) -->
+<div id="view2d" style="display:none;position:absolute;inset:0;background:#080c0e;z-index:15;
+     flex-direction:column;overflow:hidden">
+  <div style="padding:10px 16px;background:#0d1117;border-bottom:1px solid #1a2633;
+       font-size:.72rem;color:#80cbc4;display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <span>Vista 2D — Verifica spaziatura pezzi sulla catena</span>
+    <span id="2d-gap-ok" style="display:none;background:rgba(0,230,118,.15);border:1px solid rgba(0,230,118,.3);
+          border-radius:6px;padding:2px 10px;color:#00e676;font-size:.65rem;font-weight:700">
+      ✓ Nessuna collisione
+    </span>
+    <span id="2d-gap-err" style="display:none;background:rgba(244,67,54,.12);border:1px solid rgba(244,67,54,.3);
+          border-radius:6px;padding:2px 10px;color:#ef5350;font-size:.65rem;font-weight:700">
+      ⚠ Collisioni rilevate!
+    </span>
+    <button onclick="toggleVista2D(false);document.getElementById('toggle-2d').checked=false"
+            style="margin-left:auto;background:#1a2633;border:none;color:#80cbc4;border-radius:5px;
+                   padding:4px 10px;cursor:pointer;font-size:.68rem">
+      ✕ Chiudi vista 2D
+    </button>
+  </div>
+  <canvas id="canvas2d" style="flex:1;display:block;width:100%;cursor:default"></canvas>
+</div>
+
+<style>
+.src-tab{background:#111b27;border:1px solid #1a2633;color:#4a6070;padding:4px 12px;
+  border-radius:14px;cursor:pointer;font-size:.68rem;font-family:'Courier New',monospace;
+  transition:all .15s;white-space:nowrap}
+.src-tab:hover{border-color:#00e676;color:#00e676}
+.src-tab.active{background:rgba(0,230,118,.12);border-color:#00e676;color:#00e676;font-weight:700}
+.db-mac-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;
+  background:#111b27;border:1px solid #1a2633;cursor:pointer;transition:border-color .15s}
+.db-mac-item:hover{border-color:#1a2633}
+.db-mac-item input{accent-color:#00e676;flex-shrink:0}
+.comm-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px;
+  background:#111b27;border:1px solid #1a2633;cursor:pointer;transition:all .15s}
+.comm-item:hover{border-color:#ffab40;color:#ffab40}
+</style>
+
+<div id="app" style="position:relative">
   <!-- SIDEBAR -->
   <div id="sidebar">
     <h3>⛓ Nesting Catena</h3>
@@ -171,15 +292,17 @@ body.light .tv { color:#1a5e52 !important; }
 
   <!-- CANVAS AREA -->
   <div id="canvaswrap">
-    <!-- UPLOAD OVERLAY (visibile all'inizio) -->
+    <!-- UPLOAD OVERLAY (visibile all'inizio per sorgente STP) -->
     <div id="upload-overlay">
       <div id="dropzone" onclick="document.getElementById('file-input').click()"
            ondragover="event.preventDefault();this.classList.add('drag-over')"
            ondragleave="this.classList.remove('drag-over')"
            ondrop="handleDrop(event)">
-        <h2>⛓ Nesting Catena CAD</h2>
+        <h2>📐 Nesting da File STP</h2>
         <p>Carica un file STEP/STP per analizzare i componenti</p>
-        <p style="font-size:11px;margin-top:16px;">Supporta assemblaggi multi-parte</p>
+        <p style="font-size:11px;color:#4a6070;margin-top:8px;">
+          Oppure scegli <b style="color:#00e676">Macchine DB</b> o <b style="color:#ffab40">Da Commessa</b> nella barra in alto
+        </p>
         <button id="upload-btn">📁 Seleziona file STEP</button>
       </div>
       <input type="file" id="file-input" accept=".stp,.step,.STP,.STEP" onchange="handleFileSelect(this.files[0])">
@@ -1048,6 +1171,379 @@ ${istruzioni}
 
 // Init canvas size
 resize();
+
+// ═══════════════════════════════════════════════════════════
+// GESTIONE SORGENTI (STP / DB / COMMESSA)
+// ═══════════════════════════════════════════════════════════
+let currentSrc = 'stp';
+let GAP_MIN_MM = 50;
+
+function selSrc(src) {
+    currentSrc = src;
+    // aggiorna tab
+    ['stp','db','commessa'].forEach(s => {
+        document.getElementById('src-'+s).classList.toggle('active', s===src);
+    });
+    // mostra pannelli
+    document.getElementById('panel-db').style.display       = (src==='db')       ? 'block' : 'none';
+    document.getElementById('panel-commessa').style.display = (src==='commessa')  ? 'block' : 'none';
+
+    if (src==='stp') {
+        showUpload();
+    } else if (src==='db') {
+        caricaListaDB();
+    } else if (src==='commessa') {
+        caricaListaCommesse();
+    }
+}
+
+// ── Carica lista macchine DB ──────────────────────────────
+async function caricaListaDB() {
+    const container = document.getElementById('db-list');
+    container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Caricamento...</div>';
+    try {
+        const r = await fetch('/api/nesting/lista_macchine');
+        const d = await r.json();
+        if (!d.macchine || !d.macchine.length) {
+            container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Nessuna macchina nel database</div>';
+            return;
+        }
+        container.innerHTML = d.macchine.map(m => `
+          <label class="db-mac-item">
+            <input type="checkbox" class="db-mac-check" value="${m.id}" style="accent-color:#00e676">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:#b0bec5;font-weight:600">${m.nome_macchina}</div>
+              <div style="font-size:.62rem;color:#4a6070">Comm. ${m.commessa} · ${m.n_componenti} comp. · ${m.stato}</div>
+            </div>
+          </label>`).join('');
+    } catch(e) {
+        container.innerHTML = `<div style="color:#ef5350;font-size:.72rem">Errore: ${e}</div>`;
+    }
+}
+
+async function caricaDaDB() {
+    const checked = [...document.querySelectorAll('.db-mac-check:checked')];
+    if (!checked.length) { alert('Seleziona almeno una macchina.'); return; }
+    const ids = checked.map(c=>c.value).join(',');
+    document.getElementById('panel-db').style.display = 'none';
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('loading-text').textContent = 'Caricamento macchine DB...';
+    try {
+        const r = await fetch('/api/nesting/da_db?mac_ids='+ids);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        NDATA = d;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-overlay').style.display = 'none';
+        document.getElementById('toolbar').style.display = 'flex';
+        updateKPI();
+        updateClist();
+        setView('iso');
+        verificaGap();
+    } catch(e) {
+        document.getElementById('loading').style.display = 'none';
+        alert('Errore caricamento DB: '+e.message);
+        document.getElementById('panel-db').style.display = 'block';
+    }
+}
+
+// ── Carica lista commesse ─────────────────────────────────
+async function caricaListaCommesse() {
+    const container = document.getElementById('commessa-list');
+    container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Caricamento...</div>';
+    try {
+        const r = await fetch('/api/nesting/lista_macchine');
+        const d = await r.json();
+        if (!d.macchine || !d.macchine.length) {
+            container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Nessuna commessa disponibile</div>';
+            return;
+        }
+        container.innerHTML = d.macchine.map(m => `
+          <div class="comm-item" onclick="caricaDaCommessa(${m.id})">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:#b0bec5;font-weight:600">${m.nome_macchina}</div>
+              <div style="font-size:.62rem;color:#4a6070">Comm. ${m.commessa} · ${m.cliente} · ${m.n_componenti} componenti</div>
+            </div>
+            <span style="font-size:.6rem;color:#ffab40">›</span>
+          </div>`).join('');
+    } catch(e) {
+        container.innerHTML = `<div style="color:#ef5350;font-size:.72rem">Errore: ${e}</div>`;
+    }
+}
+
+async function caricaDaCommessa(mac_id) {
+    document.getElementById('panel-commessa').style.display = 'none';
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('loading-text').textContent = 'Caricamento commessa...';
+    try {
+        const r = await fetch('/api/nesting/da_commessa/'+mac_id);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        NDATA = d;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-overlay').style.display = 'none';
+        document.getElementById('toolbar').style.display = 'flex';
+        updateKPI();
+        updateClist();
+        setView('iso');
+        verificaGap();
+    } catch(e) {
+        document.getElementById('loading').style.display = 'none';
+        alert('Errore caricamento commessa: '+e.message);
+        document.getElementById('panel-commessa').style.display = 'block';
+    }
+}
+
+// ── Gestione gap ──────────────────────────────────────────
+function aggiornaGap() {
+    GAP_MIN_MM = parseFloat(document.getElementById('gap-input').value) || 50;
+    verificaGap();
+    if (document.getElementById('toggle-2d').checked) disegna2D();
+}
+
+function verificaGap() {
+    if (!NDATA || !NDATA.columns) return;
+    let collisioni = 0;
+    NDATA.columns.forEach(col => {
+        let y = 0;
+        col.pezzi.forEach((p, i) => {
+            if (i > 0) {
+                const gap = GAP_MIN_MM; // gap nominale = quello scelto
+                if (GAP_MM < GAP_MIN_MM) collisioni++;
+            }
+            y += p.alt_mm + GAP_MM;
+        });
+    });
+    // Verifica più accurata: confronta GAP_MM costante con GAP_MIN_MM
+    const hasCollision = (typeof GAP_MM !== 'undefined') && (GAP_MM < GAP_MIN_MM);
+    document.getElementById('gap-badge').style.display = hasCollision ? 'inline-block' : 'none';
+    if (document.getElementById('2d-gap-ok')) {
+        document.getElementById('2d-gap-ok').style.display = hasCollision ? 'none' : 'inline-block';
+        document.getElementById('2d-gap-err').style.display = hasCollision ? 'inline-block' : 'none';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// VISTA 2D — verifica spaziatura
+// ═══════════════════════════════════════════════════════════
+function toggleVista2D(on) {
+    const v2d = document.getElementById('view2d');
+    const knob = document.getElementById('toggle-knob');
+    const togSwitch = v2d.previousElementSibling;
+
+    if (on) {
+        if (!NDATA) { alert('Prima carica un file o una sorgente.'); 
+                      document.getElementById('toggle-2d').checked=false; return; }
+        v2d.style.display = 'flex';
+        knob.style.left = '20px';
+        knob.style.background = '#00e676';
+        // azzera la posizione 2D canvas
+        const parent = document.getElementById('canvaswrap');
+        const rect = parent.getBoundingClientRect();
+        const c2 = document.getElementById('canvas2d');
+        c2.width  = rect.width  || window.innerWidth - 220;
+        c2.height = rect.height || 500;
+        disegna2D();
+    } else {
+        v2d.style.display = 'none';
+        knob.style.left = '2px';
+        knob.style.background = '#4a6070';
+    }
+}
+
+function disegna2D() {
+    if (!NDATA) return;
+    const cv = document.getElementById('canvas2d');
+    const cx = cv.getContext('2d');
+    const W  = cv.width, H = cv.height;
+    cx.clearRect(0,0,W,H);
+
+    // Sfondo
+    cx.fillStyle = '#080c0e';
+    cx.fillRect(0,0,W,H);
+
+    const passo = NDATA.passo_mm || 400;
+    const nSlot = NDATA.total_slots || 10;
+    const zmax  = NDATA.z_max_mm   || 2000;
+    const gapUsato = typeof GAP_MM !== 'undefined' ? GAP_MM : 50;
+    const gapMin = GAP_MIN_MM;
+    const gapOk  = gapUsato >= gapMin;
+
+    // Scala: adatta la catena alla larghezza del canvas
+    const MARG = 48;
+    const catenaW_tot = nSlot * passo;
+    const scaleX = (W - MARG*2) / catenaW_tot;
+    const scaleY = (H - MARG*2 - 60) / zmax;
+    const S = Math.min(scaleX, scaleY);
+
+    // Offset centro
+    const offX = MARG;
+    const offY = MARG + 40;
+
+    // ── Barra catena (in cima) ──────────────────────────
+    cx.fillStyle = '#263545';
+    cx.fillRect(offX - 4, offY - 14, catenaW_tot*S + 8, 14);
+    cx.fillStyle = '#37474F';
+    cx.font = 'bold 11px Courier New';
+    cx.fillStyle = '#4a6070';
+    cx.fillText('⛓ CATENA', offX, offY - 18);
+    cx.fillText((catenaW_tot/1000).toFixed(1)+'m usati  ·  '+nSlot+' ganci  ·  passo '+passo+'mm', offX+90, offY-18);
+
+    // ── Linea Z_max ──────────────────────────────────────
+    cx.strokeStyle = 'rgba(255,61,61,0.25)';
+    cx.lineWidth = 1;
+    cx.setLineDash([6,4]);
+    cx.beginPath();
+    cx.moveTo(offX, offY + zmax*S);
+    cx.lineTo(offX + catenaW_tot*S, offY + zmax*S);
+    cx.stroke();
+    cx.setLineDash([]);
+    cx.fillStyle = 'rgba(255,61,61,0.6)';
+    cx.font = '9px Courier New';
+    cx.fillText('Z_max '+zmax+'mm', offX + catenaW_tot*S + 4, offY + zmax*S + 3);
+
+    // ── Griglia verticale ganci ──────────────────────────
+    for (let g=0; g<=nSlot; g++) {
+        const gx = offX + g*passo*S;
+        cx.strokeStyle = 'rgba(26,38,51,0.8)';
+        cx.lineWidth = 1;
+        cx.beginPath(); cx.moveTo(gx, offY); cx.lineTo(gx, offY+zmax*S); cx.stroke();
+        if (g < nSlot) {
+            cx.fillStyle = '#263545';
+            cx.font = '8px Courier New';
+            cx.textAlign = 'center';
+            cx.fillText('G'+(g+1), gx + passo*S/2, offY+4);
+        }
+    }
+    cx.textAlign = 'left';
+
+    // ── Pezzi ─────────────────────────────────────────────
+    NDATA.columns.forEach((col, ci) => {
+        const x0 = offX + col.start_slot * passo * S;
+        const colW = (col.n_slots||1) * passo * S;
+        let curY = offY + 2; // parte dall'alto (sotto la barra catena)
+
+        // Gancio (linea verticale)
+        cx.strokeStyle = '#90a4ae';
+        cx.lineWidth = 2;
+        cx.beginPath();
+        cx.moveTo(x0 + colW/2, offY);
+        cx.lineTo(x0 + colW/2, offY + Math.min(40, H*0.05));
+        cx.stroke();
+
+        col.pezzi.forEach((part, pi) => {
+            const ph = Math.max(part.alt_mm * S, 3);
+            const pw = Math.min(Math.max(part.largh_mm * S, 8), colW - 2);
+            const px = x0 + (colW - pw)/2;
+
+            // Gap prima del pezzo
+            if (pi > 0) {
+                const gapH = gapUsato * S;
+                const gapGood = gapUsato >= gapMin;
+                // Disegna zona gap colorata
+                cx.fillStyle = gapGood
+                    ? 'rgba(0,230,118,0.06)'
+                    : 'rgba(244,67,54,0.18)';
+                cx.fillRect(px, curY, pw, Math.max(gapH, 2));
+
+                // Linee di bordo gap
+                cx.strokeStyle = gapGood ? 'rgba(0,230,118,0.3)' : 'rgba(244,67,54,0.5)';
+                cx.lineWidth = 0.5;
+                cx.setLineDash([3,3]);
+                cx.beginPath();
+                cx.moveTo(px-2, curY);
+                cx.lineTo(px+pw+2, curY);
+                cx.stroke();
+                cx.setLineDash([]);
+
+                // Etichetta gap
+                if (gapH > 8) {
+                    cx.fillStyle = gapGood ? 'rgba(0,230,118,0.7)' : 'rgba(244,67,54,0.9)';
+                    cx.font = '8px Courier New';
+                    cx.textAlign = 'center';
+                    cx.fillText(gapUsato+'mm', px+pw/2, curY + gapH/2 + 3);
+                    cx.textAlign = 'left';
+                }
+
+                curY += Math.max(gapH, 2);
+            }
+
+            // Pezzo (rettangolo)
+            const col_hex = col.color || '#00e676';
+            cx.fillStyle = col_hex + '33';
+            cx.strokeStyle = col_hex;
+            cx.lineWidth = 1.5;
+            cx.beginPath();
+            cx.roundRect ? cx.roundRect(px, curY, pw, ph, 2) : cx.rect(px, curY, pw, ph);
+            cx.fill();
+            cx.stroke();
+
+            // Codice pezzo (se c'è spazio)
+            if (ph > 10 && pw > 30) {
+                cx.fillStyle = col_hex;
+                cx.font = `bold ${Math.min(9, ph*0.35)}px Courier New`;
+                cx.textAlign = 'center';
+                const label = part.nome ? (part.nome.length>12 ? part.nome.slice(0,11)+'…' : part.nome) : '';
+                cx.fillText(label, px+pw/2, curY + ph/2 + 3);
+                cx.textAlign = 'left';
+                // Dim
+                if (ph > 20) {
+                    cx.fillStyle = '#4a6070';
+                    cx.font = '7px Courier New';
+                    cx.textAlign = 'center';
+                    cx.fillText(part.largh_mm+'×'+part.alt_mm+'mm', px+pw/2, curY+ph-3);
+                    cx.textAlign = 'left';
+                }
+            }
+
+            curY += ph;
+        });
+    });
+
+    // ── Legenda gap ─────────────────────────────────────
+    const legX = W - 160, legY = H - 44;
+    cx.fillStyle = '#111b27';
+    cx.fillRect(legX-6, legY-14, 154, 42);
+    cx.strokeStyle = '#1a2633';
+    cx.strokeRect(legX-6, legY-14, 154, 42);
+    cx.font = '9px Courier New';
+    cx.fillStyle = '#4a6070';
+    cx.fillText(`Gap min impostato: ${gapMin} mm`, legX, legY);
+    cx.fillStyle = '#80cbc4';
+    cx.fillText(`Gap effettivo: ${gapUsato} mm`, legX, legY+13);
+    cx.fillStyle = gapOk ? '#00e676' : '#ef5350';
+    cx.fillText(gapOk ? '✓ Nessuna collisione' : '⚠ COLLISIONE RILEVATA!', legX, legY+26);
+}
+
+// ── Leggi parametri URL all'avvio ─────────────────────────
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const src = params.get('src') || 'stp';
+    const mac_id  = params.get('mac_id');
+    const mac_ids = params.get('mac_ids');
+
+    if (src === 'commessa' && mac_id) {
+        // carica automaticamente la commessa
+        document.getElementById('src-stp').classList.remove('active');
+        document.getElementById('src-commessa').classList.add('active');
+        document.getElementById('panel-commessa').style.display = 'block';
+        setTimeout(() => caricaDaCommessa(mac_id), 300);
+    } else if (src === 'db') {
+        selSrc('db');
+        if (mac_ids) {
+            // auto-seleziona le macchine
+            setTimeout(async () => {
+                await caricaListaDB();
+                const ids = mac_ids.split(',');
+                ids.forEach(id => {
+                    const cb = document.querySelector(`.db-mac-check[value="${id}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }, 400);
+        }
+    }
+    // default: stp → mostra upload overlay (già visibile)
+})();
 
 // ═══════════════════════════════════════════════
 // THEME TOGGLE
