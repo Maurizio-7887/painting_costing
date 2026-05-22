@@ -1,0 +1,2130 @@
+{% extends "base.html" %}
+{% block title %}Nesting Catena CAD{% endblock %}
+{% block content %}
+<style>
+/* ═══════════════════════════════════════════════ */
+/* LAYOUT */
+/* ═══════════════════════════════════════════════ */
+body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
+#app { display:flex; height:calc(100vh - 60px); }
+
+/* SIDEBAR */
+#sidebar {
+  width:220px; min-width:180px; background:#0d1117; border-right:1px solid #1a2633;
+  display:flex; flex-direction:column; padding:12px 8px; overflow-y:auto; flex-shrink:0;
+}
+#sidebar h3 { color:#00e676; font-size:11px; margin:0 0 10px; text-transform:uppercase; letter-spacing:1px; }
+.kpi { background:#111b27; border-radius:6px; padding:8px 10px; margin-bottom:6px; }
+.kpi .kl { font-size:9px; color:#4a6070; text-transform:uppercase; }
+.kv { font-size:18px; font-weight:bold; color:#00e676; }
+.kv.warn { color:#ff9800; }
+.kv.danger { color:#f44336; }
+#clist { margin-top:10px; }
+.ci { display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:4px;
+       cursor:pointer; margin-bottom:3px; transition:background 0.15s; }
+.ci:hover { background:#1a2633; }
+.cdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.cn { font-size:10px; flex:1; }
+.ck { font-size:10px; color:#80cbc4; white-space:nowrap; }
+
+/* CANVAS AREA */
+#canvaswrap { flex:1; position:relative; overflow:hidden; background:#080c0e; }
+#c { display:block; width:100%; height:100%; cursor:grab; }
+
+/* TOOLBAR */
+#toolbar {
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  display:flex; gap:6px; z-index:10;
+}
+.tbtn {
+  background:#0d1117; border:1px solid #1a2633; color:#b0bec5;
+  padding:6px 14px; border-radius:20px; cursor:pointer; font-size:12px;
+  font-family:'Courier New',monospace; transition:all 0.2s;
+}
+.tbtn:hover { border-color:#00e676; color:#00e676; }
+.tbtn.active { background:#00e676; color:#080c0e; border-color:#00e676; font-weight:bold; }
+.tbtn.danger { background:#c62828; color:#fff; border-color:#f44336; }
+
+/* UPLOAD OVERLAY */
+#upload-overlay {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; background:#080c0e; z-index:20;
+}
+#dropzone {
+  border:2px dashed #1a2633; border-radius:16px; padding:60px 80px;
+  text-align:center; cursor:pointer; transition:all 0.2s;
+  max-width:500px;
+}
+#dropzone:hover, #dropzone.drag-over { border-color:#00e676; background:#0a1a12; }
+#dropzone h2 { color:#00e676; margin:0 0 8px; font-size:22px; }
+#dropzone p { color:#4a6070; margin:4px 0; font-size:13px; }
+#file-input { display:none; }
+#upload-btn {
+  margin-top:20px; background:#00e676; color:#080c0e; border:none;
+  padding:10px 28px; border-radius:20px; cursor:pointer; font-size:14px;
+  font-family:'Courier New',monospace; font-weight:bold;
+}
+#upload-btn:hover { background:#00c853; }
+
+/* LOADING */
+#loading {
+  position:absolute; inset:0; display:none; flex-direction:column;
+  align-items:center; justify-content:center; background:#080c0e; z-index:20;
+}
+.spinner {
+  width:48px; height:48px; border:4px solid #1a2633;
+  border-top:4px solid #00e676; border-radius:50%;
+  animation:spin 0.8s linear infinite; margin-bottom:20px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+#loading p { color:#4a6070; font-size:14px; }
+
+/* TOOLTIP */
+#tooltip {
+  position:fixed; background:#0d1117; border:1px solid #1a2633;
+  border-radius:8px; padding:12px; min-width:200px; display:none; z-index:100;
+  pointer-events:none; font-size:11px;
+}
+.tn { font-size:13px; font-weight:bold; color:#00e676; margin-bottom:8px; }
+.tcol { font-size:10px; margin-bottom:8px; }
+.timg { margin-bottom:8px; }
+.timg img { max-width:160px; max-height:120px; border-radius:4px; }
+.tr { display:flex; justify-content:space-between; gap:16px; margin-bottom:3px; }
+.tl { color:#4a6070; }
+.tv { color:#80cbc4; font-weight:bold; }
+
+/* SCALE RULER */
+#ruler {
+  position:absolute; bottom:16px; left:16px; font-size:10px;
+  color:#4a6070; display:none;
+}
+
+/* ── LIGHT THEME ── */
+body.light { background:#f0f4f8; color:#1a2633; }
+body.light #sidebar { background:#ffffff; border-right:1px solid #dde3ea; }
+body.light #sidebar h3 { color:#007a3d; }
+body.light .kpi { background:#e8eef5; }
+body.light .kpi .kl { color:#5a7080; }
+body.light .kv { color:#007a3d; }
+body.light .ci { background:#eef2f7; color:#1a2633; }
+body.light .ci:hover { background:#dde3ea; }
+body.light .ck { color:#2e7d6b; }
+body.light #canvaswrap { background:#f0f4f8; }
+body.light #toolbar { background:#ffffff; border-bottom:1px solid #dde3ea; }
+body.light .tbtn { background:#e8eef5; border:1px solid #b0c0cc; color:#1a2633; }
+body.light .tbtn:hover { border-color:#007a3d; color:#007a3d; }
+body.light .tbtn.active { background:#007a3d; color:#fff; border-color:#007a3d; }
+body.light .tbtn.danger { background:#c62828; color:#fff; }
+body.light #upload-overlay { background:#f0f4f8; }
+body.light #dropzone { border-color:#b0c0cc; background:#e8eef5; }
+body.light #dropzone:hover, body.light #dropzone.drag-over { border-color:#007a3d; background:#d6ede3; }
+body.light #dropzone h2 { color:#007a3d; }
+body.light #dropzone p { color:#5a7080; }
+body.light #upload-btn { background:#007a3d; color:#fff; }
+body.light #upload-btn:hover { background:#005c2e; }
+body.light #loading { background:#f0f4f8; }
+body.light #loading p { color:#5a7080; }
+body.light .spinner { border-color:#dde3ea; border-top-color:#007a3d; }
+body.light #kpi-sat-box { background:#dce8f5 !important; border-color:#007a3d !important; }
+body.light #kpi-sat-label { color:#5a7080 !important; }
+body.light .tooltip { background:#ffffff !important; border-color:#dde3ea !important; color:#1a2633 !important; }
+body.light .tn { color:#007a3d !important; }
+body.light .tl { color:#5a7080 !important; }
+body.light .tv { color:#1a5e52 !important; }
+
+</style>
+
+<!-- ══════════════════════════════════════════════════════
+     BARRA SORGENTE (sopra tutto)
+══════════════════════════════════════════════════════ -->
+<div id="src-bar" style="background:#0d1117;border-bottom:1px solid #1a2633;
+     padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;z-index:50;position:relative">
+
+  <span style="font-size:.65rem;color:#4a6070;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap">
+    Sorgente dati:
+  </span>
+
+  <!-- Tab STP -->
+  <button id="src-stp" class="src-tab active" onclick="selSrc('stp')">
+    📐 File STP
+  </button>
+  <!-- Tab DB -->
+  <button id="src-db" class="src-tab" onclick="selSrc('db')">
+    🗄️ Macchine DB
+  </button>
+  <!-- Tab Commessa -->
+  <button id="src-commessa" class="src-tab" onclick="selSrc('commessa')">
+    📋 Da Commessa
+  </button>
+
+  <!-- Separatore -->
+  <div style="width:1px;height:24px;background:#1a2633;margin:0 4px"></div>
+
+  <!-- Controllo Gap 2D -->
+  <div style="display:flex;align-items:center;gap:6px">
+    <label style="font-size:.65rem;color:#4a6070;white-space:nowrap">
+      <i>Gap min. pezzi:</i>
+    </label>
+    <input id="gap-input" type="number" value="50" min="0" max="500" step="10"
+           style="width:64px;background:#111b27;border:1px solid #1a2633;color:#80cbc4;
+                  border-radius:5px;padding:3px 6px;font-size:.72rem;text-align:right"
+           onchange="aggiornaGap()" title="Spazio minimo tra i pezzi (mm)">
+    <span style="font-size:.65rem;color:#4a6070">mm</span>
+    <span id="gap-badge" style="display:none;font-size:.6rem;padding:2px 7px;border-radius:10px;
+          font-weight:700;background:rgba(244,67,54,.2);border:1px solid rgba(244,67,54,.4);
+          color:#ef5350">⚠ Collisioni!</span>
+  </div>
+
+  <!-- Toggle 2D -->
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <label style="font-size:.65rem;color:#4a6070;white-space:nowrap">Vista 2D</label>
+    <label style="position:relative;display:inline-block;width:36px;height:18px;cursor:pointer">
+      <input type="checkbox" id="toggle-2d" style="opacity:0;width:0;height:0"
+             onchange="toggleVista2D(this.checked)">
+      <span style="position:absolute;inset:0;background:#1a2633;border-radius:9px;transition:.2s"></span>
+      <span id="toggle-knob" style="position:absolute;top:2px;left:2px;width:14px;height:14px;
+            background:#4a6070;border-radius:50%;transition:.2s"></span>
+    </label>
+  </div>
+
+</div>
+
+<!-- Pannello DB macchine (nascosto di default) -->
+<div id="panel-db" style="display:none;background:#0d1117;border-bottom:1px solid #1a2633;
+     padding:10px 16px;max-height:240px;overflow-y:auto">
+  <div style="font-size:.65rem;color:#4a6070;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">
+    Seleziona le macchine dal database
+  </div>
+  <div id="db-list" style="display:flex;flex-direction:column;gap:4px">
+    <div style="color:#4a6070;font-size:.72rem">Caricamento...</div>
+  </div>
+  <div style="margin-top:10px">
+    <button onclick="caricaDaDB()" style="background:#00e676;color:#080c0e;border:none;
+            border-radius:6px;padding:6px 18px;font-weight:700;cursor:pointer;font-size:.72rem">
+      ⛓ Avvia Nesting
+    </button>
+  </div>
+</div>
+
+<!-- Pannello Commessa (nascosto di default) -->
+<div id="panel-commessa" style="display:none;background:#0d1117;border-bottom:1px solid #1a2633;
+     padding:10px 16px;max-height:240px;overflow-y:auto">
+  <div style="font-size:.65rem;color:#4a6070;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">
+    Seleziona la commessa
+  </div>
+  <div id="commessa-list" style="display:flex;flex-direction:column;gap:4px">
+    <div style="color:#4a6070;font-size:.72rem">Caricamento...</div>
+  </div>
+</div>
+
+<!-- Canvas 2D spaziatura (nascosto di default) -->
+<div id="view2d" style="display:none;position:absolute;inset:0;background:#080c0e;z-index:15;
+     flex-direction:column;overflow:hidden">
+  <!-- TOOLBAR CAD 2D -->
+  <div id="cad2d-toolbar" style="display:flex">
+    <span style="font-size:.62rem;color:#80cbc4;font-weight:700;white-space:nowrap;
+          font-family:'Courier New',monospace;letter-spacing:.05em">⬛ NESTING 2D</span>
+
+    <span id="2d-gap-ok"  style="display:none;background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);
+          border-radius:5px;padding:2px 10px;color:#00e676;font-size:.62rem;font-weight:700">✓ Nessuna collisione</span>
+    <span id="2d-gap-err" style="display:none;background:rgba(244,67,54,.10);border:1px solid rgba(244,67,54,.3);
+          border-radius:5px;padding:2px 10px;color:#ef5350;font-size:.62rem;font-weight:700">⚠ Collisione!</span>
+
+    <div style="width:1px;height:20px;background:#1a2633;margin:0 4px"></div>
+
+    <button class="cad-btn active" id="btn-pan"     onclick="setTool2D('pan')">✋ Pan</button>
+    <button class="cad-btn"        id="btn-misura"   onclick="setTool2D('misura')">📏 Misura</button>
+    <button class="cad-btn"        id="btn-quote"    onclick="toggleAutoQuote()" id="btn-auto-quote">◁▷ Quote auto</button>
+
+    <div style="width:1px;height:20px;background:#1a2633;margin:0 4px"></div>
+
+    <button class="cad-btn" onclick="zoom2D(1.25)">＋ Zoom</button>
+    <button class="cad-btn" onclick="zoom2D(0.8)">－ Zoom</button>
+    <button class="cad-btn" onclick="reset2DView()">⟳ Fit</button>
+    <button class="cad-btn" onclick="clearMeasures()">✕ Misure</button>
+
+    <span id="cad2d-status">Strumento: Pan · Scorri per zoom · Trascina per muovere</span>
+    <div id="cad2d-measure-result"></div>
+
+    <button onclick="toggleVista2D(false);document.getElementById('toggle-2d').checked=false"
+            style="margin-left:6px;background:transparent;border:1px solid #1a2633;color:#4a6070;
+                   border-radius:5px;padding:3px 10px;cursor:pointer;font-size:.65rem;font-family:'Courier New',monospace">
+      ✕ Chiudi
+    </button>
+  </div>
+  <div id="sat-bar" style="display:none;padding:4px 12px;background:#0d1117;border-bottom:1px solid #1a2633;font:10px Courier New;color:#90a4ae;display:flex;align-items:center;gap:10px;">
+  <span id="sat-label">Saturazione catena:</span>
+  <div style="flex:1;max-width:260px;background:#1a2633;border-radius:3px;height:10px;position:relative;overflow:hidden">
+    <div id="sat-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#00e676,#ffab40);transition:width .4s;border-radius:3px"></div>
+  </div>
+  <span id="sat-pct" style="color:#00e676;font-weight:bold">0%</span>
+  <span id="sat-ganci" style="color:#40c4ff">0 / 0 ganci</span>
+  <span id="sat-collisioni" style="color:#ef5350;display:none">⚠ COLLISIONI</span>
+</div>
+<canvas id="canvas2d" style="flex:1;display:block;width:100%;cursor:grab"></canvas>
+</div>
+
+<style>
+.src-tab{background:#111b27;border:1px solid #1a2633;color:#4a6070;padding:4px 12px;
+  border-radius:14px;cursor:pointer;font-size:.68rem;font-family:'Courier New',monospace;
+  transition:all .15s;white-space:nowrap}
+.src-tab:hover{border-color:#00e676;color:#00e676}
+.src-tab.active{background:rgba(0,230,118,.12);border-color:#00e676;color:#00e676;font-weight:700}
+.db-mac-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;
+  background:#111b27;border:1px solid #1a2633;cursor:pointer;transition:border-color .15s}
+.db-mac-item:hover{border-color:#1a2633}
+.db-mac-item input{accent-color:#00e676;flex-shrink:0}
+.comm-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px;
+  background:#111b27;border:1px solid #1a2633;cursor:pointer;transition:all .15s}
+.comm-item:hover{border-color:#ffab40;color:#ffab40}
+
+/* ── TOOLBAR 2D CAD ── */
+#cad2d-toolbar {
+  position:absolute; top:0; left:0; right:0; display:none;
+  background:#0a0f14; border-bottom:1px solid #1a2633;
+  padding:6px 14px; gap:8px; align-items:center; z-index:30; flex-wrap:wrap;
+}
+.cad-btn {
+  background:#111b27; border:1px solid #1a2633; color:#80cbc4;
+  padding:4px 12px; border-radius:14px; cursor:pointer;
+  font-size:.65rem; font-family:'Courier New',monospace;
+  transition:all .15s; white-space:nowrap; user-select:none;
+}
+.cad-btn:hover  { border-color:#00e676; color:#00e676; }
+.cad-btn.active { background:rgba(0,230,118,.15); border-color:#00e676; color:#00e676; font-weight:700; }
+.cad-btn.warn   { background:rgba(255,171,64,.10); border-color:#ffab40; color:#ffab40; }
+#cad2d-status {
+  font-size:.62rem; color:#4a6070; margin-left:auto;
+  font-family:'Courier New',monospace;
+}
+#cad2d-measure-result {
+  display:none; background:#111b27; border:1px solid #00e676;
+  border-radius:8px; padding:4px 14px; font-size:.72rem; color:#00e676;
+  font-family:'Courier New',monospace; font-weight:700;
+}
+
+</style>
+
+<div id="app" style="position:relative">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <h3>⛓ Nesting Catena</h3>
+    <div class="kpi">
+      <div class="kl">Peso totale</div>
+      <div class="kv" id="kpi-peso">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kl">N° ganci</div>
+      <div class="kv" id="kpi-ganci">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kl">Catena usata</div>
+      <div class="kv" id="kpi-catena">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kl">Max kg/gancio</div>
+      <div class="kv" id="kpi-maxkg">—</div>
+    </div>
+    <div class="kpi" id="kpi-sat-box" style="background:#1a2744;border:2px solid #00e676;border-radius:8px;padding:10px 8px;margin-top:4px;">
+      <div class="kl" style="font-size:10px;letter-spacing:1px;color:#90caf9;">SATURAZIONE GLOBALE</div>
+      <div id="kpi-sat" style="font-size:36px;font-weight:900;line-height:1;margin-top:4px;letter-spacing:-1px;">—</div>
+      <div id="kpi-sat-bar" style="height:6px;border-radius:3px;margin-top:6px;background:#223;"></div>
+      <div id="kpi-sat-label" style="font-size:9px;color:#888;margin-top:3px;text-align:center;">—</div>
+    </div>
+
+    <!-- Upload nuovo file -->
+    <div style="margin-top:12px;">
+      <button class="tbtn" style="width:100%;font-size:11px;" onclick="showUpload()">📁 Nuovo file STEP</button>
+    </div>
+
+    <div id="clist"></div>
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div id="canvaswrap">
+    <!-- UPLOAD OVERLAY (visibile all'inizio per sorgente STP) -->
+    <div id="upload-overlay">
+      <div id="dropzone" onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)">
+        <h2>📐 Nesting da File STP</h2>
+        <p>Carica un file STEP/STP per analizzare i componenti</p>
+        <p style="font-size:11px;color:#4a6070;margin-top:8px;">
+          Oppure scegli <b style="color:#00e676">Macchine DB</b> o <b style="color:#ffab40">Da Commessa</b> nella barra in alto
+        </p>
+        <button id="upload-btn">📁 Seleziona file STEP</button>
+      </div>
+      <input type="file" id="file-input" accept=".stp,.step,.STP,.STEP" onchange="handleFileSelect(this.files[0])">
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <p id="loading-text">Analisi STEP in corso...</p>
+    </div>
+
+    <!-- TOOLBAR (visibile dopo caricamento) -->
+    <div id="toolbar" style="display:none;">
+      <button class="tbtn active" onclick="setView('iso');setActive(this)">○ ISO</button>
+      <button class="tbtn" onclick="setView('front');setActive(this)">↔ Frontale</button>
+      <button class="tbtn" onclick="setView('top');setActive(this)">↕ Top</button>
+      <button class="tbtn" onclick="zoom(1.3)">+</button>
+      <button class="tbtn" onclick="zoom(0.77)">-</button>
+      <button class="tbtn" onclick="orbitLeft()" title="Ruota vista -15°">◁</button>
+      <button class="tbtn" onclick="orbitRight()" title="Ruota vista +15°">▷</button>
+      <button class="tbtn" onclick="printReport()" title="Report stampabile">🖨 Report</button>
+      <button class="tbtn danger" onclick="showUpload()">↺ Reset</button>
+      <button id="theme-btn" class="tbtn" onclick="toggleTheme()" title="Cambia tema chiaro/scuro" style="margin-left:8px;font-size:15px;">☀️</button>
+    </div>
+
+    <!-- CANVAS -->
+    <canvas id="c"></canvas>
+
+    <!-- RULER -->
+    <div id="ruler" id="ruler">scala: 1 gancio = 400mm</div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// UPLOAD & FETCH
+// ═══════════════════════════════════════════════
+let NDATA = null;
+
+function showUpload() {
+  document.getElementById('upload-overlay').style.display = 'flex';
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('toolbar').style.display = 'none';
+  document.getElementById('ruler').style.display = 'none';
+  NDATA = null;
+  document.getElementById('clist').innerHTML = '';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+}
+
+function handleFileSelect(file) {
+  if (!file) return;
+  document.getElementById('upload-overlay').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('loading-text').textContent = 'Analisi STEP: ' + file.name + '...';
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  fetch('/api/nesting/analizza', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('Errore: ' + data.error);
+        showUpload();
+        return;
+      }
+      NDATA = data;
+      initViewer();
+    })
+    .catch(err => {
+      alert('Errore di rete: ' + err);
+      showUpload();
+    });
+}
+
+function initViewer() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('ruler').style.display = 'block';
+
+  // KPI
+  const totalPeso = NDATA.columns.reduce((s,c) => s+c.peso, 0);
+  const maxKgG = Math.max(...NDATA.columns.map(c=>c.peso));
+  document.getElementById('kpi-peso').textContent = totalPeso.toFixed(1) + ' kg';
+  document.getElementById('kpi-ganci').textContent = NDATA.columns.length;
+  document.getElementById('kpi-catena').textContent = (NDATA.total_slots * NDATA.passo_mm / 1000).toFixed(1) + ' m';
+  const mkv = document.getElementById('kpi-maxkg');
+  mkv.textContent = maxKgG.toFixed(1) + ' kg';
+  mkv.className = 'kv' + (maxKgG > 55 ? ' danger' : maxKgG > 40 ? ' warn' : '');
+  // Saturazione globale
+  const satGlob = NDATA.columns[0] && NDATA.columns[0].sat_globale_pct !== undefined
+                  ? NDATA.columns[0].sat_globale_pct : 0;
+  const satEl = document.getElementById('kpi-sat');
+  satEl.textContent = satGlob.toFixed(1) + '%';
+  const satColor = satGlob < 40 ? '#ff5252' : satGlob < 65 ? '#ffab40' : '#00e676';
+  satEl.style.color = satColor;
+  const satBox = document.getElementById('kpi-sat-box');
+  if (satBox) satBox.style.borderColor = satColor;
+  const satBar = document.getElementById('kpi-sat-bar');
+  if (satBar) { satBar.style.width = Math.min(100,satGlob).toFixed(0)+'%'; satBar.style.background = satColor; }
+  const satLbl = document.getElementById('kpi-sat-label');
+  if (satLbl) satLbl.textContent = satGlob < 40 ? '⚠ Bassa — ottimizzare' : satGlob < 65 ? '◑ Media — migliorabile' : '✓ Ottima';
+
+  // Sidebar lista ganci
+  const clistEl = document.getElementById('clist');
+  clistEl.innerHTML = '';
+  NDATA.columns.forEach(col => {
+    const d = document.createElement('div');
+    d.className = 'ci';
+    const sat = col.sat_pct !== undefined ? col.sat_pct.toFixed(0)+'%' : '';
+    const satColor = col.sat_pct < 40 ? '#ff5252' : col.sat_pct < 65 ? '#ffab40' : '#00e676';
+    d.innerHTML =
+      '<div class="cdot" style="background:'+col.color+'"></div>'+
+      '<div class="cn">G'+(col.start_slot+1)+
+      (col.n_slots>1 ? '–'+(col.start_slot+col.n_slots) : '')+
+      ' · '+col.pezzi.length+' pz</div>'+
+      '<div class="ck">'+col.peso.toFixed(1)+' kg</div>'+
+      '<div style="font-size:9px;color:'+satColor+';margin-left:auto">'+sat+'</div>';
+    d.onclick = () => {
+      const x = col.start_slot * PASSO_MM;
+      const p = projFn(x, -Z_MAX_MM/2, 0);
+      offX = canvas.width/2 - p.sx * scale;
+      offY = canvas.height/2 - p.sy * scale;
+      draw();
+    };
+    clistEl.appendChild(d);
+  });
+
+  window.addEventListener('resize', resize);
+  resize();
+  setTimeout(resetView, 100);
+}
+
+function setActive(btn) {
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+// SCALA E COORDINATE
+// ═══════════════════════════════════════════════
+// Tutto in mm reali, poi proiezione isometrica
+const PASSO_MM  = 400;
+const Z_MAX_MM  = 2000;
+const GAP_MM    = 50;    // gap verticale tra pezzi (=backend gap_v)
+const HOOK_LEN  = 120;   // lunghezza gambo gancio mm
+
+// Proiezione isometrica standard
+// x_iso = (x - z) * cos30
+// y_iso = (x + z) * sin30 - y
+// (x=destra sulla catena, y=altezza, z=profondità)
+
+const COS30 = Math.cos(Math.PI/6);
+const SIN30 = Math.sin(Math.PI/6);
+
+function iso(x, y, z) {
+    // Ruota X,Z attorno all'asse Y (azimuth)
+    const cosA = Math.cos(azimuth);
+    const sinA = Math.sin(azimuth);
+    const rx = x * cosA - z * sinA;
+    const rz = x * sinA + z * cosA;
+    return {
+        sx: rx * COS30,
+        sy: rz * SIN30 - y
+    };
+}
+
+function orbitLeft()  { azimuth -= Math.PI/12; if(NDATA) draw(); }
+function orbitRight() { azimuth += Math.PI/12; if(NDATA) draw(); }
+
+function front(x, y, z) {
+    return { sx: x * 0.5, sy: -y * 0.5 };
+}
+
+function top_proj(x, y, z) {
+    return { sx: x * 0.5, sy: -z * 0.5 };
+}
+
+let projFn = iso;
+let scale  = 1.0;
+let offX   = 0, offY = 0;
+let viewMode = 'iso';
+
+// ORBIT: azimuth (rotazione orizzontale) in radianti
+// Default: PI/6 ~ 30° (vista isometrica classica)
+let azimuth = Math.PI / 6;
+
+// Canvas
+const cw = document.getElementById('canvaswrap');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width  = cw.clientWidth;
+    canvas.height = cw.clientHeight;
+    if (NDATA) draw();
+}
+
+// ═══════════════════════════════════════════════
+// PAN & ZOOM
+// ═══════════════════════════════════════════════
+let dragging = false, orbiting = false;
+let dragX = 0, dragY = 0;
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragX = e.clientX; dragY = e.clientY;
+    if (e.button === 2 || e.shiftKey) { orbiting = true; canvas.style.cursor='grabbing'; }
+    else { dragging = true; canvas.style.cursor='grabbing'; }
+});
+canvas.addEventListener('mousemove', e => {
+    const dx = e.clientX - dragX;
+    const dy = e.clientY - dragY;
+    dragX = e.clientX; dragY = e.clientY;
+    if (dragging) {
+        offX += dx; offY += dy;
+        if (NDATA) draw();
+    } else if (orbiting) {
+        azimuth += dx * 0.008; // velocità rotazione
+        if (NDATA) draw();
+    }
+    handleHover(e);
+});
+canvas.addEventListener('mouseup',    () => { dragging=false; orbiting=false; canvas.style.cursor='grab'; });
+canvas.addEventListener('mouseleave', () => { dragging=false; orbiting=false; canvas.style.cursor='grab'; });
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.12 : 0.89;
+    scale *= f;
+    scale = Math.max(0.05, Math.min(8, scale));
+    if (NDATA) draw();
+}, { passive: false });
+
+function zoom(f) { scale *= f; scale = Math.max(0.05,Math.min(8,scale)); if(NDATA) draw(); }
+
+// ═══════════════════════════════════════════════
+// VISTE
+// ═══════════════════════════════════════════════
+function setView(v) {
+    viewMode = v;
+    if (v==='iso')   projFn = iso;
+    if (v==='front') projFn = front;
+    if (v==='top')   projFn = top_proj;
+    resetView();
+}
+
+function resetView() {
+    if (!NDATA) return;
+    azimuth = Math.PI / 6; // ripristina angolo isometrico
+    const totalX = NDATA.total_slots * PASSO_MM;
+    const p = projFn(totalX/2, Z_MAX_MM/2, 0);
+    scale = viewMode==='iso' ? 0.28 : 0.38;
+    offX  = canvas.width/2  - p.sx * scale;
+    offY  = canvas.height/2 - p.sy * scale;
+    draw();
+}
+
+// Trasforma mm→pixel
+function px(x, y, z) {
+    const p = projFn(x, y, z);
+    return {
+        x: p.sx * scale + offX,
+        y: p.sy * scale + offY
+    };
+}
+
+// ═══════════════════════════════════════════════
+// DRAW
+// ═══════════════════════════════════════════════
+const hitBoxes = []; // per click detection
+
+function draw() {
+    if (!NDATA) return;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Sfondo
+    ctx.fillStyle = getBgColor();
+    ctx.fillRect(0, 0, W, H);
+
+    hitBoxes.length = 0;
+
+    // ── Griglia a terra ────────────────────────
+    ctx.strokeStyle = getGridColor();
+    ctx.lineWidth = 0.5;
+    const totalX = NDATA.total_slots * PASSO_MM;
+    for (let gx = 0; gx <= totalX + PASSO_MM; gx += PASSO_MM) {
+        const a = px(gx, -Z_MAX_MM-100, -200);
+        const b = px(gx, -Z_MAX_MM-100,  200);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    for (let gz = -200; gz <= 200; gz += 100) {
+        const a = px(0,         -Z_MAX_MM-100, gz);
+        const b = px(totalX+PASSO_MM, -Z_MAX_MM-100, gz);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+
+    // ── Linea Z max (limite altezza) ──────────
+    ctx.strokeStyle = 'rgba(255,61,61,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8,6]);
+    const za = px(0,           -Z_MAX_MM, -150);
+    const zb = px(totalX+PASSO_MM, -Z_MAX_MM, -150);
+    ctx.beginPath(); ctx.moveTo(za.x,za.y); ctx.lineTo(zb.x,zb.y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ── CATENA ─────────────────────────────────
+    drawChain();
+
+    // ── Ordine depth: disegna colonne da lontano a vicino ──
+    const sortedCols = [...NDATA.columns].sort((a,b) =>
+        viewMode === 'iso' ? b.start_slot - a.start_slot : a.start_slot - b.start_slot
+    );
+    sortedCols.forEach(col => drawColumn(col));
+}
+
+function drawChain() {
+    const totalX = NDATA.total_slots * PASSO_MM;
+    const fullX  = totalX + PASSO_MM * 3;
+
+    // Barra catena completa (grigio)
+    drawBeam(0, 0, fullX, 0, 0, 40, '#37474F', '#263545', '#4a6070');
+
+    // Parte occupata (verde semitrasparente)
+    drawBeamTinted(0, 0, totalX, 0, 0, 40, 'rgba(0,230,118,0.15)', 'rgba(0,230,118,0.08)');
+
+    // Tick ogni 5 ganci
+    for (let g = 0; g <= NDATA.total_slots + 3; g += 5) {
+        const x = g * PASSO_MM;
+        const a = px(x, 20, 0);
+        const b = px(x, -30, 0);
+        ctx.strokeStyle = '#263545';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+
+        // Label numero gancio
+        ctx.fillStyle = getHookLabelBg();
+        ctx.font = `${Math.max(8,10*scale)}px 'Courier New'`;
+        ctx.textAlign = 'center';
+        ctx.fillText('G'+g, a.x, a.y - 5*scale);
+    }
+
+    // Label "CATENA" e lunghezza
+    const la = px(-PASSO_MM*0.5, 50, 0);
+    ctx.fillStyle = getChainLabelColor();
+    ctx.font = `bold ${Math.max(7,9*scale)}px 'Courier New'`;
+    ctx.textAlign = 'left';
+    ctx.fillText('↑ CATENA — PITCH '+NDATA.passo_mm+'mm — '+NDATA.total_slots+' GANCI', la.x, la.y);
+
+    const lb = px(totalX + PASSO_MM*0.2, 50, 0);
+    ctx.fillStyle = getChainLenColor();
+    ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
+    ctx.fillText((NDATA.total_slots * NDATA.passo_mm / 1000).toFixed(1)+' m usati', lb.x, lb.y);
+}
+
+// Disegna una trave/parallelepipedo isometrico
+function drawBeam(x1, y, x2, y2, z, depth, faceColor, topColor, sideColor) {
+    const H = 24; // spessore catena mm
+
+    const p1 = px(x1, y+H/2, -depth/2);
+    const p2 = px(x2, y+H/2, -depth/2);
+    const p3 = px(x2, y-H/2, -depth/2);
+    const p4 = px(x1, y-H/2, -depth/2);
+    const p5 = px(x1, y+H/2,  depth/2);
+    const p6 = px(x2, y+H/2,  depth/2);
+
+    // Top
+    ctx.fillStyle = topColor;
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p6.x,p6.y); ctx.lineTo(p5.x,p5.y);
+    ctx.closePath(); ctx.fill();
+
+    // Front face
+    ctx.fillStyle = faceColor;
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
+    ctx.closePath(); ctx.fill();
+
+    // Right side
+    ctx.fillStyle = sideColor;
+    ctx.beginPath();
+    ctx.moveTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
+    ctx.lineTo(px(x2,y-H/2,depth/2).x, px(x2,y-H/2,depth/2).y);
+    ctx.lineTo(p6.x,p6.y);
+    ctx.closePath(); ctx.fill();
+}
+
+function drawBeamTinted(x1, y, x2, y2, z, depth, col1, col2) {
+    const H = 26;
+    const p1 = px(x1, y+H/2, -depth/2);
+    const p2 = px(x2, y+H/2, -depth/2);
+    const p3 = px(x2, y-H/2, -depth/2);
+    const p4 = px(x1, y-H/2, -depth/2);
+    ctx.fillStyle = col1;
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
+    ctx.closePath(); ctx.fill();
+}
+
+function drawColumn(col) {
+    // x è il centro dello span fisico occupato dal gruppo di pezzi
+    // start_slot + (n_slots-1)/2 = centro dello span
+    const n_slots = col.n_slots || 1;
+    const x_hook  = col.start_slot * PASSO_MM;              // posizione gancio principale
+    const x_center = x_hook + (n_slots - 1) * PASSO_MM / 2; // centro span
+    const color = col.color;
+
+    // ── Gancio fisico (disegnato sul primo slot) ──────────────
+    drawHook(x_hook, color);
+    // Se multi-slot, disegna anche i ganci secondari
+    for (let s = 1; s < n_slots; s++) {
+        drawHookSecondary(x_hook + s * PASSO_MM, color);
+    }
+
+    // Label gancio sopra catena (centrata sullo span)
+    const lp = px(x_center, 80, 0);
+    ctx.fillStyle = color;
+    ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    const slotLabel = n_slots > 1 ? `G${col.start_slot+1}–G${col.start_slot+n_slots}` : `G${col.start_slot+1}`;
+    const satTxt = col.sat_pct !== undefined ? ` [${col.sat_pct.toFixed(0)}%]` : '';
+    ctx.fillText(slotLabel+'·'+col.peso.toFixed(1)+'kg'+satTxt, lp.x, lp.y);
+
+    // ── Pezzi in colonna ───────────────────────────────────────
+    // Ogni pezzo è centrato sul proprio span (usa i suoi n_slots)
+    let curY = -(HOOK_LEN + 10);
+
+    col.pezzi.forEach((part, pi) => {
+        const altH   = part.alt_mm;
+        const W      = Math.max(part.largh_mm, 30);
+        const D      = Math.max(part.D_mm || 60, 20);
+        // Centro X del singolo pezzo = centro dei suoi slot
+        const p_slots = part.n_slots || Math.max(1, Math.ceil(W / PASSO_MM));
+        const x_piece = x_hook + (p_slots - 1) * PASSO_MM / 2;
+
+        drawPart(x_piece, curY - altH, W, altH, D, color, part, col, pi);
+
+        curY -= altH + GAP_MM;
+    });
+
+    // Linea Z_MAX
+    const zm1 = px(x_hook - PASSO_MM*0.4, -Z_MAX_MM, -100);
+    const zm2 = px(x_hook + PASSO_MM*0.4 + (n_slots-1)*PASSO_MM, -Z_MAX_MM, -100);
+    ctx.strokeStyle = 'rgba(255,61,61,0.18)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(zm1.x,zm1.y); ctx.lineTo(zm2.x,zm2.y); ctx.stroke();
+}
+
+function drawHookSecondary(x, color) {
+    // Gancio secondario (slot aggiuntivo per pezzi larghi) — stile tratteggiato
+    const ga = px(x, 0, 0);
+    const gb = px(x, HOOK_LEN, 0);
+    ctx.strokeStyle = color + '66';
+    ctx.lineWidth = Math.max(1, 2*scale);
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Uncino piccolo
+    const gc = px(x, HOOK_LEN, 0);
+    const gd = px(x + HOOK_LEN*0.3, HOOK_LEN*0.7, HOOK_LEN*0.3);
+    ctx.beginPath(); ctx.moveTo(gc.x, gc.y); ctx.lineTo(gd.x, gd.y); ctx.stroke();
+}
+
+function drawHook(x, color) {
+    // Gambo verticale
+    const ga = px(x, 0, 0);
+    const gb = px(x, -HOOK_LEN, 0);
+    ctx.strokeStyle = '#b0bec5';
+    ctx.lineWidth = Math.max(2, 3*scale);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ga.x,ga.y); ctx.lineTo(gb.x,gb.y); ctx.stroke();
+
+    // Curva gancio (arco)
+    const hc = px(x + 60, -HOOK_LEN - 60, 0);
+    ctx.strokeStyle = '#90a4ae';
+    ctx.lineWidth = Math.max(2, 3*scale);
+    ctx.beginPath();
+    ctx.arc(hc.x, hc.y, 40*scale*COS30, Math.PI*0.5, Math.PI*1.5);
+    ctx.stroke();
+
+    // Pallina alla catena
+    const ball = px(x, 0, 0);
+    ctx.fillStyle = '#b0bec5';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, Math.max(3, 5*scale), 0, Math.PI*2);
+    ctx.fill();
+}
+
+function drawPart(x, yTop, W, H, D, color, part, col, pi) {
+    // Centra il pezzo sull'asse X del gancio
+    const xL = x - W/2;
+    const xR = x + W/2;
+    const yB = yTop;
+    const yT = yTop + H;
+
+    // Calcola i 8 vertici del box in proiezione
+    const TLF = px(xL, yT, -D/2);  // top-left-front
+    const TRF = px(xR, yT, -D/2);  // top-right-front
+    const BRF = px(xR, yB, -D/2);  // bottom-right-front
+    const BLF = px(xL, yB, -D/2);  // bottom-left-front
+    const TLB = px(xL, yT,  D/2);  // top-left-back
+    const TRB = px(xR, yT,  D/2);  // top-right-back
+
+    // Colori facce con shading
+    const rgb = hexToRgb(color);
+    const topC  = `rgba(${Math.min(255,rgb.r+40)},${Math.min(255,rgb.g+40)},${Math.min(255,rgb.b+40)},0.9)`;
+    const frontC= `rgba(${rgb.r},${rgb.g},${rgb.b},0.82)`;
+    const rightC= `rgba(${Math.max(0,rgb.r-40)},${Math.max(0,rgb.g-40)},${Math.max(0,rgb.b-40)},0.78)`;
+
+    // Faccia superiore (top)
+    ctx.fillStyle = topC;
+    ctx.beginPath();
+    ctx.moveTo(TLF.x,TLF.y); ctx.lineTo(TRF.x,TRF.y);
+    ctx.lineTo(TRB.x,TRB.y); ctx.lineTo(TLB.x,TLB.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth=0.8; ctx.stroke();
+
+    // Faccia frontale
+    ctx.fillStyle = frontC;
+    ctx.beginPath();
+    ctx.moveTo(TLF.x,TLF.y); ctx.lineTo(TRF.x,TRF.y);
+    ctx.lineTo(BRF.x,BRF.y); ctx.lineTo(BLF.x,BLF.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth=0.8; ctx.stroke();
+
+    // Faccia destra
+    const BRB = px(xR, yB, D/2);
+    ctx.fillStyle = rightC;
+    ctx.beginPath();
+    ctx.moveTo(TRF.x,TRF.y); ctx.lineTo(TRB.x,TRB.y);
+    ctx.lineTo(BRB.x,BRB.y); ctx.lineTo(BRF.x,BRF.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth=0.8; ctx.stroke();
+
+    // Thumbnail SVG nella faccia frontale (se c'è spazio)
+    const facW = Math.abs(TRF.x - TLF.x);
+    const facH = Math.abs(BLF.y - TLF.y);
+    if (part.svg_uri && facW > 20 && facH > 15) {
+        loadSVGInFace(part.svg_uri, TLF, TRF, BLF, BRF, facW, facH);
+    }
+
+    // Testo nome (solo se faccia abbastanza grande)
+    if (facH > 14) {
+        const cx2 = (TLF.x + TRF.x) / 2;
+        const cy2 = BLF.y - 5;
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.font = `${Math.max(7, Math.min(11, facH*0.15))}px 'Courier New'`;
+        ctx.textAlign = 'center';
+        const nome = ((part.rotated ? '🔄 ' : '') + part.nome || '').substring(0, 18);
+        ctx.fillText(nome, cx2, cy2);
+    }
+
+    // Salva hitbox per click
+    const minX = Math.min(TLF.x,TRF.x,BLF.x,BRF.x,TLB.x,TRB.x);
+    const maxX = Math.max(TLF.x,TRF.x,BLF.x,BRF.x,TLB.x,TRB.x);
+    const minY = Math.min(TLF.y,TRF.y,BLF.y,BRF.y,TLB.y,TRB.y);
+    const maxY = Math.max(TLF.y,TRF.y,BLF.y,BRF.y,TLB.y,TRB.y);
+    hitBoxes.push({ minX,maxX,minY,maxY, part, col });
+}
+
+// Cache immagini SVG
+const svgCache = {};
+function loadSVGInFace(uri, TL, TR, BL, BR, fw, fh) {
+    if (!svgCache[uri]) {
+        const img = new Image();
+        img.onload = () => { svgCache[uri] = img; if(NDATA) draw(); };
+        img.src = uri;
+        svgCache[uri] = null;
+        return;
+    }
+    const img = svgCache[uri];
+    if (!img) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(TL.x,TL.y); ctx.lineTo(TR.x,TR.y);
+    ctx.lineTo(BR.x,BR.y); ctx.lineTo(BL.x,BL.y);
+    ctx.closePath();
+    ctx.clip();
+
+    const margin = 3;
+    ctx.drawImage(img,
+        TL.x + margin, TL.y + margin,
+        Math.abs(TR.x-TL.x) - margin*2,
+        Math.abs(BL.y-TL.y) - margin*2
+    );
+    ctx.restore();
+}
+
+function hexToRgb(hex) {
+    const h = hex.replace('#','');
+    return {
+        r: parseInt(h.substring(0,2),16),
+        g: parseInt(h.substring(2,4),16),
+        b: parseInt(h.substring(4,6),16)
+    };
+}
+
+// ═══════════════════════════════════════════════
+// TOOLTIP + CLICK
+// ═══════════════════════════════════════════════
+const tip = document.getElementById('tooltip');
+
+function handleHover(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    for (const hb of hitBoxes) {
+        if (mx >= hb.minX && mx <= hb.maxX && my >= hb.minY && my <= hb.maxY) {
+            canvas.style.cursor = 'pointer';
+            return;
+        }
+    }
+    canvas.style.cursor = dragging ? 'grabbing' : 'grab';
+}
+
+canvas.addEventListener('click', e => {
+    if (Math.abs(e.clientX-dragX)>5 || Math.abs(e.clientY-dragY)>5) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let found = false;
+    for (const hb of [...hitBoxes].reverse()) {
+        if (mx >= hb.minX && mx <= hb.maxX && my >= hb.minY && my <= hb.maxY) {
+            showTip(e, hb.part, hb.col);
+            found = true;
+            break;
+        }
+    }
+    if (!found) tip.style.display = 'none';
+});
+
+function showTip(e, part, col) {
+    tip.innerHTML =
+        '<div class="tn">'+part.nome+'</div>'+
+        '<div class="tcol" style="color:'+col.color+'">Gancio G'+(col.start_slot+1)+'</div>'+
+        (part.svg_uri?'<div class="timg"><img src="'+part.svg_uri+'"></div>':'')+
+        '<div class="tr"><span class="tl">Altezza</span><span class="tv">'+part.alt_mm.toFixed(0)+' mm</span></div>'+
+        '<div class="tr"><span class="tl">Larghezza</span><span class="tv">'+part.largh_mm.toFixed(0)+' mm</span></div>'+
+        '<div class="tr"><span class="tl">Peso</span><span class="tv">'+part.peso_kg.toFixed(2)+' kg</span></div>'+
+        '<div class="tr"><span class="tl">Orientamento</span><span class="tv">'+(part.orientamento||'standard')+'</span></div>';
+    tip.style.left = (e.clientX+14)+'px';
+    tip.style.top  = (e.clientY-20)+'px';
+    tip.style.display = 'block';
+}
+
+
+// ═══════════════════════════════════════════════
+// REPORT STAMPABILE
+// ═══════════════════════════════════════════════
+function printReport() {
+    if (!NDATA) { alert('Carica prima un file STEP'); return; }
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+    const nomeFile = NDATA.nome_file || 'N/D';
+    const totalPz  = NDATA.columns.reduce((s,c) => s + c.pezzi.length, 0);
+    const pesoTot  = NDATA.columns.reduce((s,c) => s + c.peso, 0).toFixed(1);
+    const satGlob  = NDATA.columns[0]?.sat_globale_pct ?? '-';
+    const nGanci   = NDATA.columns.length;
+    const catenaM  = ((NDATA.total_slots || nGanci) * (NDATA.passo_mm || 400) / 1000).toFixed(1);
+    const satColor = satGlob < 40 ? '#c62828' : satGlob < 65 ? '#e65100' : '#1b5e20';
+
+    // ── Tabella riepilogativa ─────────────────────────────────
+    let righeTabella = '';
+    NDATA.columns.forEach((col, ci) => {
+        let firstRow = true;
+        col.pezzi.forEach((p, pi) => {
+            const bg = pi % 2 === 0 ? '#f8f9fa' : '#ffffff';
+            righeTabella += `<tr style="background:${bg}">`;
+            if (firstRow) {
+                const sc = col.sat_pct < 40 ? '#c62828' : col.sat_pct < 65 ? '#e65100' : '#2e7d32';
+                righeTabella += `<td rowspan="${col.pezzi.length}" style="
+                    background:${col.color}22; border-right:3px solid ${col.color};
+                    font-weight:bold; text-align:center; vertical-align:middle;
+                    padding:6px; font-size:13px;">
+                    G${ci+1}<br><small style="font-weight:normal;color:#555">${col.peso.toFixed(1)} kg</small>
+                    <br><span style="font-size:12px;font-weight:900;color:${sc}">${col.sat_pct.toFixed(0)}%</span>
+                </td>`;
+                firstRow = false;
+            }
+            const orient = p.orientamento === 'ruotato_90' ? '🔄 Ruotato 90°' : '↕ Standard';
+            righeTabella += `
+                <td style="padding:5px 8px;font-weight:500">${p.nome || '-'}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.largh_mm||0).toFixed(0)}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.alt_mm||0).toFixed(0)}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.D_mm||0).toFixed(0)}</td>
+                <td style="padding:5px 8px;text-align:right">${(p.peso_kg||0).toFixed(2)}</td>
+                <td style="padding:5px 8px;text-align:center">${orient}</td>
+            </tr>`;
+        });
+        const sc2 = col.sat_pct < 40 ? '#c62828' : col.sat_pct < 65 ? '#e65100' : '#2e7d32';
+        righeTabella += `<tr style="background:#e8f5e9;border-top:2px solid ${col.color}">
+            <td colspan="7" style="padding:4px 8px;font-size:11px;color:#2e7d32">
+                ↳ G${ci+1}: ${col.pezzi.length} pz · ${col.peso.toFixed(1)} kg ·
+                   H usata ${col.h_usata_mm} mm / 2000 mm ·
+                   <b style="color:${sc2}">Saturazione ${col.sat_pct.toFixed(0)}%</b>
+            </td>
+        </tr>`;
+    });
+
+    // ── Istruzioni operative gancio per gancio ───────────────
+    let istruzioni = '';
+    NDATA.columns.forEach((col, ci) => {
+        const sc = col.sat_pct < 40 ? '#c62828' : col.sat_pct < 65 ? '#e65100' : '#1b5e20';
+        istruzioni += `
+        <div class="gancio-card" style="border:1px solid #ddd;border-left:5px solid ${col.color};
+             border-radius:4px;margin-bottom:14px;page-break-inside:avoid;">
+          <div style="background:${col.color}18;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <span style="font-size:16px;font-weight:900;color:${col.color}">GANCIO G${ci+1}</span>
+              <span style="font-size:12px;margin-left:12px;color:#555">
+                ${col.pezzi.length} pez${col.pezzi.length>1?'zi':'zo'} &nbsp;·&nbsp;
+                ${col.peso.toFixed(1)} kg &nbsp;·&nbsp;
+                ${col.h_usata_mm} mm / 2000 mm
+              </span>
+            </div>
+            <div style="font-size:22px;font-weight:900;color:${sc}">${col.sat_pct.toFixed(0)}%</div>
+          </div>
+          <div style="padding:10px 12px;">
+            <ol style="margin:0;padding-left:20px;">`;
+
+        col.pezzi.forEach((p, pi) => {
+            const L = (p.largh_mm||0).toFixed(0);
+            const H = (p.alt_mm||0).toFixed(0);
+            const D = (p.D_mm||0).toFixed(0);
+            const kg = (p.peso_kg||0).toFixed(2);
+            const isRot = p.orientamento === 'ruotato_90';
+            const orientTxt = isRot
+                ? '🔄 <b>RUOTATO 90°</b> — larghezza diventa altezza'
+                : '↕ <b>ORIENTAMENTO STANDARD</b> — come da disegno';
+
+            // Suggerimento aggancio basato su dimensioni
+            let metodo = '';
+            if (parseFloat(L) > 600) {
+                metodo = '🔗 Pezzo largo: usa <b>filo/morsetto su entrambi i lati</b> per bilanciare il peso';
+            } else if (parseFloat(kg) > 20) {
+                metodo = '🔗 Pezzo pesante: usa <b>gancio a C rinforzato</b> o doppio filo';
+            } else {
+                metodo = '🔗 Usa <b>filo metallico Ø3mm</b> o morsetto standard';
+            }
+
+            istruzioni += `
+              <li style="margin-bottom:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                <div style="font-weight:700;font-size:13px;">${p.nome || 'Pezzo '+(pi+1)}</div>
+                <div style="color:#444;margin:3px 0;">
+                  Dimensioni: <b>${L} × ${H} mm</b> (prof. ${D} mm) &nbsp;·&nbsp; Peso: <b>${kg} kg</b>
+                </div>
+                <div style="color:#1565C0;margin:2px 0;">${orientTxt}</div>
+                <div style="color:#555;margin:2px 0;">${metodo}</div>
+                <div style="color:#777;font-size:11px;margin-top:3px;">
+                  Posizione verticale: ${pi === 0 ? 'IN CIMA al gancio (primo da appendere)' :
+                    pi === col.pezzi.length-1 ? 'IN FONDO (ultimo, più vicino al pavimento)' :
+                    'Posizione '+(pi+1)+' dall\u2019alto'}
+                  &nbsp;·&nbsp; Gap dal pezzo sopra: 50 mm
+                </div>
+              </li>`;
+        });
+
+        istruzioni += `</ol></div></div>`;
+    });
+
+    const html = `<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="UTF-8">
+<title>Report Nesting — ${nomeFile}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size:12px; color:#222; margin:20px; max-width:1100px; }
+  h1 { font-size:20px; color:#1565C0; border-bottom:3px solid #1565C0; padding-bottom:8px; margin-bottom:4px; }
+  h2 { font-size:12px; color:#666; margin:0 0 18px; font-weight:normal; }
+  h3 { font-size:14px; color:#1565C0; margin:24px 0 10px; border-bottom:1px solid #ddd; padding-bottom:4px; }
+  .kpi-row { display:flex; gap:14px; margin:14px 0 22px; flex-wrap:wrap; }
+  .kpi { background:#f0f4ff; border-radius:8px; padding:10px 18px; text-align:center; min-width:100px; }
+  .kpi .v { font-size:24px; font-weight:900; color:#1565C0; }
+  .kpi .l { font-size:10px; color:#888; text-transform:uppercase; margin-top:2px; letter-spacing:0.5px; }
+  .sat-box { background:#1565C022; border:2px solid ${satColor}; border-radius:8px; padding:12px 20px; text-align:center; }
+  .sat-box .v { font-size:40px; font-weight:900; color:${satColor}; line-height:1; }
+  table { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:4px; }
+  th { background:#1565C0; color:#fff; padding:7px 8px; text-align:left; }
+  th.r { text-align:right; }
+  td { border-bottom:1px solid #e8e8e8; }
+  .footer { margin-top:28px; font-size:10px; color:#888; border-top:1px solid #ddd; padding-top:10px; }
+  .no-print { margin-bottom:16px; }
+  @media print {
+    .no-print { display:none; }
+    body { margin:10px; font-size:11px; }
+    h1 { font-size:16px; }
+    .gancio-card { page-break-inside: avoid; }
+  }
+</style>
+</head><body>
+
+<div class="no-print">
+  <button onclick="window.print()" style="background:#1565C0;color:#fff;border:none;
+    padding:9px 22px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">
+    🖨&nbsp; Stampa / Salva PDF
+  </button>
+  &nbsp;
+  <button onclick="window.close()" style="background:#eee;border:none;
+    padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;">✕ Chiudi</button>
+</div>
+
+<h1>⛓ Report Nesting Catena Verniciatura</h1>
+<h2>File: <b>${nomeFile}</b> &nbsp;·&nbsp; Generato: ${dateStr}</h2>
+
+<div class="kpi-row">
+  <div class="sat-box">
+    <div class="l" style="color:${satColor};font-size:10px;letter-spacing:1px;margin-bottom:4px;">SATURAZIONE GLOBALE</div>
+    <div class="v">${satGlob}%</div>
+    <div style="font-size:11px;color:${satColor};margin-top:4px;">${satGlob>=80?'✓ Ottima':satGlob>=65?'◑ Buona':satGlob>=40?'⚠ Media':'✗ Bassa'}</div>
+  </div>
+  <div class="kpi"><div class="v">${nGanci}</div><div class="l">N° Ganci</div></div>
+  <div class="kpi"><div class="v">${totalPz}</div><div class="l">Pezzi totali</div></div>
+  <div class="kpi"><div class="v">${pesoTot} kg</div><div class="l">Peso totale</div></div>
+  <div class="kpi"><div class="v">${catenaM} m</div><div class="l">Catena usata</div></div>
+</div>
+
+<h3>📋 Riepilogo tabellare</h3>
+<table>
+  <thead><tr>
+    <th style="width:65px">Gancio</th>
+    <th>Nome Pezzo</th>
+    <th class="r">L (mm)</th>
+    <th class="r">H (mm)</th>
+    <th class="r">Prof. (mm)</th>
+    <th class="r">Peso (kg)</th>
+    <th style="text-align:center">Orient.</th>
+  </tr></thead>
+  <tbody>${righeTabella}</tbody>
+</table>
+
+<h3>📌 Istruzioni operative — gancio per gancio</h3>
+<p style="color:#555;font-size:11px;margin-bottom:14px;">
+  Seguire l'ordine indicato. Appendere dal primo pezzo in cima verso il basso.
+  Gap verticale minimo tra pezzi: <b>50 mm</b>. Altezza utile gancio: <b>2000 mm</b>.
+</p>
+
+${istruzioni}
+
+<div class="footer">
+  ENOROSSI Paint Optimizer &nbsp;|&nbsp; Passo catena: ${NDATA.passo_mm||400} mm &nbsp;·&nbsp;
+  Altezza utile: 2000 mm &nbsp;·&nbsp; Gap verticale: 50 mm &nbsp;·&nbsp;
+  Peso max/gancio: 55 kg &nbsp;·&nbsp; Algoritmo: FFD fisico con vincoli geometrici
+</div>
+</body></html>`;
+
+    const w = window.open('', '_blank', 'width=1000,height=750');
+    w.document.write(html);
+    w.document.close();
+}
+//ENDREPORT//
+
+// Init canvas size
+resize();
+
+// ═══════════════════════════════════════════════════════════
+// GESTIONE SORGENTI (STP / DB / COMMESSA)
+// ═══════════════════════════════════════════════════════════
+let currentSrc = 'stp';
+let GAP_MIN_MM = 50;
+
+function selSrc(src) {
+    currentSrc = src;
+    // aggiorna tab
+    ['stp','db','commessa'].forEach(s => {
+        document.getElementById('src-'+s).classList.toggle('active', s===src);
+    });
+    // mostra pannelli
+    document.getElementById('panel-db').style.display       = (src==='db')       ? 'block' : 'none';
+    document.getElementById('panel-commessa').style.display = (src==='commessa')  ? 'block' : 'none';
+
+    if (src==='stp') {
+        showUpload();
+    } else if (src==='db') {
+        caricaListaDB();
+    } else if (src==='commessa') {
+        caricaListaCommesse();
+    }
+}
+
+// ── Carica lista macchine DB ──────────────────────────────
+async function caricaListaDB() {
+    const container = document.getElementById('db-list');
+    container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Caricamento...</div>';
+    try {
+        const r = await fetch('/api/nesting/lista_macchine');
+        const d = await r.json();
+        if (!d.macchine || !d.macchine.length) {
+            container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Nessuna macchina nel database</div>';
+            return;
+        }
+        container.innerHTML = d.macchine.map(m => `
+          <label class="db-mac-item">
+            <input type="checkbox" class="db-mac-check" value="${m.id}" style="accent-color:#00e676">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:#b0bec5;font-weight:600">${m.nome_macchina}</div>
+              <div style="font-size:.62rem;color:#4a6070">Comm. ${m.commessa} · ${m.n_componenti} comp. · ${m.stato}</div>
+            </div>
+          </label>`).join('');
+    } catch(e) {
+        container.innerHTML = `<div style="color:#ef5350;font-size:.72rem">Errore: ${e}</div>`;
+    }
+}
+
+async function caricaDaDB() {
+    const checked = [...document.querySelectorAll('.db-mac-check:checked')];
+    if (!checked.length) { alert('Seleziona almeno una macchina.'); return; }
+    const ids = checked.map(c=>c.value).join(',');
+    document.getElementById('panel-db').style.display = 'none';
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('loading-text').textContent = 'Caricamento macchine DB...';
+    try {
+        const r = await fetch('/api/nesting/da_db?mac_ids='+ids);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        NDATA = d;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-overlay').style.display = 'none';
+        document.getElementById('toolbar').style.display = 'flex';
+        updateKPI();
+        updateClist();
+        setView('iso');
+        verificaGap();
+    } catch(e) {
+        document.getElementById('loading').style.display = 'none';
+        alert('Errore caricamento DB: '+e.message);
+        document.getElementById('panel-db').style.display = 'block';
+    }
+}
+
+// ── Carica lista commesse ─────────────────────────────────
+async function caricaListaCommesse() {
+    const container = document.getElementById('commessa-list');
+    container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Caricamento...</div>';
+    try {
+        const r = await fetch('/api/nesting/lista_macchine');
+        const d = await r.json();
+        if (!d.macchine || !d.macchine.length) {
+            container.innerHTML = '<div style="color:#4a6070;font-size:.72rem">Nessuna commessa disponibile</div>';
+            return;
+        }
+        container.innerHTML = d.macchine.map(m => `
+          <div class="comm-item" onclick="caricaDaCommessa(${m.id})">
+            <div style="flex:1">
+              <div style="font-size:.72rem;color:#b0bec5;font-weight:600">${m.nome_macchina}</div>
+              <div style="font-size:.62rem;color:#4a6070">Comm. ${m.commessa} · ${m.cliente} · ${m.n_componenti} componenti</div>
+            </div>
+            <span style="font-size:.6rem;color:#ffab40">›</span>
+          </div>`).join('');
+    } catch(e) {
+        container.innerHTML = `<div style="color:#ef5350;font-size:.72rem">Errore: ${e}</div>`;
+    }
+}
+
+async function caricaDaCommessa(mac_id) {
+    document.getElementById('panel-commessa').style.display = 'none';
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('loading-text').textContent = 'Caricamento commessa...';
+    try {
+        const r = await fetch('/api/nesting/da_commessa/'+mac_id);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        NDATA = d;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-overlay').style.display = 'none';
+        document.getElementById('toolbar').style.display = 'flex';
+        updateKPI();
+        updateClist();
+        setView('iso');
+        verificaGap();
+    } catch(e) {
+        document.getElementById('loading').style.display = 'none';
+        alert('Errore caricamento commessa: '+e.message);
+        document.getElementById('panel-commessa').style.display = 'block';
+    }
+}
+
+// ── Gestione gap ──────────────────────────────────────────
+function aggiornaGap() {
+    GAP_MIN_MM = parseFloat(document.getElementById('gap-input').value) || 50;
+    verificaGap();
+    if (document.getElementById('toggle-2d').checked) disegna2D();
+}
+
+function verificaGap() {
+    if (!NDATA || !NDATA.columns) return;
+    let collisioni = 0;
+    NDATA.columns.forEach(col => {
+        let y = 0;
+        col.pezzi.forEach((p, i) => {
+            if (i > 0) {
+                const gap = GAP_MIN_MM; // gap nominale = quello scelto
+                if (GAP_MM < GAP_MIN_MM) collisioni++;
+            }
+            y += p.alt_mm + GAP_MM;
+        });
+    });
+    // Verifica più accurata: confronta GAP_MM costante con GAP_MIN_MM
+    const hasCollision = (typeof GAP_MM !== 'undefined') && (GAP_MM < GAP_MIN_MM);
+    document.getElementById('gap-badge').style.display = hasCollision ? 'inline-block' : 'none';
+    if (document.getElementById('2d-gap-ok')) {
+        document.getElementById('2d-gap-ok').style.display = hasCollision ? 'none' : 'inline-block';
+        document.getElementById('2d-gap-err').style.display = hasCollision ? 'inline-block' : 'none';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// VISTA 2D CAD — stile Lantek con misuratore e pan/zoom
+// ═══════════════════════════════════════════════════════════
+
+// Stato CAD 2D
+let cad2dTool    = 'pan';    // 'pan' | 'misura'
+let autoQuote    = true;     // mostra quote gap automatiche
+let cad2dZoom    = 1.0;
+let cad2dOffX    = 0, cad2dOffY = 0;   // offset pan in pixel
+let cad2dDragging = false;
+let cad2dDragX   = 0, cad2dDragY = 0;
+let measurePts   = [];       // [{x,y} in mm-world] punti misura
+let measures     = [];       // [{p1,p2,dist} salvati]
+let cad2dMouseMM = null;     // posizione mouse in mm (world)
+let cadScale     = 1.0;      // mm→pixel (base, prima di zoom)
+
+// Dati geometria pezzi (calcolati una volta per frame)
+let cad2dGeom = [];  // [{col, part, x_mm, y_mm, w_mm, h_mm, gapTop_mm, gapOk}]
+
+function setTool2D(t) {
+    cad2dTool = t;
+    ['pan','misura'].forEach(n => {
+        const b = document.getElementById('btn-'+n);
+        if(b) b.classList.toggle('active', n===t);
+    });
+    const cv = document.getElementById('canvas2d');
+    cv.style.cursor = t==='pan' ? 'grab' : 'crosshair';
+    const st = document.getElementById('cad2d-status');
+    if (t==='pan')    st.textContent = 'Pan: trascina · Scroll: zoom';
+    if (t==='misura') st.textContent = 'Misura: clic punto 1 → clic punto 2';
+    measurePts = [];
+    redraw2D();
+}
+
+function toggleAutoQuote() {
+    autoQuote = !autoQuote;
+    const b = document.getElementById('btn-quote');
+    if(b) b.classList.toggle('active', autoQuote);
+    redraw2D();
+}
+
+function clearMeasures() {
+    measures = [];
+    measurePts = [];
+    redraw2D();
+}
+
+function zoom2D(factor) {
+    cad2dZoom *= factor;
+    cad2dZoom = Math.max(0.1, Math.min(20, cad2dZoom));
+    redraw2D();
+}
+
+// Converti pixel → mm world
+function px2mm(px_x, px_y) {
+    const S = cadScale * cad2dZoom;
+    return {
+        x: (px_x - cad2dOffX) / S,
+        y: (px_y - cad2dOffY) / S
+    };
+}
+// mm → pixel
+function mm2px(mm_x, mm_y) {
+    const S = cadScale * cad2dZoom;
+    return {
+        x: mm_x * S + cad2dOffX,
+        y: mm_y * S + cad2dOffY
+    };
+}
+
+function reset2DView() {
+    if (!NDATA) return;
+    const cv = document.getElementById('canvas2d');
+    const W = cv.width, H = cv.height;
+    const passo = NDATA.passo_mm || 400;
+    const nSlot = NDATA.total_slots || 10;
+    const zmax  = NDATA.z_max_mm   || 2000;
+    const catenaW = nSlot * passo;
+    const MARG = 60;
+    const sx = (W - MARG*2) / catenaW;
+    const sy = (H - MARG*2 - 80) / zmax;
+    cadScale = Math.min(sx, sy);
+    cad2dZoom = 1.0;
+    cad2dOffX = MARG;
+    cad2dOffY = MARG + 50;
+    redraw2D();
+}
+
+function toggleVista2D(on) {
+    const v2d = document.getElementById('view2d');
+    const knob = document.getElementById('toggle-knob');
+    if (on) {
+        if (!NDATA) { alert('Prima carica un file o una sorgente.');
+                      document.getElementById('toggle-2d').checked=false; return; }
+        v2d.style.display = 'flex';
+        knob.style.left = '20px'; knob.style.background = '#00e676';
+        document.getElementById('cad2d-toolbar').style.display = 'flex';
+        const parent = document.getElementById('canvaswrap');
+        const rect = parent.getBoundingClientRect();
+        const c2 = document.getElementById('canvas2d');
+        c2.width  = rect.width  || window.innerWidth - 220;
+        c2.height = (rect.height || 500) - 44; // tolgo toolbar
+        // Setup eventi canvas 2D
+        setup2DEvents(c2);
+        reset2DView();
+    } else {
+        v2d.style.display = 'none';
+        document.getElementById('cad2d-toolbar').style.display = 'none';
+        knob.style.left = '2px'; knob.style.background = '#4a6070';
+    }
+}
+
+// ── Setup eventi pan/zoom/misura sul canvas2D ─────────────────────
+let cad2dEventsSetup = false;
+function setup2DEvents(cv) {
+    if (cad2dEventsSetup) return;
+    cad2dEventsSetup = true;
+
+    cv.addEventListener('mousedown', e => {
+        if (cad2dTool === 'pan') {
+            cad2dDragging = true;
+            cad2dDragX = e.clientX; cad2dDragY = e.clientY;
+            cv.style.cursor = 'grabbing';
+        }
+    });
+
+    cv.addEventListener('mousemove', e => {
+        const rect = cv.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        cad2dMouseMM = px2mm(mx, my);
+
+        if (cad2dDragging && cad2dTool === 'pan') {
+            const dx = e.clientX - cad2dDragX;
+            const dy = e.clientY - cad2dDragY;
+            cad2dOffX += dx; cad2dOffY += dy;
+            cad2dDragX = e.clientX; cad2dDragY = e.clientY;
+            redraw2D();
+        }
+        // Misura: mostra linea dinamica se ho già il punto 1
+        if (cad2dTool === 'misura' && measurePts.length === 1) {
+            redraw2D();
+        }
+        // Aggiorna statusbar coordinate
+        if (cad2dMouseMM) {
+            const st = document.getElementById('cad2d-status');
+            if (cad2dTool === 'pan')
+                st.textContent = `X: ${cad2dMouseMM.x.toFixed(0)} mm  Y: ${cad2dMouseMM.y.toFixed(0)} mm`;
+            else if (cad2dTool === 'misura' && measurePts.length === 1) {
+                const dx = cad2dMouseMM.x - measurePts[0].x;
+                const dy = cad2dMouseMM.y - measurePts[0].y;
+                const d = Math.sqrt(dx*dx+dy*dy).toFixed(1);
+                st.textContent = `Distanza parziale: ${d} mm  (clic per confermare)`;
+            }
+        }
+    });
+
+    cv.addEventListener('mouseup', e => {
+        if (cad2dDragging) {
+            cad2dDragging = false;
+            cv.style.cursor = cad2dTool === 'pan' ? 'grab' : 'crosshair';
+        }
+    });
+
+    cv.addEventListener('mouseleave', e => { cad2dDragging = false; });
+
+    // Click per misura
+    cv.addEventListener('click', e => {
+        if (cad2dTool !== 'misura') return;
+        const rect = cv.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const pt = px2mm(mx, my);
+
+        if (measurePts.length === 0) {
+            measurePts = [pt];
+            document.getElementById('cad2d-status').textContent = 'Punto 1 registrato. Clic sul punto 2...';
+        } else if (measurePts.length === 1) {
+            const p1 = measurePts[0], p2 = pt;
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            measures.push({ p1, p2, dist });
+            measurePts = [];
+            // mostra risultato
+            const res = document.getElementById('cad2d-measure-result');
+            res.style.display = 'inline-block';
+            res.textContent = `📏 ${dist.toFixed(1)} mm`;
+            document.getElementById('cad2d-status').textContent =
+                `Misura: ${dist.toFixed(1)} mm  (ΔX: ${Math.abs(dx).toFixed(1)}  ΔY: ${Math.abs(dy).toFixed(1)})`;
+            redraw2D();
+        }
+    });
+
+    // Scroll per zoom (centrato sul cursore)
+    cv.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = cv.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const factor = e.deltaY < 0 ? 1.15 : 0.87;
+        const oldZ = cad2dZoom;
+        cad2dZoom *= factor;
+        cad2dZoom = Math.max(0.1, Math.min(30, cad2dZoom));
+        // Zoom centrato sul cursore: mantieni il punto world sotto il cursore
+        const ratio = cad2dZoom / oldZ;
+        cad2dOffX = mx - ratio * (mx - cad2dOffX);
+        cad2dOffY = my - ratio * (my - cad2dOffY);
+        redraw2D();
+    }, { passive: false });
+}
+
+// ── Disegna freccia di quota ──────────────────────────────────────
+function drawDimArrow(ctx, x1, y1, x2, y2, label, color, side) {
+    // Linea di quota con frecce alle estremità + label centrale
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len < 2) return;
+    const ux = dx/len, uy = dy/len;
+    const AH = 7; // lunghezza testa freccia px
+    const AW = 3; // semi-larghezza testa freccia px
+
+    ctx.strokeStyle = color;
+    ctx.fillStyle   = color;
+    ctx.lineWidth   = 1;
+
+    // Linea principale
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    // Freccia in p1
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 + ux*AH - uy*AW, y1 + uy*AH + ux*AW);
+    ctx.lineTo(x1 + ux*AH + uy*AW, y1 + uy*AH - ux*AW);
+    ctx.closePath(); ctx.fill();
+
+    // Freccia in p2
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux*AH - uy*AW, y2 - uy*AH + ux*AW);
+    ctx.lineTo(x2 - ux*AH + uy*AW, y2 - uy*AH - ux*AW);
+    ctx.closePath(); ctx.fill();
+
+    // Label
+    const cx2 = (x1+x2)/2, cy2 = (y1+y2)/2;
+    const OFF = side === 'right' ? 10 : -10;
+    ctx.fillStyle = color;
+    ctx.font = 'bold 9px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Box bianco/scuro sotto label
+    const tw = ctx.measureText(label).width + 6;
+    ctx.fillStyle = darkMode ? '#080c0e' : '#ffffff';
+    ctx.fillRect(cx2 - tw/2, cy2 - 7, tw, 14);
+    ctx.fillStyle = color;
+    ctx.fillText(label, cx2, cy2);
+    ctx.textBaseline = 'alphabetic';
+}
+
+// Quota verticale a destra di un rettangolo
+function drawDimV(ctx, px_x, y1, y2, label, color, offsetX) {
+    const x = px_x + offsetX;
+    const EXT = 4;
+    ctx.strokeStyle = color; ctx.lineWidth = 0.8;
+    // Linee di estensione
+    ctx.beginPath(); ctx.moveTo(px_x, y1); ctx.lineTo(x + 4, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px_x, y2); ctx.lineTo(x + 4, y2); ctx.stroke();
+    drawDimArrow(ctx, x, y1, x, y2, label, color, 'right');
+}
+
+// Quota orizzontale sotto un rettangolo
+function drawDimH(ctx, x1, x2, py_y, label, color, offsetY) {
+    const y = py_y + offsetY;
+    const EXT = 4;
+    ctx.strokeStyle = color; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(x1, py_y); ctx.lineTo(x1, y + 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2, py_y); ctx.lineTo(x2, y + 4); ctx.stroke();
+    drawDimArrow(ctx, x1, y, x2, y, label, color, 'bottom');
+}
+
+// ── Ridisegna tutto il canvas 2D ──────────────────────────────────
+function redraw2D() {
+    if (!NDATA) return;
+    const cv  = document.getElementById('canvas2d');
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const S       = cadScale * cad2dZoom;
+    const passo   = NDATA.passo_mm   || 400;
+    const nSlot   = NDATA.total_slots || 10;
+    const zmax    = NDATA.z_max_mm   || 2000;
+    const gapUsato = typeof GAP_MM !== 'undefined' ? GAP_MM : 50;
+    const gapMin   = GAP_MIN_MM;
+    const catenaW  = nSlot * passo;
+
+    // ── Sfondo ───────────────────────────────────────────────────
+    ctx.fillStyle = darkMode ? '#080c0e' : '#f4f6f8';
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Grid adattiva ────────────────────────────────────────────
+    const gridSizes = [10,25,50,100,200,500,1000,2000];
+    const targetPx  = 60;
+    const gridMM    = gridSizes.find(g => g*S >= targetPx) || gridSizes[gridSizes.length-1];
+    const firstX = Math.floor(-cad2dOffX / S / gridMM) * gridMM;
+    const firstY = Math.floor(-cad2dOffY / S / gridMM) * gridMM;
+    ctx.strokeStyle = darkMode ? 'rgba(26,38,51,0.7)' : 'rgba(200,210,220,0.8)';
+    ctx.lineWidth   = 0.5;
+    for (let gx = firstX; gx < firstX + W/S + gridMM; gx += gridMM) {
+        const px = gx*S + cad2dOffX;
+        ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+    }
+    for (let gy = firstY; gy < firstY + H/S + gridMM; gy += gridMM) {
+        const py = gy*S + cad2dOffY;
+        ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+    }
+    ctx.fillStyle = darkMode ? '#263545' : '#c8d8e8';
+    ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    for (let gx = firstX; gx < firstX + W/S + gridMM; gx += gridMM) {
+        const px = gx*S + cad2dOffX;
+        if (px > 20 && px < W-10) ctx.fillText(gx+' mm', px+2, H-4);
+    }
+    for (let gy = firstY; gy < firstY + H/S + gridMM; gy += gridMM) {
+        const py = gy*S + cad2dOffY;
+        if (py > 4 && py < H-10) ctx.fillText(gy+' mm', 2, py-2);
+    }
+
+    // ── CATENA ───────────────────────────────────────────────────
+    const cat_px_x = 0*S + cad2dOffX;
+    const cat_px_y = -14*S + cad2dOffY;
+    const cat_px_w = catenaW*S;
+    const cat_px_h = 14*S;
+
+    // Gradiente catena
+    const catGrad = ctx.createLinearGradient(0, cat_px_y, 0, cat_px_y + Math.max(cat_px_h, 6));
+    catGrad.addColorStop(0, darkMode ? '#253545' : '#d8e4ec');
+    catGrad.addColorStop(1, darkMode ? '#1a2633' : '#c0ced8');
+    ctx.fillStyle   = catGrad;
+    ctx.strokeStyle = darkMode ? '#37474F' : '#90a4ae';
+    ctx.lineWidth   = 1.5;
+    ctx.fillRect(cat_px_x, cat_px_y, cat_px_w, Math.max(cat_px_h, 6));
+    ctx.strokeRect(cat_px_x, cat_px_y, cat_px_w, Math.max(cat_px_h, 6));
+
+    ctx.fillStyle = darkMode ? '#4a6070' : '#5a7080';
+    ctx.font = `bold ${Math.min(11,Math.max(7,S*8))}px Courier New`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`⛓ CATENA  ${(catenaW/1000).toFixed(1)} m · ${nSlot} ganci · passo ${passo} mm`,
+        cat_px_x+4, cat_px_y - 5);
+
+    // Divisori ganci + label
+    for (let g = 0; g <= nSlot; g++) {
+        const gx = g*passo*S + cad2dOffX;
+        ctx.strokeStyle = darkMode ? '#1a2633' : '#c8d8e0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(gx, cat_px_y); ctx.lineTo(gx, cat_px_y + Math.max(cat_px_h, 6));
+        ctx.stroke();
+        if (g < nSlot && S*passo > 20) {
+            ctx.fillStyle = darkMode ? '#263545' : '#b0bec5';
+            ctx.font = `${Math.min(9,Math.max(6,S*6))}px Courier New`;
+            ctx.textAlign = 'center';
+            ctx.fillText('G'+(g+1), gx + passo*S/2, cat_px_y + Math.max(cat_px_h,6)/2 + 3);
+        }
+    }
+    ctx.textAlign = 'left';
+
+    // ── Linea limite Z ────────────────────────────────────────────
+    const zmaxPy = zmax*S + cad2dOffY;
+    ctx.strokeStyle = 'rgba(255,61,61,0.45)';
+    ctx.lineWidth = 1.5; ctx.setLineDash([8,5]);
+    ctx.beginPath(); ctx.moveTo(cat_px_x-10, zmaxPy); ctx.lineTo(cat_px_x+cat_px_w+10, zmaxPy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,61,61,0.7)';
+    ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'right';
+    ctx.fillText('LIMITE '+zmax+' mm', cat_px_x+cat_px_w, zmaxPy-3);
+    ctx.textAlign = 'left';
+
+    // ── Pezzi ─────────────────────────────────────────────────────
+    cad2dGeom = [];
+    let gancipUsati = 0;
+    let areaOccupata = 0;
+    let areaDisponibile = nSlot * passo * zmax;
+    let collisioniRilevate = false;
+
+    NDATA.columns.forEach((col, ci) => {
+        const n_slots  = col.n_slots || 1;
+        const x0_mm    = col.start_slot * passo;
+        const colW_mm  = n_slots * passo;
+        const colW_px  = colW_mm * S;
+        const x0_px    = x0_mm * S + cad2dOffX;
+        gancipUsati++;
+
+        // ── Gancio (rappresentazione visiva) ─────────────────────
+        const hookX  = x0_px + colW_px/2;
+        const hookY1 = cat_px_y + Math.max(cat_px_h, 6);
+        const hookY2 = hookY1 + Math.min(30*S, 18);
+        // Corpo gancio
+        ctx.strokeStyle = darkMode ? '#90a4ae' : '#607d8b';
+        ctx.lineWidth = Math.max(1.5, 2.5*S);
+        ctx.beginPath(); ctx.moveTo(hookX, hookY1); ctx.lineTo(hookX, hookY2); ctx.stroke();
+        // Uncino
+        ctx.beginPath();
+        ctx.arc(hookX - Math.min(6*S, 5), hookY2, Math.min(6*S, 5), 0, Math.PI * 0.85);
+        ctx.stroke();
+
+        let curY_mm = 0;
+
+        col.pezzi.forEach((part, pi) => {
+            const pw_mm  = part.largh_mm || 100;
+            const ph_mm  = part.alt_mm   || 200;
+            const gap_mm = gapUsato;
+            const gapOk  = gap_mm >= gapMin;
+            if (!gapOk && pi > 0) collisioniRilevate = true;
+
+            // ── Zona gap tra pezzi ───────────────────────────────
+            if (pi > 0) {
+                const gy1_px = curY_mm * S + cad2dOffY;
+                const gy2_px = (curY_mm + gap_mm) * S + cad2dOffY;
+                const pw_px_g = Math.min(pw_mm*S, colW_px - 2);
+                const px_lg   = x0_px + (colW_px - pw_px_g)/2;
+
+                ctx.fillStyle = gapOk ? 'rgba(0,230,118,0.06)' : 'rgba(244,67,54,0.14)';
+                ctx.fillRect(px_lg, gy1_px, pw_px_g, gy2_px - gy1_px);
+
+                // Linee di gap tratteggiate
+                ctx.strokeStyle = gapOk ? 'rgba(0,230,118,0.45)' : 'rgba(244,67,54,0.65)';
+                ctx.lineWidth = 0.8; ctx.setLineDash([3,3]);
+                ctx.beginPath(); ctx.moveTo(px_lg-4, gy1_px); ctx.lineTo(px_lg+pw_px_g+4, gy1_px); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(px_lg-4, gy2_px); ctx.lineTo(px_lg+pw_px_g+4, gy2_px); ctx.stroke();
+                ctx.setLineDash([]);
+
+                if (autoQuote && gy2_px - gy1_px > 6) {
+                    const gapColor = gapOk ? '#00e676' : '#ef5350';
+                    drawDimArrow(ctx,
+                        px_lg + pw_px_g + 14, gy1_px,
+                        px_lg + pw_px_g + 14, gy2_px,
+                        gap_mm+' mm', gapColor, 'right');
+                }
+                curY_mm += gap_mm;
+            }
+
+            // ── Geometria pezzo ───────────────────────────────────
+            const pw_px   = Math.min(pw_mm * S, colW_px - 4);
+            const ph_px   = Math.max(ph_mm * S, 2);
+            const px_left = x0_px + (colW_px - pw_px) / 2;
+            const py_top  = curY_mm * S + cad2dOffY;
+            areaOccupata += pw_mm * ph_mm;
+
+            cad2dGeom.push({
+                col, part, ci, pi,
+                x_px: px_left, y_px: py_top, w_px: pw_px, h_px: ph_px,
+                x_mm: x0_mm + (colW_mm - pw_mm)/2, y_mm: curY_mm,
+                w_mm: pw_mm, h_mm: ph_mm
+            });
+
+            const hex = col.color || '#00e676';
+
+            // ── Zona LIBERA sotto il pezzo (fino a zmax) ─────────
+            if (autoQuote) {
+                const freeTop_px = py_top + ph_px;
+                const freeBot_px = zmax * S + cad2dOffY;
+                if (freeBot_px - freeTop_px > 4 && pi === col.pezzi.length - 1) {
+                    // Hatch rosso tenue = spazio non utilizzato
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(px_left, freeTop_px, pw_px, freeBot_px - freeTop_px);
+                    ctx.clip();
+                    ctx.strokeStyle = 'rgba(239,83,80,0.12)';
+                    ctx.lineWidth = 0.7;
+                    const hStep = 10;
+                    for (let d = -(pw_px + (freeBot_px-freeTop_px)); d < pw_px + (freeBot_px-freeTop_px); d += hStep) {
+                        ctx.beginPath();
+                        ctx.moveTo(px_left + d, freeTop_px);
+                        ctx.lineTo(px_left + d + (freeBot_px - freeTop_px), freeBot_px);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                    // Bordo sottile
+                    ctx.strokeStyle = 'rgba(239,83,80,0.18)';
+                    ctx.lineWidth = 0.5; ctx.setLineDash([2,4]);
+                    ctx.strokeRect(px_left, freeTop_px, pw_px, freeBot_px - freeTop_px);
+                    ctx.setLineDash([]);
+                    // Label piccola
+                    if ((freeBot_px - freeTop_px) > 18 && pw_px > 28) {
+                        ctx.fillStyle = 'rgba(239,83,80,0.35)';
+                        ctx.font = `${Math.min(8, Math.max(6, (freeBot_px-freeTop_px)*0.08))}px Courier New`;
+                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                        ctx.fillText('LIBERO', px_left + pw_px/2, (freeTop_px + freeBot_px)/2);
+                        ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+                    }
+                }
+            }
+
+            // ── Fill pezzo con gradiente ──────────────────────────
+            if (ph_px > 2) {
+                const grad = ctx.createLinearGradient(px_left, py_top, px_left + pw_px, py_top + ph_px);
+                grad.addColorStop(0, hex + '45');
+                grad.addColorStop(0.5, hex + '20');
+                grad.addColorStop(1, hex + '38');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(px_left, py_top, pw_px, ph_px, 3);
+                else ctx.rect(px_left, py_top, pw_px, ph_px);
+                ctx.fill();
+            }
+
+            // ── Hatch diagonale stile CAD ─────────────────────────
+            if (pw_px > 12 && ph_px > 12) {
+                ctx.save();
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(px_left, py_top, pw_px, ph_px, 3);
+                else ctx.rect(px_left, py_top, pw_px, ph_px);
+                ctx.clip();
+                ctx.strokeStyle = hex + '22';
+                ctx.lineWidth = 0.8;
+                const step = Math.max(8, 18 / cad2dZoom);
+                for (let d = -(pw_px + ph_px); d < pw_px + ph_px; d += step) {
+                    ctx.beginPath();
+                    ctx.moveTo(px_left + d, py_top);
+                    ctx.lineTo(px_left + d + ph_px, py_top + ph_px);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // ── Bordo principale GLOW (doppio pass) ───────────────
+            // Pass 1: glow esterno
+            ctx.save();
+            ctx.shadowColor  = hex;
+            ctx.shadowBlur   = 8;
+            ctx.strokeStyle  = hex + 'aa';
+            ctx.lineWidth    = 1.5;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(px_left, py_top, pw_px, ph_px, 3);
+            else ctx.rect(px_left, py_top, pw_px, ph_px);
+            ctx.stroke();
+            ctx.restore();
+            // Pass 2: bordo netto
+            ctx.strokeStyle = hex;
+            ctx.lineWidth   = 2.5;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(px_left, py_top, pw_px, ph_px, 3);
+            else ctx.rect(px_left, py_top, pw_px, ph_px);
+            ctx.stroke();
+
+            // ── Corner marks stile CAD ────────────────────────────
+            if (pw_px > 18 && ph_px > 18) {
+                const cm = Math.min(8, pw_px * 0.12, ph_px * 0.12);
+                ctx.strokeStyle = hex;
+                ctx.lineWidth   = 1.5;
+                // TL
+                ctx.beginPath(); ctx.moveTo(px_left, py_top + cm); ctx.lineTo(px_left, py_top); ctx.lineTo(px_left + cm, py_top); ctx.stroke();
+                // TR
+                ctx.beginPath(); ctx.moveTo(px_left+pw_px-cm, py_top); ctx.lineTo(px_left+pw_px, py_top); ctx.lineTo(px_left+pw_px, py_top+cm); ctx.stroke();
+                // BL
+                ctx.beginPath(); ctx.moveTo(px_left, py_top+ph_px-cm); ctx.lineTo(px_left, py_top+ph_px); ctx.lineTo(px_left+cm, py_top+ph_px); ctx.stroke();
+                // BR
+                ctx.beginPath(); ctx.moveTo(px_left+pw_px-cm, py_top+ph_px); ctx.lineTo(px_left+pw_px, py_top+ph_px); ctx.lineTo(px_left+pw_px, py_top+ph_px-cm); ctx.stroke();
+            }
+
+            // ── Croce centrale (centro pezzo) ─────────────────────
+            if (pw_px > 24 && ph_px > 24) {
+                const cx = px_left + pw_px/2, cy = py_top + ph_px/2;
+                const cs = Math.min(6, pw_px*0.06, ph_px*0.06);
+                ctx.strokeStyle = hex + '60';
+                ctx.lineWidth   = 0.7;
+                ctx.beginPath(); ctx.moveTo(cx-cs, cy); ctx.lineTo(cx+cs, cy); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx, cy-cs); ctx.lineTo(cx, cy+cs); ctx.stroke();
+            }
+
+            // ── Etichetta pezzo ───────────────────────────────────
+            if (ph_px > 14 && pw_px > 20) {
+                // Sfondo etichetta
+                const nomeTrunc = (part.nome || '').substring(0, 16);
+                const dimTxt    = `${(pw_mm).toFixed(0)} × ${(ph_mm).toFixed(0)}`;
+                const fSize     = Math.min(10, Math.max(6, ph_px * 0.16));
+                ctx.font = `bold ${fSize}px Courier New`;
+                const tw = ctx.measureText(nomeTrunc).width;
+                const cx = px_left + pw_px/2, cy = py_top + ph_px/2;
+                if (ph_px > 26) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+                    ctx.fillRect(cx - tw/2 - 3, cy - fSize - 2, tw + 6, fSize + 2);
+                }
+                ctx.fillStyle = hex;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                ctx.fillText(nomeTrunc, cx, cy + (ph_px > 26 ? 0 : 0));
+                if (ph_px > 26) {
+                    ctx.font = `${Math.min(8, Math.max(5, ph_px*0.10))}px Courier New`;
+                    ctx.fillStyle = hex + 'bb';
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(dimTxt+' mm', cx, cy + 2);
+                }
+                ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+            }
+
+            // ── Quote dimensionali automatiche ────────────────────
+            if (autoQuote && pw_px > 32 && ph_px > 20) {
+                const dimColor = darkMode ? '#546e7a' : '#78909c';
+                drawDimH(ctx, px_left, px_left+pw_px, py_top+ph_px, pw_mm.toFixed(0)+' mm', dimColor, 14);
+                if (ph_px > 32)
+                    drawDimV(ctx, px_left+pw_px, py_top, py_top+ph_px, ph_mm.toFixed(0)+' mm', dimColor, 14);
+            }
+
+            curY_mm += ph_mm;
+        });
+    });
+
+    // ── Scala grafica ─────────────────────────────────────────────
+    const scaleBarMM = gridMM;
+    const scaleBarPx = scaleBarMM * S;
+    const sX = 14, sY = H - 14;
+    ctx.fillStyle = darkMode ? '#0d1117' : '#ffffff';
+    ctx.fillRect(sX-2, sY-12, scaleBarPx+4, 14);
+    ctx.strokeStyle = darkMode ? '#546e7a' : '#78909c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(sX, sY-8); ctx.lineTo(sX, sY-2);
+    ctx.moveTo(sX, sY-5); ctx.lineTo(sX+scaleBarPx, sY-5);
+    ctx.moveTo(sX+scaleBarPx, sY-8); ctx.lineTo(sX+scaleBarPx, sY-2);
+    ctx.stroke();
+    ctx.fillStyle = darkMode ? '#546e7a' : '#78909c';
+    ctx.font = '8px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText(scaleBarMM+' mm', sX+scaleBarPx/2, sY-1);
+    ctx.textAlign = 'left';
+
+    // ── Misure salvate ────────────────────────────────────────────
+    measures.forEach(m => {
+        const p1 = mm2px(m.p1.x, m.p1.y);
+        const p2 = mm2px(m.p2.x, m.p2.y);
+        drawDimArrow(ctx, p1.x, p1.y, p2.x, p2.y, m.dist.toFixed(1)+' mm', '#ffab40', 'top');
+        [p1, p2].forEach(p => {
+            ctx.fillStyle = '#ffab40';
+            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+        });
+    });
+
+    // ── Misura in corso ───────────────────────────────────────────
+    if (cad2dTool === 'misura' && measurePts.length === 1 && cad2dMouseMM) {
+        const p1 = mm2px(measurePts[0].x, measurePts[0].y);
+        const p2 = mm2px(cad2dMouseMM.x, cad2dMouseMM.y);
+        const dist = Math.sqrt(
+            (cad2dMouseMM.x - measurePts[0].x)**2 +
+            (cad2dMouseMM.y - measurePts[0].y)**2
+        ).toFixed(1);
+        ctx.strokeStyle = 'rgba(255,171,64,0.85)';
+        ctx.lineWidth = 1.5; ctx.setLineDash([5,3]);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ffab40';
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.fillRect((p1.x+p2.x)/2-32, (p1.y+p2.y)/2-10, 64, 14);
+        ctx.fillStyle = '#ffab40';
+        ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(dist+' mm', (p1.x+p2.x)/2, (p1.y+p2.y)/2);
+        ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    }
+
+    // ── Aggiorna badge collision ──────────────────────────────────
+    const gapOk2 = gapUsato >= gapMin;
+    const okEl  = document.getElementById('2d-gap-ok');
+    const errEl = document.getElementById('2d-gap-err');
+    if (okEl)  okEl.style.display  = gapOk2 ? 'inline-block' : 'none';
+    if (errEl) errEl.style.display = gapOk2 ? 'none' : 'inline-block';
+
+    // ── Aggiorna barra saturazione ────────────────────────────────
+    const satBar = document.getElementById('sat-bar');
+    if (satBar) {
+        satBar.style.display = 'flex';
+        const pct = Math.min(100, Math.round(areaOccupata / areaDisponibile * 100));
+        const fillEl = document.getElementById('sat-fill');
+        const pctEl  = document.getElementById('sat-pct');
+        const ganEl  = document.getElementById('sat-ganci');
+        const colEl  = document.getElementById('sat-collisioni');
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (pctEl)  { pctEl.textContent = pct + '%'; pctEl.style.color = pct > 80 ? '#00e676' : pct > 50 ? '#ffab40' : '#ef5350'; }
+        if (ganEl)  ganEl.textContent = gancipUsati + ' / ' + nSlot + ' ganci';
+        if (colEl)  colEl.style.display = collisioniRilevate ? 'inline' : 'none';
+    }
+}
+
+function disegna2D() { redraw2D(); }
+
+// ── Leggi parametri URL all'avvio ─────────────────────────
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const src = params.get('src') || 'stp';
+    const mac_id  = params.get('mac_id');
+    const mac_ids = params.get('mac_ids');
+
+    if (src === 'commessa' && mac_id) {
+        // carica automaticamente la commessa
+        document.getElementById('src-stp').classList.remove('active');
+        document.getElementById('src-commessa').classList.add('active');
+        document.getElementById('panel-commessa').style.display = 'block';
+        setTimeout(() => caricaDaCommessa(mac_id), 300);
+    } else if (src === 'db') {
+        selSrc('db');
+        if (mac_ids) {
+            // auto-seleziona le macchine
+            setTimeout(async () => {
+                await caricaListaDB();
+                const ids = mac_ids.split(',');
+                ids.forEach(id => {
+                    const cb = document.querySelector(`.db-mac-check[value="${id}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }, 400);
+        }
+    }
+    // default: stp → mostra upload overlay (già visibile)
+})();
+
+// ═══════════════════════════════════════════════
+// THEME TOGGLE
+// ═══════════════════════════════════════════════
+let darkMode = true;
+
+// Palette pezzi: dark = toni vivaci su nero, light = stessi ma leggermente più saturi
+const PART_COLORS_DARK  = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252','#69f0ae','#ffff00','#ff6e40','#b388ff','#18ffff'];
+const PART_COLORS_LIGHT = ['#00695c','#0277bd','#e65100','#6a1b9a','#b71c1c','#1b5e20','#f57f17','#bf360c','#4527a0','#006064'];
+
+function toggleTheme() {
+    darkMode = !darkMode;
+    const btn = document.getElementById('theme-btn');
+    if (darkMode) {
+        document.body.classList.remove('light');
+        btn.textContent = '☀️';
+        btn.title = 'Passa a tema chiaro';
+    } else {
+        document.body.classList.add('light');
+        btn.textContent = '🌙';
+        btn.title = 'Passa a tema scuro';
+    }
+    // Aggiorna colori pezzi nel dataset
+    if (NDATA && NDATA.columns) {
+        const palette = darkMode ? PART_COLORS_DARK : PART_COLORS_LIGHT;
+        NDATA.columns.forEach((col, i) => {
+            col.color = palette[i % palette.length];
+        });
+        updateKPI();
+    }
+    draw();
+}
+
+function getBgColor()   { return darkMode ? '#080c0e' : '#f0f4f8'; }
+function getGridColor() { return darkMode ? 'rgba(13,19,24,0.8)' : 'rgba(180,195,210,0.9)'; }
+function getHookLabelBg()  { return darkMode ? '#263545' : '#c8d8e8'; }
+function getChainLabelColor() { return darkMode ? '#4a6070' : '#5a7080'; }
+function getChainLenColor()   { return darkMode ? '#00e676' : '#007a3d'; }
+
+</script>
+{% endblock %}
