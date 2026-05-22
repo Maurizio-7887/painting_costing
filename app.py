@@ -620,18 +620,7 @@ def ottimizza_lotto_db(items_con_prodotti: list, cfg: Configurazione) -> dict:
 
 @app.route('/')
 def dashboard():
-    oggi = date.today().isoformat()
-    n_prodotti = Prodotto.query.count()
-    ordini_attesa = OrdineOrdine.query.filter_by(stato='ATTESA').all()
-    lotti_recenti = ordini_attesa[:8]
-    lotti = Lotto.query.order_by(Lotto.id.desc()).limit(6).all()
-    kpi = {
-        'n_prodotti': n_prodotti,
-        'n_lotti': len(ordini_attesa),
-        'pezzi_attesa': sum(o.quantita for o in ordini_attesa),
-    }
-    return render_template('dashboard.html', oggi=oggi, kpi=kpi,
-                           lotti_recenti=lotti_recenti, lotti=lotti)
+    return redirect(url_for('pagina_produzione'))
 
 
 # ══════════════════════════════════════════════════════════════════
