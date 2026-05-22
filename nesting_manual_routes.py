@@ -23,7 +23,7 @@ def register_manual_routes(app, db, OrdineCAD, BOMAssembly, BOMRecordCAD, ItemMa
         try:
             db.session.execute(text("""
                 CREATE TABLE IF NOT EXISTS nesting_manual_history (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id          SERIAL PRIMARY KEY,
                     ordine_id   INTEGER NOT NULL,
                     layout_json TEXT,
                     kpi_json    TEXT,
