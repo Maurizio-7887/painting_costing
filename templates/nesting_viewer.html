@@ -626,42 +626,100 @@ function drawMiniature(mc,part){
 // ── AUTO-PLACE: trova il primo slot con spazio ──
 function autoPlace(part){
   if(!NDATA) return;
-  // Prova entrambi gli orientamenti
   const orientations=[
-    {L:part.largh_mm,H:part.alt_mm,rot:false},
-    {L:part.alt_mm,  H:part.largh_mm,rot:true}
+    {L:part.largh_mm, H:part.alt_mm,  rot:false},
+    {L:part.alt_mm,   H:part.largh_mm, rot:true}
   ];
+
+  // Cerca il MIGLIORE slot: quello con più spazio residuo dopo il piazzamento
+  let bestSlot=-1, bestOrient=null, bestY=null, bestResiduo=-Infinity;
+
   for(const or of orientations){
+    const testPart={...part, largh_mm:or.L, alt_mm:or.H};
     for(let si=0;si<NDATA.columns.length;si++){
-      const result=tryFitInSlot(si,{...part,largh_mm:or.L,alt_mm:or.H});
-      if(result!==null){
-        manualParts.push({slotIdx:si,part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:result,orientamento:or.rot?'ruotato_90':'standard'},color:'#ff9800'});
-        draw(); updateKPIManual();
-        showToastOk(`${part.nome} → G${si+1}${or.rot?' (ruotato)':''}`);
-        return;
+      const yTop=tryFitInSlot(si, testPart);
+      if(yTop===null) continue;
+      // Residuo = spazio rimasto nel gancio dopo il piazzamento
+      const usedAfter = Math.abs(yTop - or.H);
+      const residuo   = Z_MAX_MM - usedAfter;
+      if(residuo > bestResiduo){
+        bestResiduo=residuo; bestSlot=si; bestOrient=or; bestY=yTop;
       }
     }
-    // Prova un nuovo gancio
-    const newSlot=NDATA.columns.length+manualParts.filter(m=>m.slotIdx>=NDATA.columns.length).length;
-    const yTop=-HOOK_LEN;
-    if(Math.abs(yTop-or.H)<=Z_MAX_MM){
-      manualParts.push({slotIdx:newSlot,part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,orientamento:or.rot?'ruotato_90':'standard'},color:'#ff9800'});
-      draw(); updateKPIManual();
-      showToastOk(`${part.nome} → nuovo G${newSlot+1}${or.rot?' (ruotato)':''}`);
-      return;
-    }
+    if(bestSlot>=0) break; // trovato con orientamento standard, non serve ruotare
   }
-  showToastErr(`${part.nome}: nessuno spazio disponibile!`);
+
+  if(bestSlot>=0){
+    manualParts.push({
+      slotIdx:bestSlot,
+      part:{...part,largh_mm:bestOrient.L,alt_mm:bestOrient.H,
+            y_top:bestY,orientamento:bestOrient.rot?'ruotato_90':'standard'},
+      color:'#ff9800'
+    });
+    draw(); updateKPIManual();
+    showToastOk(`${part.nome} → G${bestSlot+1}${bestOrient.rot?' (ruotato)':''}`);
+    return;
+  }
+
+  // Nessun gancio esistente: apri nuovo slot
+  for(const or of orientations){
+    const GAP_LAT=NDATA.gap_lat_mm||60;
+    if(or.L > PASSO_MM-GAP_LAT) continue; // troppo largo anche per gancio nuovo
+    const newSlot=NDATA.columns.length +
+      [...new Set(manualParts.filter(m=>m.slotIdx>=NDATA.columns.length).map(m=>m.slotIdx))].length;
+    const yTop=-HOOK_LEN;
+    if(Math.abs(yTop-or.H)>Z_MAX_MM) continue;
+    manualParts.push({
+      slotIdx:newSlot,
+      part:{...part,largh_mm:or.L,alt_mm:or.H,
+            y_top:yTop,orientamento:or.rot?'ruotato_90':'standard'},
+      color:'#ff9800'
+    });
+    draw(); updateKPIManual();
+    showToastOk(`${part.nome} → nuovo G${newSlot+1}${or.rot?' (ruotato)':''}`);
+    return;
+  }
+
+  showToastErr(`${part.nome} (${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm): troppo grande o nessuno spazio!`);
 }
 
 // Controlla se il pezzo entra nello slot, ritorna y_top o null
-function tryFitInSlot(slotIdx,part){
-  const col=NDATA.columns[slotIdx];
+function tryFitInSlot(slotIdx, part){
+  const col = NDATA.columns[slotIdx];
   if(!col) return null;
-  if(col.peso + part.peso_kg > (NDATA.max_kg||60)) return null;
-  if(part.largh_mm > PASSO_MM-60) return null;
 
-  // Calcola ultima y occupata (pezzi automatici + manuali già presenti)
+  // 1. Peso max gancio
+  const extraPeso = manualParts.filter(m=>m.slotIdx===slotIdx).reduce((s,m)=>s+m.part.peso_kg,0);
+  if(col.peso + extraPeso + part.peso_kg > (NDATA.max_kg||60)) return null;
+
+  // 2. Vincolo laterale: il pezzo non deve invadere i ganci vicini
+  //    Formula: W_pezzo/2 + W_vicino/2 + GAP_LAT <= PASSO_MM
+  const GAP_LAT = NDATA.gap_lat_mm || 60;
+  const halfNew = part.largh_mm / 2;
+
+  // Calcola W_max effettivo di questo slot (inclusi pezzi manuali)
+  let wMaxThis = col.W_max || 0;
+  manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
+    wMaxThis = Math.max(wMaxThis, m.part.largh_mm);
+  });
+  const newWMax = Math.max(wMaxThis, part.largh_mm);
+
+  // Controlla gancio a sinistra
+  if(slotIdx > 0){
+    const leftCol = NDATA.columns[slotIdx-1];
+    let wLeft = leftCol ? (leftCol.W_max||0) : 0;
+    manualParts.filter(m=>m.slotIdx===slotIdx-1).forEach(m=>{ wLeft=Math.max(wLeft,m.part.largh_mm); });
+    if(wLeft/2 + newWMax/2 + GAP_LAT > PASSO_MM) return null;
+  }
+  // Controlla gancio a destra
+  if(slotIdx < NDATA.columns.length-1){
+    const rightCol = NDATA.columns[slotIdx+1];
+    let wRight = rightCol ? (rightCol.W_max||0) : 0;
+    manualParts.filter(m=>m.slotIdx===slotIdx+1).forEach(m=>{ wRight=Math.max(wRight,m.part.largh_mm); });
+    if(newWMax/2 + wRight/2 + GAP_LAT > PASSO_MM) return null;
+  }
+
+  // 3. Altezza disponibile
   let lastY = -HOOK_LEN;
   col.pezzi.forEach(p=>{ lastY=Math.min(lastY, p.y_top-p.alt_mm); });
   manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
@@ -669,7 +727,8 @@ function tryFitInSlot(slotIdx,part){
   });
   const yTop = lastY - GAP_V;
   const yBot = yTop - part.alt_mm;
-  if(Math.abs(yBot)>Z_MAX_MM) return null;
+  if(Math.abs(yBot) > Z_MAX_MM) return null;
+
   return yTop;
 }
 
