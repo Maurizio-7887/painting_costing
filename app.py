@@ -2490,146 +2490,158 @@ def api_nesting_config():
     })
 
 
-def _analizza_step_per_nesting(filepath):
-    """
-    Analizza file STEP/STL e ritorna NDATA per il viewer nesting.
-    Ogni geometria separata = un gancio sulla catena.
-    Formato output: { passo_mm, z_max_mm, max_kg, total_slots, columns:[{...}] }
-    """
-    import trimesh
-    import numpy as np
-    import base64, io, math
+ESCLUDI_PATTERN_NESTING = ['VisTHZ','EcrouHM','Rondelle','BS 4320','entretoise',
+                            'axe attelage','ANSI B18','vis ','boulon']
+NESTING_COLORS = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
+                  '#69f0ae','#18ffff','#ffd740','#b388ff','#ff6e40',
+                  '#ff6d00','#00b0ff','#76ff03','#e040fb','#ff1744']
 
-    ACCIAIO_KG_MM3 = 7.85e-6  # kg/mm³  (7850 kg/m³ — acciaio)
-    PASSO_MM = 400
-    MAX_KG_GANCIO = 60.0
-    Z_MAX_MM = 2000
+def _analizza_step_per_nesting(filepath, passo_mm=400, max_kg=60.0,
+                                z_max=2000, gap_v=60, gap_lat=60, hook_len=120):
+    import trimesh, numpy as np, base64
+    from shapely.geometry import MultiPoint, box as shp_box
+    from shapely.affinity import translate, rotate as shp_rotate
+    from shapely.ops import unary_union
 
-    COLORS = [
-        '#1565C0','#00897B','#F57F17','#6A1B9A','#D32F2F',
-        '#0277BD','#558B2F','#E65100','#4527A0','#AD1457',
-        '#00695C','#F9A825','#283593','#2E7D32','#4E342E'
-    ]
-
+    # Carica STEP
     try:
-        scene = trimesh.load(filepath, force='scene')
+        scene = trimesh.load(filepath, force='scene', process=False)
     except Exception as e:
         try:
-            mesh = trimesh.load(filepath, force='mesh')
+            mesh = trimesh.load(filepath, force='mesh', process=False)
             scene = trimesh.scene.Scene({'parte_0': mesh})
         except Exception as e2:
-            return {'error': f'Impossibile caricare il file: {str(e2)}'}
+            return {'error': f'Impossibile caricare: {e2}'}
 
-    # Estrai geometrie
-    if hasattr(scene, 'geometry') and scene.geometry:
+    if hasattr(scene,'geometry') and scene.geometry:
         geoms = list(scene.geometry.items())
-    elif hasattr(scene, 'triangles'):
+    elif hasattr(scene,'triangles'):
         geoms = [('parte_0', scene)]
     else:
-        return {'error': 'Nessuna geometria trovata nel file'}
+        return {'error': 'Nessuna geometria trovata'}
 
+    # ── Estrai pezzi ──
     parts = []
     for name, mesh in geoms:
+        if any(ex.lower() in name.lower() for ex in ESCLUDI_PATTERN_NESTING):
+            continue
         try:
-            if not hasattr(mesh, 'bounds') or mesh.bounds is None:
-                continue
-            bounds = mesh.bounds
-            dims = bounds[1] - bounds[0]
-            L, H, D = float(dims[0]), float(dims[1]), float(dims[2])
+            if not hasattr(mesh,'bounds') or mesh.bounds is None: continue
+            verts = mesh.vertices
+            max_dim = float(np.abs(verts).max())
+            scale = 1000.0 if max_dim < 10 else 1.0
+            verts_mm = verts * scale
+            bb = mesh.bounding_box.extents * scale
+            dims = sorted([float(bb[0]),float(bb[1]),float(bb[2])], reverse=True)
+            L,H,D = max(dims[0],10),max(dims[1],10),max(dims[2],10)
 
-            # Auto-detect unità: se tutto < 10 → probabilmente metri
-            max_dim = max(L, H, D)
-            if max_dim < 10:
-                L *= 1000; H *= 1000; D *= 1000
-            elif max_dim < 100:
-                # Potrebbe essere cm o piccoli mm — controlla se < 2m
-                if max_dim < 5:  # sicuramente metri
-                    L *= 1000; H *= 1000; D *= 1000
+            # Silhouette Shapely
+            thin = int(np.argmin([float(bb[0]),float(bb[1]),float(bb[2])]))
+            keep = [i for i in range(3) if i!=thin]
+            pts2d = verts_mm[:,keep]
+            try:
+                hull = MultiPoint(pts2d).convex_hull
+                poly_shape = hull if hull.geom_type=='Polygon' else None
+            except:
+                poly_shape = None
+            if poly_shape is None or poly_shape.is_empty:
+                poly_shape = shp_box(-L/2,-H/2,L/2,H/2)
+            cx,cy = poly_shape.centroid.x, poly_shape.centroid.y
+            poly_shape = translate(poly_shape,-cx,-cy)
+            poly_pts = [[round(p[0],1),round(p[1],1)] for p in poly_shape.exterior.coords]
 
-            L = max(L, 10.0)
-            H = max(H, 10.0)
-            D = max(D, 10.0)
-
-            # Larghezza = dimensione maggiore
-            dims_sorted = sorted([L, H, D], reverse=True)
-            largh_mm = dims_sorted[0]  # più largo
-            alt_mm   = dims_sorted[1]  # altezza
-            prof_mm  = dims_sorted[2]  # profondità
+            # SVG miniatura
+            svg_uri = _genera_svg_profilo_trimesh(mesh, L, H)
 
             # Peso
             try:
-                if hasattr(mesh, 'is_watertight') and mesh.is_watertight and mesh.volume > 0:
-                    vol_mm3 = float(mesh.volume)
-                    # Converti volume se unità erano metri
-                    if max_dim < 10:
-                        vol_mm3 *= 1e9
-                    peso_kg = vol_mm3 * ACCIAIO_KG_MM3
+                if hasattr(mesh,'is_watertight') and mesh.is_watertight and mesh.volume>0:
+                    vol = float(mesh.volume)*(scale**3)
+                    peso = round(vol*7.85e-6,2)
                 else:
-                    # Stima da bbox con fill factor 20%
-                    peso_kg = (largh_mm * alt_mm * prof_mm) * ACCIAIO_KG_MM3 * 0.20
-            except Exception:
-                peso_kg = (largh_mm * alt_mm * prof_mm) * ACCIAIO_KG_MM3 * 0.20
+                    peso = round(L*H*D*7.85e-6*0.15,2)
+            except:
+                peso = round(L*H*D*7.85e-6*0.15,2)
+            peso = max(0.01,peso)
 
-            peso_kg = max(0.01, round(peso_kg, 2))
-
-            # Genera SVG profilo (proiezione frontale)
-            svg_uri = _genera_svg_profilo_trimesh(mesh, largh_mm, alt_mm)
-
-            # Estrai silhouette 2D per nesting viewer
-            try:
-                from shapely.geometry import MultiPoint as _MP
-                _verts = mesh.vertices * (1000.0 if max_dim < 10 else 1.0)
-                _bb = [L, H, D]
-                _thin = _bb.index(min(_bb))
-                _keep = [i for i in range(3) if i != _thin]
-                _pts2d = _verts[:, _keep]
-                _hull = _MP(_pts2d).convex_hull
-                if hasattr(_hull, 'exterior'):
-                    _coords = list(_hull.exterior.coords)
-                    _cx = sum(p[0] for p in _coords) / len(_coords)
-                    _cy = sum(p[1] for p in _coords) / len(_coords)
-                    _poly_pts = [[round(p[0]-_cx,1), round(p[1]-_cy,1)] for p in _coords]
-                else:
-                    _poly_pts = []
-            except Exception:
-                _poly_pts = []
-
-            parts.append({
-                'nome': name,
-                'largh_mm': round(largh_mm, 1),
-                'alt_mm': round(alt_mm, 1),
-                'D_mm': round(prof_mm, 1),
-                'peso_kg': peso_kg,
-                'orientamento': 'standard',
-                'svg_uri': svg_uri,
-                'poly_pts': _poly_pts,
-            })
-        except Exception as ex:
-            # Pezzo non leggibile → skip
+            parts.append({'nome':name,'largh_mm':round(L,1),'alt_mm':round(H,1),
+                          'D_mm':round(D,1),'peso_kg':peso,'poly_pts':poly_pts,
+                          'svg_uri':svg_uri,'_shape':poly_shape})
+        except:
             continue
 
     if not parts:
-        return {'error': 'Nessun componente valido trovato nel file STEP'}
+        return {'error': 'Nessun pezzo verniciabile trovato'}
 
-    # ── FFD OPTIMIZER: riempie ogni palo con quanti più pezzi possibile ──
-    parts.sort(key=lambda p: -(p['largh_mm'] * p['alt_mm']))  # grandi prima
+    # ── Nesting Shapely ──
+    parts.sort(key=lambda p: -(p['largh_mm']*p['alt_mm']))
+    columns = []
 
-    columns = _nesting_catena(
-        parts,
-        passo_mm=PASSO_MM,
-        max_kg=MAX_KG_GANCIO,
-        z_max=Z_MAX_MM
-    )
+    def _try_place(col, part, orient='std'):
+        shape = part['_shape']
+        L,H = part['largh_mm'],part['alt_mm']
+        if orient=='rot' and abs(L-H)>5:
+            shape = shp_rotate(shape,90,origin=(0,0))
+            L,H = H,L
+        if L > passo_mm-gap_lat: return None
+        if col['peso']+part['peso_kg'] > max_kg: return None
+        yTop = col['y_cursor']
+        if abs(yTop-H) > z_max: return None
+        placed = translate(shape, 0, yTop-H/2)
+        if col['union_shape'] is not None:
+            buf_ex = col['union_shape'].buffer(gap_v/2,join_style=2)
+            if placed.buffer(gap_v/2,join_style=2).intersects(buf_ex): return None
+        return {'shape':placed,'L':L,'H':H,'yTop':yTop,'orient':orient}
 
-    return {
-        'passo_mm': PASSO_MM,
-        'z_max_mm': Z_MAX_MM,
-        'max_kg': MAX_KG_GANCIO,
-        'total_slots': sum(c.get('n_slots', 1) for c in columns),
-        'columns': columns,
-        'n_pezzi': len(parts),
-        'peso_totale': round(sum(p['peso_kg'] for p in parts), 2)
-    }
+    def _do_place(col, part, r):
+        pp = {k:v for k,v in part.items() if k!='_shape'}
+        pp['largh_mm']=r['L']; pp['alt_mm']=r['H']
+        pp['y_top']=r['yTop']
+        pp['orientamento']='ruotato_90' if r['orient']=='rot' else 'standard'
+        col['pezzi'].append(pp)
+        col['peso']=round(col['peso']+part['peso_kg'],2)
+        col['y_cursor']=r['yTop']-r['H']-gap_v
+        col['W_max']=max(col['W_max'],r['L'])
+        col['union_shape']=r['shape'] if col['union_shape'] is None else unary_union([col['union_shape'],r['shape']])
+
+    for part in parts:
+        placed=False
+        for col in columns:
+            r=_try_place(col,part,'std')
+            if r is None: r=_try_place(col,part,'rot')
+            if r is not None:
+                _do_place(col,part,r); placed=True; break
+        if not placed:
+            col={'start_slot':len(columns),'color':NESTING_COLORS[len(columns)%len(NESTING_COLORS)],
+                 'pezzi':[],'peso':0.0,'y_cursor':-hook_len,'W_max':0.0,'union_shape':None}
+            r=_try_place(col,part,'std')
+            if r is None: r=_try_place(col,part,'rot')
+            if r is not None: _do_place(col,part,r)
+            columns.append(col)
+
+    # KPI colonne
+    result_cols=[]
+    for col in columns:
+        h_usata=abs(col['y_cursor']-(-hook_len))-gap_v
+        sat=round(100*h_usata/z_max,1)
+        result_cols.append({'start_slot':col['start_slot'],'color':col['color'],
+            'pezzi':col['pezzi'],'peso':col['peso'],'W_max':col['W_max'],
+            'h_usata_mm':round(h_usata),'h_libera_mm':round(z_max-h_usata),'sat_pct':sat})
+
+    # Libreria pezzi unici
+    library=[]
+    seen=set()
+    for p in parts:
+        key=f"{p['nome']}_{p['largh_mm']:.0f}x{p['alt_mm']:.0f}"
+        if key not in seen:
+            seen.add(key)
+            library.append({k:v for k,v in p.items() if k!='_shape'})
+
+    return {'passo_mm':passo_mm,'z_max_mm':z_max,'max_kg':max_kg,
+            'gap_v_mm':gap_v,'gap_lat_mm':gap_lat,
+            'total_slots':len(result_cols),'columns':result_cols,
+            'library':library,'n_pezzi':len(parts),
+            'peso_totale':round(sum(p['peso_kg'] for p in parts),2)}
 
 
 @app.route('/api/nesting/analizza', methods=['POST'])
@@ -2848,163 +2860,6 @@ def _genera_svg_profilo_trimesh(mesh, L_mm, H_mm):
         svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a1628"/><rect x="10" y="10" width="80" height="80" fill="#1a3a5c" stroke="#00e5ff" stroke-width="1.5"/></svg>'
         return 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
 
-
-def _nesting_catena(parts, passo_mm=400, max_kg=60, z_max=2000, gap_v=50, gap_lat=50, gap_curva=40):
-    """
-    FFD fisico RIGIDO — vincoli completi impianto verniciatura:
-    1. GAP VERTICALE gap_v=50mm tra pezzi sullo stesso gancio (oscillazione)
-    2. GAP LATERALE gap_lat=50mm: W[i]/2 + W[i+1]/2 + gap_lat <= passo_mm
-       => nessuna sovrapposizione fisica tra ganci adiacenti
-    3. GAP CURVA: D/2 + D_vicino/2 + gap_curva <= passo_mm
-    4. PESO MAX per gancio
-    5. ALTEZZA MAX z_max=2000mm
-    6. ROTAZIONE 90deg: prova sempre entrambe le orientazioni
-    7. SATURAZIONE: sat_pct per colonna e globale
-    """
-    COLORS = ['#00e676','#40c4ff','#ffab40','#ea80fc','#ff5252',
-              '#69f0ae','#18ffff','#ffd740','#b388ff','#ff6e40']
-
-    sorted_parts = sorted(parts, key=lambda p: p['largh_mm'] * p['alt_mm'], reverse=True)
-    columns = []
-
-    def h_usata(col):
-        n = len(col['pezzi'])
-        if n == 0:
-            return 0
-        return sum(p['alt_mm'] for p in col['pezzi']) + gap_v * (n - 1)
-
-    def check_lateral(col_idx, new_W):
-        """
-        Controlla che il pezzo con larghezza new_W, inserito in colonna col_idx,
-        non si sovrapponga fisicamente ai ganci adiacenti.
-        Vincolo: W_vicino/2 + new_W_max/2 + gap_lat <= passo_mm
-        """
-        # W_max aggiornato per la colonna (considera il nuovo pezzo)
-        col = columns[col_idx]
-        current_W_max = col.get('W_max', 0)
-        new_W_max = max(current_W_max, new_W)
-
-        if col_idx > 0:
-            W_sx = columns[col_idx - 1].get('W_max', 0)
-            if W_sx / 2.0 + new_W_max / 2.0 + gap_lat > passo_mm:
-                return False
-        if col_idx < len(columns) - 1:
-            W_dx = columns[col_idx + 1].get('W_max', 0)
-            if new_W_max / 2.0 + W_dx / 2.0 + gap_lat > passo_mm:
-                return False
-        return True
-
-    def check_lateral_new(new_W):
-        """Verifica laterale per un NUOVO gancio (l'ultimo a destra)"""
-        if not columns:
-            return True
-        W_sx = columns[-1].get('W_max', 0)
-        return (W_sx / 2.0 + new_W / 2.0 + gap_lat) <= passo_mm
-
-    def vincolo_curva_ok(col_idx, D_nuovo):
-        if col_idx == 0:
-            return True
-        D_sx = columns[col_idx - 1].get('D_max', 0)
-        return (D_nuovo / 2.0 + D_sx / 2.0 + gap_curva) <= passo_mm
-
-    def can_add(col_idx, col, part):
-        # 1. Altezza
-        h_agg = (gap_v if col['pezzi'] else 0) + part['alt_mm']
-        if h_usata(col) + h_agg > z_max:
-            return False
-        # 2. Peso
-        if col['peso'] + part['peso_kg'] > max_kg:
-            return False
-        # 3. Curva
-        D = part.get('D_mm', min(part['largh_mm'], 200))
-        if not vincolo_curva_ok(col_idx, D):
-            return False
-        # 4. Laterale — VINCOLO CRITICO no-overlap
-        if not check_lateral(col_idx, part['largh_mm']):
-            return False
-        return True
-
-    def can_add_new(part):
-        """Controlla se il pezzo può aprire un nuovo gancio"""
-        if not check_lateral_new(part['largh_mm']):
-            return False
-        if part['alt_mm'] > z_max:
-            return False
-        return True
-
-    def do_add(col, part):
-        col['pezzi'].append(part)
-        col['peso'] = round(col['peso'] + part['peso_kg'], 2)
-        D = part.get('D_mm', min(part['largh_mm'], 200))
-        col['D_max'] = max(col['D_max'], D)
-        col['W_max'] = max(col['W_max'], part['largh_mm'])
-
-    for part in sorted_parts:
-        W0, H0 = part['largh_mm'], part['alt_mm']
-        W90, H90 = H0, W0
-
-        p_std = dict(part, largh_mm=W0,  alt_mm=H0,  rotated=False, orientamento='standard')
-        p_rot = dict(part, largh_mm=W90, alt_mm=H90, rotated=True,  orientamento='ruotato_90')
-
-        placed = False
-
-        # Prima prova fit su ganci esistenti (FFD)
-        for idx, col in enumerate(columns):
-            if can_add(idx, col, p_std):
-                do_add(col, p_std)
-                placed = True
-                break
-            # Prova ruotato se cambia dimensioni
-            if (W90, H90) != (W0, H0) and can_add(idx, col, p_rot):
-                do_add(col, p_rot)
-                placed = True
-                break
-
-        if not placed:
-            # Apre nuovo gancio — scegli orientamento migliore
-            new_col = {
-                'start_slot': len(columns),
-                'n_slots':    1,
-                'peso':       0.0,
-                'color':      COLORS[len(columns) % len(COLORS)],
-                'pezzi':      [],
-                'D_max':      0.0,
-                'W_max':      0.0,
-            }
-            # Scegli orientamento: preferisci quello che occupa meno larghezza
-            # (lascia spazio ai vicini) se entrambi ok, altrimenti il più alto
-            ok_std = can_add_new(p_std)
-            ok_rot = can_add_new(p_rot) if (W90, H90) != (W0, H0) else False
-
-            if ok_std and ok_rot:
-                # Scegli quello con larghezza minore (meno invasivo lateralmente)
-                chosen = p_std if W0 <= W90 else p_rot
-            elif ok_std:
-                chosen = p_std
-            elif ok_rot:
-                chosen = p_rot
-            else:
-                # Pezzo troppo largo: forza su nuovo gancio (meglio che perderlo)
-                chosen = p_std if H0 <= H90 else p_rot
-
-            do_add(new_col, chosen)
-            columns.append(new_col)
-
-    # Calcola saturazione per ogni colonna
-    for col in columns:
-        h = h_usata(col)
-        col['h_usata_mm']  = int(round(h))
-        col['h_libera_mm'] = int(round(z_max - h))
-        col['sat_pct']     = round(100.0 * h / z_max, 1)
-
-    # Saturazione globale
-    n_col = len(columns)
-    if n_col:
-        sat_glob = round(sum(c['h_usata_mm'] for c in columns) / (z_max * n_col) * 100, 1)
-        for col in columns:
-            col['sat_globale_pct'] = sat_glob
-
-    return columns
 
 def cad_upload():
     """Upload file STEP/STP → parsing → BOM nel DB."""
