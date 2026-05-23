@@ -16,23 +16,30 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
 .sat-w{height:3px;background:#1a2633;border-radius:2px;margin-top:3px}
 .sat-b{height:3px;border-radius:2px;background:#00e676;transition:width .4s}
 .ci{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:3px;
-  cursor:pointer;margin-bottom:2px;font-size:9px;transition:background .15s}
+  cursor:pointer;margin-bottom:2px;font-size:9px;transition:background .15s;flex-wrap:wrap}
 .ci:hover{background:#1a2633}
 .cdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 
 /* CANVAS */
-#canvaswrap{flex:1;position:relative;overflow:hidden;background:#080c0e;transition:background .3s}
-#canvaswrap.light{background:#f5f5f0}
+#canvaswrap{flex:1;position:relative;overflow:hidden;transition:background .3s}
+#canvaswrap.dark-mode{background:#080c0e}
+#canvaswrap.light-mode{background:#f5f7fa}
 #c{display:block;width:100%;height:100%;cursor:grab}
 
 /* TOOLBAR */
 #toolbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);
   display:flex;gap:5px;z-index:10;flex-wrap:wrap;justify-content:center}
-.tb{background:#0d1117;border:1px solid #1a2633;color:#b0bec5;padding:5px 12px;
-  border-radius:16px;cursor:pointer;font-size:11px;font-family:'Courier New',monospace;transition:all .2s}
+.tb{border:1px solid #1a2633;color:#b0bec5;padding:5px 12px;
+  border-radius:16px;cursor:pointer;font-size:11px;font-family:'Courier New',monospace;
+  transition:all .2s;background:#0d1117}
 .tb:hover{border-color:#00e676;color:#00e676}
 .tb.act{background:#00e676;color:#080c0e;border-color:#00e676;font-weight:bold}
+.tb.act-light{background:#1565C0;color:#fff;border-color:#1565C0;font-weight:bold}
 .tb.danger{background:#c62828;color:#fff;border-color:#f44336}
+
+/* LIGHT MODE toolbar override */
+#canvaswrap.light-mode + * .tb,
+.light-tb{background:#fff;border-color:#ccc;color:#333}
 
 /* UPLOAD */
 #upload-overlay{position:absolute;inset:0;display:flex;flex-direction:column;
@@ -56,24 +63,38 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
 
 /* TOOLTIP */
 #tooltip{position:fixed;background:#0d1117;border:1px solid #1a2633;border-radius:7px;
-  padding:10px;min-width:190px;display:none;z-index:100;pointer-events:none;font-size:10px}
+  padding:10px;min-width:190px;display:none;z-index:200;pointer-events:none;font-size:10px}
 .tn{font-size:12px;font-weight:bold;color:#00e676;margin-bottom:6px}
-.tr{display:flex;justify-content:space-between;gap:12px;margin-bottom:2px}
+.tr2{display:flex;justify-content:space-between;gap:12px;margin-bottom:2px}
 .tl{color:#4a6070}.tv{color:#80cbc4;font-weight:bold}
 
-/* LIBRERIA MANUALE */
-#lib-panel{position:absolute;right:0;top:0;bottom:0;width:180px;
+/* LIBRERIA */
+#lib-panel{position:absolute;right:0;top:0;bottom:0;width:185px;
   background:#0d1117;border-left:1px solid #1a2633;display:none;
   flex-direction:column;z-index:15;padding:8px;overflow-y:auto}
-#lib-panel h4{color:#00e676;font-size:9px;text-transform:uppercase;margin:0 0 6px}
+#lib-panel h4{color:#00e676;font-size:9px;text-transform:uppercase;margin:0 0 4px}
+#lib-panel p{font-size:8px;color:#4a6070;margin:0 0 8px}
 .lib-item{border:1px solid #1a2633;border-radius:5px;padding:5px 6px;margin-bottom:5px;
-  cursor:grab;transition:border-color .15s;user-select:none}
-.lib-item:hover,.lib-item.dragging{border-color:#00e676;background:#0a1a12}
+  cursor:grab;transition:all .15s;user-select:none}
+.lib-item:hover{border-color:#00e676;background:#0a1a12}
+.lib-item.dragging{border-color:#ff9800;opacity:.7}
 .lib-item canvas{display:block;margin:0 auto 3px}
 .lib-nm{font-size:8px;color:#80cbc4;text-align:center;word-break:break-all}
-.lib-dm{font-size:7px;color:#4a6070;text-align:center}
+.lib-dm{font-size:7px;color:#4a6070;text-align:center;margin-bottom:3px}
+.lib-btns{display:flex;gap:3px;justify-content:center}
+.lib-btn{font-size:7px;padding:2px 5px;border-radius:3px;border:none;cursor:pointer;
+  font-family:'Courier New',monospace}
+.lb-auto{background:#00e676;color:#080c0e}
+.lb-manual{background:#1a2633;color:#80cbc4}
+.lb-auto:hover{background:#00c853}
+.lb-manual:hover{background:#263545;color:#fff}
 
 #ruler{position:absolute;bottom:14px;left:14px;font-size:9px;color:#4a6070;display:none}
+
+/* GHOST drag */
+#drag-ghost{position:fixed;pointer-events:none;display:none;z-index:300;
+  opacity:.75;border:2px dashed #ff9800;border-radius:4px;background:rgba(255,152,0,.1);
+  font-size:9px;color:#ff9800;padding:2px 5px;font-family:'Courier New',monospace}
 </style>
 
 <div id="app">
@@ -92,12 +113,13 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
       <button class="tb" style="width:100%;font-size:10px" onclick="showUpload()">📁 Nuovo STEP</button>
     </div>
     <div style="margin-top:5px">
-      <button class="tb" id="btn-manual" style="width:100%;font-size:10px" onclick="toggleManual()">✋ Manuale</button>
+      <button class="tb" id="btn-manual" style="width:100%;font-size:10px" onclick="toggleManual()">✋ Nesting Manuale</button>
     </div>
     <div id="clist" style="margin-top:8px"></div>
   </div>
 
-  <div id="canvaswrap">
+  <div id="canvaswrap" class="dark-mode">
+    <!-- UPLOAD -->
     <div id="upload-overlay">
       <div id="dropzone" onclick="document.getElementById('file-input').click()"
            ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -111,26 +133,30 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
       <input type="file" id="file-input" accept=".stp,.step,.STP,.STEP" onchange="handleFileSelect(this.files[0])">
     </div>
 
+    <!-- LOADING -->
     <div id="loading">
       <div class="spinner"></div>
       <p id="loading-text" style="color:#4a6070;font-size:13px">Analisi STEP in corso...</p>
     </div>
 
+    <!-- TOOLBAR -->
     <div id="toolbar" style="display:none">
       <button class="tb act" id="btn-iso"   onclick="setView('iso');  setAct(this)">○ ISO</button>
       <button class="tb"     id="btn-front" onclick="setView('front');setAct(this)">↔ Frontale</button>
       <button class="tb"     id="btn-top"   onclick="setView('top');  setAct(this)">↕ Top</button>
-      <button class="tb"     id="btn-theme" onclick="toggleTheme(this)">☀ Chiaro</button>
+      <button class="tb"     id="btn-theme" onclick="toggleTheme()">☀ Chiaro</button>
       <button class="tb" onclick="zoom(1.2)">+</button>
-      <button class="tb" onclick="zoom(0.83)">-</button>
+      <button class="tb" onclick="zoom(0.83)">−</button>
       <button class="tb danger" onclick="showUpload()">↺ Reset</button>
     </div>
 
     <canvas id="c"></canvas>
-    <div id="ruler">scala: 1 gancio = 400mm</div>
+    <div id="ruler">scala: 1 gancio = <span id="ruler-val">400</span>mm</div>
 
+    <!-- LIBRERIA MANUALE -->
     <div id="lib-panel">
-      <h4>📦 Libreria — trascina sul gancio</h4>
+      <h4>📦 Libreria Pezzi</h4>
+      <p>Auto: primo spazio libero · Manuale: scegli gancio</p>
       <div id="lib-list"></div>
     </div>
   </div>
@@ -139,56 +165,74 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
 <div id="tooltip">
   <div class="tn" id="tip-name"></div>
   <div style="font-size:9px;margin-bottom:5px" id="tip-col"></div>
-  <div class="tr"><span class="tl">Altezza</span><span class="tv" id="tip-h"></span></div>
-  <div class="tr"><span class="tl">Larghezza</span><span class="tv" id="tip-w"></span></div>
-  <div class="tr"><span class="tl">Peso</span><span class="tv" id="tip-p"></span></div>
-  <div class="tr"><span class="tl">Sat. gancio</span><span class="tv" id="tip-sat"></span></div>
-  <div style="margin-top:6px;font-size:9px;color:#4a6070" id="tip-hint">Click → rimuovi dal gancio</div>
+  <div class="tr2"><span class="tl">Altezza</span><span class="tv" id="tip-h"></span></div>
+  <div class="tr2"><span class="tl">Larghezza</span><span class="tv" id="tip-w"></span></div>
+  <div class="tr2"><span class="tl">Peso</span><span class="tv" id="tip-p"></span></div>
+  <div class="tr2"><span class="tl">Saturazione</span><span class="tv" id="tip-sat"></span></div>
+  <div style="margin-top:5px;font-size:8px;color:#4a6070" id="tip-hint"></div>
 </div>
 
+<!-- Ghost drag -->
+<div id="drag-ghost"></div>
+
 <script>
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // STATE
-// ═══════════════════════════════════════════════
-const canvas = document.getElementById('c');
-const ctx    = canvas.getContext('2d');
-const wrap   = document.getElementById('canvaswrap');
+// ═══════════════════════════════════════════════════════
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const wrap    = document.getElementById('canvaswrap');
 
-let NDATA     = null;
-let viewMode  = 'iso';
-let scale     = 0.28;
-let offX      = 0, offY = 0;
-let dragging  = false, dragX = 0, dragY = 0;
-let darkMode  = true;
+let NDATA      = null;
+let viewMode   = 'iso';
+let scale      = 0.28;
+let offX       = 0, offY = 0;
+let isPanning  = false, panX = 0, panY = 0;
+let darkMode   = true;
 let manualMode = false;
-let manualExtra = []; // [{slot, part}] pezzi aggiunti manualmente
-let Z_MAX_MM  = 2000;
-let PASSO_MM  = 400;
-let HOOK_LEN  = 120;
-let GAP_V     = 60;
-let hitBoxes  = [];
-let dragPart  = null; // pezzo in drag dalla libreria
+let manualParts = [];   // [{slotIdx, part, color}]
+let hitBoxes   = [];
+let Z_MAX_MM   = 2000;
+let PASSO_MM   = 400;
+let HOOK_LEN   = 120;
+let GAP_V      = 60;
 
-// ═══════════════════════════════════════════════
+// Drag dalla libreria
+let dragState  = null; // {part, mode:'auto'|'manual'}
+let hoverSlot  = -1;   // gancio evidenziato durante drag manual
+
+// ═══════════════════════════════════════════════════════
+// RESIZE
+// ═══════════════════════════════════════════════════════
+function resize(){
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  if(NDATA) draw();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════
 // PROJECTIONS
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 const C30 = Math.cos(Math.PI/6), S30 = Math.sin(Math.PI/6);
-const proj = {
-  iso:   (x,y,z) => ({ sx:(x-z)*C30, sy:-y-(x+z)*S30 }),
-  front: (x,y,z) => ({ sx:x, sy:-y }),
-  top:   (x,y,z) => ({ sx:x, sy:-z }),
+const PROJS = {
+  iso:   (x,y,z)=>({sx:(x-z)*C30, sy:-y-(x+z)*S30}),
+  front: (x,y,z)=>({sx:x,         sy:-y}),
+  top:   (x,y,z)=>({sx:x,         sy:-z}),
 };
-let projFn = proj.iso;
+let projFn = PROJS.iso;
 
 function setView(v){
-  viewMode=v; projFn=proj[v==='top'?'top':v];
+  viewMode = v;
+  projFn   = PROJS[v] || PROJS.iso;
   resetView();
 }
 function resetView(){
   if(!NDATA) return;
-  const tX = NDATA.total_slots * PASSO_MM;
+  const tX = NDATA.columns.length * PASSO_MM;
   const p  = projFn(tX/2, Z_MAX_MM/2, 0);
-  scale = viewMode==='iso' ? 0.28 : 0.38;
+  scale = viewMode==='iso' ? 0.28 : 0.40;
   offX  = canvas.width/2  - p.sx*scale;
   offY  = canvas.height/2 - p.sy*scale;
   draw();
@@ -197,165 +241,214 @@ function px(x,y,z){
   const p=projFn(x,y,z);
   return {x:p.sx*scale+offX, y:p.sy*scale+offY};
 }
+function zoom(f){
+  offX=canvas.width/2-(canvas.width/2-offX)*f;
+  offY=canvas.height/2-(canvas.height/2-offY)*f;
+  scale*=f; draw();
+}
 
-// ═══════════════════════════════════════════════
-// THEME
-// ═══════════════════════════════════════════════
-function toggleTheme(btn){
+// ═══════════════════════════════════════════════════════
+// THEME — DARK (default) + LIGHT (Lantek style)
+// ═══════════════════════════════════════════════════════
+function toggleTheme(){
   darkMode=!darkMode;
-  wrap.classList.toggle('light',!darkMode);
-  btn.textContent = darkMode ? '☀ Chiaro' : '🌙 Scuro';
+  wrap.className = darkMode?'dark-mode':'light-mode';
+  const btn=document.getElementById('btn-theme');
+  btn.textContent = darkMode?'☀ Chiaro':'🌙 Scuro';
+  btn.className   = darkMode?'tb':'tb act-light';
   if(NDATA) draw();
 }
-const bg    = ()=> darkMode?'#080c0e':'#f5f5f0';
-const grid  = ()=> darkMode?'rgba(13,19,24,0.7)':'rgba(180,180,180,0.4)';
-const dim   = ()=> darkMode?'#00e676':'#1565C0';
-const txt   = ()=> darkMode?'#4a6070':'#555';
 
-// ═══════════════════════════════════════════════
-// RESIZE
-// ═══════════════════════════════════════════════
-function resize(){ canvas.width=wrap.clientWidth; canvas.height=wrap.clientHeight; if(NDATA) draw(); }
-window.addEventListener('resize', resize);
-resize();
+// Colori dinamici per tema
+function C(dark,light){ return darkMode?dark:light; }
+const BG     = ()=> C('#080c0e','#f5f7fa');
+const GRID   = ()=> C('rgba(26,38,51,0.8)','rgba(200,210,220,0.6)');
+const CHAIN  = ()=> C('#263545','#90a4ae');
+const TXTCOL = ()=> C('#4a6070','#546e7a');
+const DIM    = ()=> C('#00e676','#1565C0');
+const GAPCOL = ()=> C('rgba(120,120,120,0.5)','rgba(80,100,120,0.5)');
+const NAMEC  = ()=> C('rgba(255,255,255,0.85)','rgba(10,10,40,0.85)');
+const ZMAXC  = ()=> C('rgba(255,61,61,0.2)','rgba(200,30,30,0.25)');
 
-// ═══════════════════════════════════════════════
-// DRAW
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// DRAW MAIN
+// ═══════════════════════════════════════════════════════
 function draw(){
   if(!NDATA) return;
   const W=canvas.width, H=canvas.height;
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle=bg(); ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=BG(); ctx.fillRect(0,0,W,H);
   hitBoxes=[];
 
   const nCols = NDATA.columns.length;
   const tX    = nCols * PASSO_MM;
 
-  // Griglia
-  ctx.strokeStyle=grid(); ctx.lineWidth=0.5;
+  // ── Griglia ──
+  ctx.strokeStyle=GRID(); ctx.lineWidth=0.5;
   for(let gx=0; gx<=tX+PASSO_MM; gx+=PASSO_MM){
     const a=px(gx,-Z_MAX_MM-80,-180), b=px(gx,-Z_MAX_MM-80,180);
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
   }
 
-  // Linea z_max
-  ctx.strokeStyle='rgba(255,61,61,0.18)'; ctx.lineWidth=1;
-  ctx.setLineDash([7,5]);
-  const za=px(0,-Z_MAX_MM,-140), zb=px(tX+PASSO_MM,-Z_MAX_MM,-140);
+  // ── Linea Z_MAX ──
+  ctx.strokeStyle=ZMAXC(); ctx.lineWidth=1.2; ctx.setLineDash([8,5]);
+  const za=px(-PASSO_MM,-Z_MAX_MM,-120), zb=px(tX+PASSO_MM,-Z_MAX_MM,-120);
   ctx.beginPath(); ctx.moveTo(za.x,za.y); ctx.lineTo(zb.x,zb.y); ctx.stroke();
   ctx.setLineDash([]);
+  // Label Z_MAX
+  ctx.fillStyle=darkMode?'rgba(255,61,61,0.5)':'rgba(200,30,30,0.6)';
+  ctx.font=`${Math.max(7,8*scale)}px 'Courier New'`;
+  ctx.textAlign='left';
+  ctx.fillText(`Z max ${Z_MAX_MM}mm`, za.x+4, za.y-3);
 
-  // Catena
+  // ── Catena ──
   drawChain(tX);
 
-  // Colonne (depth sort)
-  const sorted = [...NDATA.columns].sort((a,b)=>
+  // ── Colonne ──
+  const sorted=[...NDATA.columns].sort((a,b)=>
     viewMode==='iso' ? b.start_slot-a.start_slot : a.start_slot-b.start_slot
   );
-  sorted.forEach(col => drawColumn(col));
+  sorted.forEach(col=>drawColumn(col, false));
 
-  // Extra manuali
-  manualExtra.forEach(({slot, part, color}) => {
-    const colX = slot * PASSO_MM + PASSO_MM/2;
-    const col  = NDATA.columns[slot] || {color: color||'#ff9800', pezzi:[]};
-    drawPartShape(colX, part.y_top||-(HOOK_LEN+10), part, '#ff9800', col, true);
+  // ── Pezzi manuali ──
+  manualParts.forEach(m=>{
+    const colX = m.slotIdx*PASSO_MM + PASSO_MM/2;
+    const col  = NDATA.columns[m.slotIdx]||{start_slot:m.slotIdx,color:'#ff9800',pezzi:[],peso:0,sat_pct:0};
+    drawPartShape(colX, m.part, '#ff9800', col, true);
   });
 
-  // Misure in vista frontale
-  if(viewMode==='front') NDATA.columns.forEach(col => drawMeasures(col));
+  // ── Evidenziazione gancio durante drag manual ──
+  if(dragState && dragState.mode==='manual' && hoverSlot>=0){
+    const hx = hoverSlot*PASSO_MM + PASSO_MM/2;
+    const ha = px(hx-PASSO_MM/2+5, 80, 0);
+    const hb = px(hx+PASSO_MM/2-5, 80, 0);
+    const hc = px(hx+PASSO_MM/2-5, -Z_MAX_MM, 0);
+    const hd = px(hx-PASSO_MM/2+5, -Z_MAX_MM, 0);
+    ctx.strokeStyle='rgba(255,152,0,0.6)'; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+    ctx.beginPath();
+    ctx.moveTo(ha.x,ha.y);ctx.lineTo(hb.x,hb.y);ctx.lineTo(hc.x,hc.y);ctx.lineTo(hd.x,hd.y);
+    ctx.closePath(); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ── Misure frontali ──
+  if(viewMode==='front') NDATA.columns.forEach(col=>drawMeasures(col));
 }
 
+// ═══════════════════════════════════════════════════════
+// CATENA
+// ═══════════════════════════════════════════════════════
 function drawChain(tX){
   const fullX = tX + PASSO_MM*2;
-  // Barra
-  const cc = darkMode?'#263545':'#90a4ae';
-  drawBox(0,0,fullX,0,0,40,cc);
+  const cc = CHAIN();
+  const rgb = hexRgb(cc);
+  const topC=`rgba(${Math.min(255,rgb.r+30)},${Math.min(255,rgb.g+30)},${Math.min(255,rgb.b+30)},.9)`;
+  const H=22, D=40;
+  const p1=px(0,H/2,-D/2),p2=px(fullX,H/2,-D/2),p3=px(fullX,-H/2,-D/2),p4=px(0,-H/2,-D/2);
+  const p5=px(0,H/2,D/2),p6=px(fullX,H/2,D/2);
+  ctx.fillStyle=topC;
+  ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.lineTo(p6.x,p6.y);ctx.lineTo(p5.x,p5.y);ctx.closePath();ctx.fill();
+  ctx.fillStyle=cc;
+  ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.lineTo(p3.x,p3.y);ctx.lineTo(p4.x,p4.y);ctx.closePath();ctx.fill();
 
-  ctx.fillStyle=txt(); ctx.font=`${Math.max(7,9*scale)}px 'Courier New'`;
-  for(let g=0; g<=NDATA.total_slots+2; g+=5){
+  // Tick ganci
+  ctx.strokeStyle=TXTCOL(); ctx.lineWidth=0.8;
+  ctx.fillStyle=TXTCOL();
+  ctx.font=`${Math.max(7,9*scale)}px 'Courier New'`;
+  for(let g=0;g<=NDATA.total_slots+2;g+=5){
     const x=g*PASSO_MM;
-    const a=px(x,20,0), b=px(x,-25,0);
-    ctx.strokeStyle=txt(); ctx.lineWidth=0.8;
-    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    ctx.textAlign='center'; ctx.fillText('G'+g, a.x, a.y-4*scale);
+    const a=px(x,22,0),b=px(x,-28,0);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    ctx.textAlign='center';ctx.fillText('G'+g,a.x,a.y-4*scale);
   }
-  const la=px(-PASSO_MM*.4,45,0);
-  ctx.fillStyle=txt(); ctx.textAlign='left';
+  // Etichette
+  const la=px(-PASSO_MM*.3,44,0);
+  ctx.fillStyle=TXTCOL(); ctx.textAlign='left';
   ctx.font=`bold ${Math.max(7,8*scale)}px 'Courier New'`;
-  ctx.fillText(`CATENA ${NDATA.passo_mm}mm — ${NDATA.total_slots} GANCI`, la.x, la.y);
-  const lb=px(tX+PASSO_MM*.1,45,0);
-  ctx.fillStyle=dim();
-  ctx.fillText(`${(NDATA.total_slots*NDATA.passo_mm/1000).toFixed(1)} m`, lb.x, lb.y);
+  ctx.fillText(`CATENA ${NDATA.passo_mm}mm — ${NDATA.total_slots} GANCI`,la.x,la.y);
+  const lb=px(tX+PASSO_MM*.05,44,0);
+  ctx.fillStyle=DIM();
+  ctx.fillText(`${(NDATA.total_slots*NDATA.passo_mm/1000).toFixed(1)} m`,lb.x,lb.y);
 }
 
-function drawBox(x1,y,x2,y2,z,depth,color){
-  const H=22;
-  const p1=px(x1,y+H/2,-depth/2),p2=px(x2,y+H/2,-depth/2);
-  const p3=px(x2,y-H/2,-depth/2),p4=px(x1,y-H/2,-depth/2);
-  const p5=px(x1,y+H/2,depth/2), p6=px(x2,y+H/2,depth/2);
-  const rgb=hexRgb(color);
-  ctx.fillStyle=`rgba(${Math.min(255,rgb.r+30)},${Math.min(255,rgb.g+30)},${Math.min(255,rgb.b+30)},.9)`;
-  ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p6.x,p6.y); ctx.lineTo(p5.x,p5.y); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=color;
-  ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y); ctx.closePath(); ctx.fill();
-}
-
+// ═══════════════════════════════════════════════════════
+// COLONNA
+// ═══════════════════════════════════════════════════════
 function drawColumn(col){
   const x = col.start_slot*PASSO_MM + PASSO_MM/2;
   const color = col.color;
-  // Gancio
+
+  // Gambo gancio
   const ga=px(x,0,0), gb=px(x,-HOOK_LEN,0);
-  ctx.strokeStyle='#b0bec5'; ctx.lineWidth=Math.max(2,3*scale); ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(ga.x,ga.y); ctx.lineTo(gb.x,gb.y); ctx.stroke();
+  ctx.strokeStyle=darkMode?'#b0bec5':'#607d8b';
+  ctx.lineWidth=Math.max(2,3*scale); ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(ga.x,ga.y);ctx.lineTo(gb.x,gb.y);ctx.stroke();
+  // Curva gancio
   const hc=px(x+55,-HOOK_LEN-50,0);
-  ctx.strokeStyle='#90a4ae'; ctx.lineWidth=Math.max(2,2.5*scale);
-  ctx.beginPath(); ctx.arc(hc.x,hc.y,35*scale*C30,Math.PI*.5,Math.PI*1.5); ctx.stroke();
+  ctx.strokeStyle=darkMode?'#90a4ae':'#78909c';
+  ctx.lineWidth=Math.max(2,2.5*scale);
+  ctx.beginPath();ctx.arc(hc.x,hc.y,35*scale*C30,Math.PI*.5,Math.PI*1.5);ctx.stroke();
+  // Pallino
+  ctx.fillStyle=darkMode?'#b0bec5':'#607d8b';
+  ctx.beginPath();ctx.arc(ga.x,ga.y,Math.max(3,4*scale),0,Math.PI*2);ctx.fill();
 
-  // Label gancio
-  const lp=px(x,70,0);
-  ctx.fillStyle=color; ctx.font=`bold ${Math.max(7,9*scale)}px 'Courier New'`;
+  // Label peso
+  const lp=px(x,65,0);
+  ctx.fillStyle=color;
+  ctx.font=`bold ${Math.max(7,9*scale)}px 'Courier New'`;
   ctx.textAlign='center';
-  ctx.fillText(`G${col.start_slot+1}·${col.peso.toFixed(1)}kg`, lp.x, lp.y);
+  ctx.fillText(`G${col.start_slot+1}·${col.peso.toFixed(1)}kg`,lp.x,lp.y);
 
-  // Pezzi — usa y_top dal nesting engine
-  col.pezzi.forEach((part,pi) => {
-    drawPartShape(x, part.y_top, part, color, col, false);
-  });
+  // Pezzi
+  col.pezzi.forEach(part=>drawPartShape(x, part, color, col, false));
 }
 
-function drawPartShape(x, yTop, part, color, col, isManual){
+// ═══════════════════════════════════════════════════════
+// DRAW PART — silhouette reale + box fallback
+// ═══════════════════════════════════════════════════════
+function drawPartShape(x, part, color, col, isManual){
   const W = Math.max(part.largh_mm, 20);
   const H = part.alt_mm;
   const D = Math.max(part.D_mm||60, 15);
+  const yTop = part.y_top;
   const yBot = yTop - H;
-  const poly = part.poly_pts;
-  const rgb  = hexRgb(color);
-  const frontC = `rgba(${rgb.r},${rgb.g},${rgb.b},${isManual?0.6:0.82})`;
-  const sideC  = `rgba(${Math.max(0,rgb.r-40)},${Math.max(0,rgb.g-40)},${Math.max(0,rgb.b-40)},.75)`;
-  const topC   = `rgba(${Math.min(255,rgb.r+40)},${Math.min(255,rgb.g+40)},${Math.min(255,rgb.b+40)},.9)`;
+  const poly  = part.poly_pts;
+
+  const rgb = hexRgb(color);
+  const alpha = isManual ? 0.65 : 0.85;
+  const frontC = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+  const sideC  = `rgba(${Math.max(0,rgb.r-45)},${Math.max(0,rgb.g-45)},${Math.max(0,rgb.b-45)},.75)`;
+  const topC   = `rgba(${Math.min(255,rgb.r+45)},${Math.min(255,rgb.g+45)},${Math.min(255,rgb.b+45)},.92)`;
 
   const TLF=px(x-W/2,yTop,-D/2), TRF=px(x+W/2,yTop,-D/2);
   const BLF=px(x-W/2,yBot,-D/2), BRF=px(x+W/2,yBot,-D/2);
   const TLB=px(x-W/2,yTop, D/2), TRB=px(x+W/2,yTop, D/2);
   const BRB=px(x+W/2,yBot, D/2);
 
+  const strokeCol = isManual ? '#ff9800' : color;
+  const strokeW   = isManual ? 1.5 : (darkMode ? 0.8 : 1.2);
+
   if(poly && poly.length>=3){
-    // Silhouette reale
-    const pxArr=poly.map(p=>p[0]), pyArr=poly.map(p=>p[1]);
-    const pW=Math.max(...pxArr)-Math.min(...pxArr)||1;
-    const pH=Math.max(...pyArr)-Math.min(...pyArr)||1;
+    const pxA=poly.map(p=>p[0]), pyA=poly.map(p=>p[1]);
+    const pW=Math.max(...pxA)-Math.min(...pxA)||1;
+    const pH=Math.max(...pyA)-Math.min(...pyA)||1;
     const scX=W/pW, scY=H/pH;
-    const cy2 = yTop - H/2;
-    const silF=poly.map(p=>px(x+p[0]*scX, cy2+p[1]*scY, -D/2));
-    const silB=poly.map(p=>px(x+p[0]*scX, cy2+p[1]*scY,  D/2));
+    const cY=yTop-H/2;
+
+    const silF=poly.map(p=>px(x+p[0]*scX, cY+p[1]*scY,-D/2));
+    const silB=poly.map(p=>px(x+p[0]*scX, cY+p[1]*scY, D/2));
 
     // Faccia frontale
     ctx.fillStyle=frontC;
     ctx.beginPath();
-    silF.forEach((p,i)=> i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    silF.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle=isManual?'#ff9800':color; ctx.lineWidth=1; ctx.stroke();
+    ctx.strokeStyle=strokeCol; ctx.lineWidth=strokeW; ctx.stroke();
+
+    // Bordo tema chiaro: linea più marcata
+    if(!darkMode && !isManual){
+      ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
+    }
 
     // Estrusione iso
     if(viewMode==='iso'){
@@ -366,30 +459,37 @@ function drawPartShape(x, yTop, part, color, col, isManual){
         ctx.lineTo(silB[i+1].x,silB[i+1].y); ctx.lineTo(silB[i].x,silB[i].y);
         ctx.closePath(); ctx.fill();
       }
+      // Top face
+      ctx.fillStyle=topC;
+      ctx.beginPath();
+      silF.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+      silB.reverse().forEach(p=>ctx.lineTo(p.x,p.y)); silB.reverse();
+      ctx.closePath(); ctx.fill();
     }
   } else {
     // Fallback box
     if(viewMode==='iso'){
       ctx.fillStyle=topC;
       ctx.beginPath();ctx.moveTo(TLF.x,TLF.y);ctx.lineTo(TRF.x,TRF.y);ctx.lineTo(TRB.x,TRB.y);ctx.lineTo(TLB.x,TLB.y);ctx.closePath();ctx.fill();
-      ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.stroke();
+      ctx.strokeStyle=strokeCol;ctx.lineWidth=strokeW;ctx.stroke();
       ctx.fillStyle=sideC;
       ctx.beginPath();ctx.moveTo(TRF.x,TRF.y);ctx.lineTo(TRB.x,TRB.y);ctx.lineTo(BRB.x,BRB.y);ctx.lineTo(BRF.x,BRF.y);ctx.closePath();ctx.fill();
-      ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.stroke();
+      ctx.strokeStyle=strokeCol;ctx.lineWidth=strokeW;ctx.stroke();
     }
     ctx.fillStyle=frontC;
     ctx.beginPath();ctx.moveTo(TLF.x,TLF.y);ctx.lineTo(TRF.x,TRF.y);ctx.lineTo(BRF.x,BRF.y);ctx.lineTo(BLF.x,BLF.y);ctx.closePath();ctx.fill();
-    ctx.strokeStyle=isManual?'#ff9800':color;ctx.lineWidth=.8;ctx.stroke();
+    ctx.strokeStyle=strokeCol;ctx.lineWidth=strokeW;ctx.stroke();
+    if(!darkMode && !isManual){ ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke(); }
   }
 
-  // Nome
+  // Nome pezzo
   const facH=Math.abs(BLF.y-TLF.y);
-  if(facH>12){
-    const cx3=(TLF.x+TRF.x)/2, cy3=(TLF.y+BLF.y)/2+3;
-    ctx.fillStyle=darkMode?'rgba(255,255,255,.8)':'rgba(0,0,0,.7)';
+  if(facH>14){
+    const cxN=(TLF.x+TRF.x)/2, cyN=(TLF.y+BLF.y)/2+3;
+    ctx.fillStyle=NAMEC();
     ctx.font=`${Math.max(6,Math.min(10,facH*.12))}px 'Courier New'`;
     ctx.textAlign='center';
-    ctx.fillText((part.nome||'').substring(0,16), cx3, cy3);
+    ctx.fillText((part.nome||'').substring(0,18),cxN,cyN);
   }
 
   // Hitbox
@@ -401,34 +501,41 @@ function drawPartShape(x, yTop, part, color, col, isManual){
   });
 }
 
-// ── MISURE (vista frontale) ──────────────────────
+// ═══════════════════════════════════════════════════════
+// MISURE FRONTALI
+// ═══════════════════════════════════════════════════════
 function drawMeasures(col){
-  const x = col.start_slot*PASSO_MM + PASSO_MM/2;
-  col.pezzi.forEach((part,pi) => {
+  const x=col.start_slot*PASSO_MM+PASSO_MM/2;
+  const allParts=[...col.pezzi];
+  manualParts.filter(m=>m.slotIdx===col.start_slot).forEach(m=>allParts.push(m.part));
+
+  allParts.forEach((part,pi)=>{
     const W=Math.max(part.largh_mm,20), H=part.alt_mm;
     const yTop=part.y_top, yBot=yTop-H;
 
-    // Freccia altezza pezzo (lato destro)
-    const ox=W/2+35;
+    // Altezza pezzo
+    const ox=W/2+40;
     const pT=px(x+ox,yTop,0), pB=px(x+ox,yBot,0);
-    if(Math.abs(pT.y-pB.y)>18) drawArrow(pT,pB,dim(),`${H.toFixed(0)}mm`,'v');
+    if(Math.abs(pT.y-pB.y)>16) drawArrow(pT,pB,DIM(),`${H.toFixed(0)}mm`,'v');
 
-    // Freccia larghezza (sopra il pezzo)
-    const pL=px(x-W/2,yTop+18,0), pR=px(x+W/2,yTop+18,0);
-    if(Math.abs(pR.x-pL.x)>24) drawArrow(pL,pR,dim(),`${W.toFixed(0)}mm`,'h');
+    // Larghezza pezzo
+    const pL=px(x-W/2,yTop+22,0), pR=px(x+W/2,yTop+22,0);
+    if(Math.abs(pR.x-pL.x)>22) drawArrow(pL,pR,DIM(),`${W.toFixed(0)}mm`,'h');
 
-    // Gap sotto il pezzo
-    if(pi < col.pezzi.length-1){
-      const nextYTop = col.pezzi[pi+1].y_top;
-      const gapMm = Math.round(yBot - nextYTop);  // gap tra fondo pezzo e top successivo... atteso = GAP_V
-      const gA=px(x-W/2-25,yBot,0), gB=px(x-W/2-25,nextYTop,0);
-      if(Math.abs(gA.y-gB.y)>8){
-        ctx.strokeStyle='rgba(100,100,100,.4)'; ctx.lineWidth=.7; ctx.setLineDash([3,3]);
-        ctx.beginPath();ctx.moveTo(gA.x,gA.y);ctx.lineTo(gB.x,gB.y);ctx.stroke();
-        ctx.setLineDash([]);
-        const gm={x:(gA.x+gB.x)/2-22, y:(gA.y+gB.y)/2+3};
-        ctx.fillStyle='rgba(100,100,100,.7)'; ctx.font=`${Math.max(7,8*scale)}px 'Courier New'`;
-        ctx.textAlign='right'; ctx.fillText(`${gapMm}mm`, gm.x, gm.y);
+    // Gap sotto
+    if(pi<allParts.length-1){
+      const nxt=allParts[pi+1];
+      const gapMm=Math.abs(yBot-nxt.y_top);
+      if(gapMm>0){
+        const gA=px(x-W/2-30,yBot,0), gB=px(x-W/2-30,nxt.y_top,0);
+        if(Math.abs(gA.y-gB.y)>6){
+          ctx.strokeStyle=GAPCOL(); ctx.lineWidth=.7; ctx.setLineDash([3,3]);
+          ctx.beginPath();ctx.moveTo(gA.x,gA.y);ctx.lineTo(gB.x,gB.y);ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle=GAPCOL(); ctx.font=`${Math.max(7,8*scale)}px 'Courier New'`;
+          ctx.textAlign='right';
+          ctx.fillText(`${gapMm.toFixed(0)}mm`,(gA.x+gB.x)/2-2,(gA.y+gB.y)/2+3);
+        }
       }
     }
   });
@@ -438,7 +545,7 @@ function drawArrow(A,B,color,label,dir){
   const dx=B.x-A.x,dy=B.y-A.y,len=Math.sqrt(dx*dx+dy*dy);
   if(len<8) return;
   const ux=dx/len,uy=dy/len,hs=5;
-  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=.9;
+  ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=.9;
   ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
   [[A,1],[B,-1]].forEach(([pt,d])=>{
     ctx.beginPath();ctx.moveTo(pt.x,pt.y);
@@ -447,20 +554,20 @@ function drawArrow(A,B,color,label,dir){
     ctx.closePath();ctx.fill();
   });
   const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;
-  const off=dir==='v'?{x:18,y:4}:{x:0,y:-10};
+  const off=dir==='v'?{x:20,y:4}:{x:0,y:-10};
   ctx.font=`${Math.max(7,8*scale)}px 'Courier New'`;
   ctx.textAlign=dir==='v'?'left':'center';
   ctx.fillText(label,mx+off.x,my+off.y);
 }
 
-// ═══════════════════════════════════════════════
-// NESTING MANUALE — LIBRERIA & DRAG
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// NESTING MANUALE — LOGICA AUTO-PLACE + MANUAL
+// ═══════════════════════════════════════════════════════
 function toggleManual(){
   manualMode=!manualMode;
   document.getElementById('lib-panel').style.display=manualMode?'flex':'none';
   document.getElementById('btn-manual').classList.toggle('act',manualMode);
-  if(manualMode && NDATA) buildLibPanel();
+  if(manualMode&&NDATA) buildLibPanel();
 }
 
 function buildLibPanel(){
@@ -475,26 +582,29 @@ function buildLibPanel(){
     div.appendChild(mc);
     const nm=document.createElement('div');nm.className='lib-nm';nm.textContent=part.nome;div.appendChild(nm);
     const dm=document.createElement('div');dm.className='lib-dm';
-    dm.textContent=`${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm · ${part.peso_kg.toFixed(1)}kg`;
+    dm.textContent=`${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm·${part.peso_kg.toFixed(1)}kg`;
     div.appendChild(dm);
-    // Drag dalla libreria
-    div.addEventListener('mousedown',e=>{
-      e.preventDefault();
-      dragPart={...part};
-      div.classList.add('dragging');
-      document.addEventListener('mouseup',()=>{div.classList.remove('dragging');dragPart=null;},{once:true});
-    });
+    // Bottoni Auto e Manuale
+    const btns=document.createElement('div');btns.className='lib-btns';
+    const bAuto=document.createElement('button');bAuto.className='lib-btn lb-auto';
+    bAuto.textContent='⚡ Auto';bAuto.title='Piazza nel primo spazio libero';
+    bAuto.onclick=e=>{e.stopPropagation();autoPlace(part);};
+    const bMan=document.createElement('button');bMan.className='lib-btn lb-manual';
+    bMan.textContent='✋ Manual';bMan.title='Trascina sul gancio scelto';
+    bMan.onmousedown=e=>{e.stopPropagation();startDrag(e,part,'manual');};
+    btns.appendChild(bAuto);btns.appendChild(bMan);
+    div.appendChild(btns);
     list.appendChild(div);
   });
 }
 
 function drawMiniature(mc,part){
   const mctx=mc.getContext('2d');
-  mctx.fillStyle=darkMode?'#111b27':'#e8e8e8'; mctx.fillRect(0,0,mc.width,mc.height);
+  mctx.fillStyle=darkMode?'#111b27':'#e8eef4';mctx.fillRect(0,0,mc.width,mc.height);
   const poly=part.poly_pts;
   const W=mc.width-8,H=mc.height-8;
-  mctx.strokeStyle='#00e676'; mctx.lineWidth=1.5;
-  mctx.fillStyle='rgba(0,230,118,0.15)';
+  mctx.strokeStyle=darkMode?'#00e676':'#1565C0';mctx.lineWidth=1.5;
+  mctx.fillStyle=darkMode?'rgba(0,230,118,0.15)':'rgba(21,101,192,0.12)';
   if(poly&&poly.length>=3){
     const pxs=poly.map(p=>p[0]),pys=poly.map(p=>p[1]);
     const pW=Math.max(...pxs)-Math.min(...pxs)||1,pH=Math.max(...pys)-Math.min(...pys)||1;
@@ -506,69 +616,175 @@ function drawMiniature(mc,part){
     });
     mctx.closePath();mctx.fill();mctx.stroke();
   } else {
-    const sc=Math.min(W/(part.largh_mm||100),H/(part.alt_mm||100));
-    const rw=(part.largh_mm||100)*sc,rh=(part.alt_mm||100)*sc;
+    const sc2=Math.min(W/(part.largh_mm||100),H/(part.alt_mm||100));
+    const rw=(part.largh_mm||100)*sc2,rh=(part.alt_mm||100)*sc2;
     mctx.beginPath();mctx.rect(mc.width/2-rw/2,mc.height/2-rh/2,rw,rh);
     mctx.fill();mctx.stroke();
   }
 }
 
-// Drop del pezzo dalla libreria sul canvas
-canvas.addEventListener('mouseup', e=>{
-  if(!dragPart||!NDATA) return;
-  const rect=canvas.getBoundingClientRect();
-  const mx=e.clientX-rect.left;
-  // Trova gancio più vicino
-  let bestSlot=0,bestDist=Infinity;
+// ── AUTO-PLACE: trova il primo slot con spazio ──
+function autoPlace(part){
+  if(!NDATA) return;
+  // Prova entrambi gli orientamenti
+  const orientations=[
+    {L:part.largh_mm,H:part.alt_mm,rot:false},
+    {L:part.alt_mm,  H:part.largh_mm,rot:true}
+  ];
+  for(const or of orientations){
+    for(let si=0;si<NDATA.columns.length;si++){
+      const result=tryFitInSlot(si,{...part,largh_mm:or.L,alt_mm:or.H});
+      if(result!==null){
+        manualParts.push({slotIdx:si,part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:result,orientamento:or.rot?'ruotato_90':'standard'},color:'#ff9800'});
+        draw(); updateKPIManual();
+        showToastOk(`${part.nome} → G${si+1}${or.rot?' (ruotato)':''}`);
+        return;
+      }
+    }
+    // Prova un nuovo gancio
+    const newSlot=NDATA.columns.length+manualParts.filter(m=>m.slotIdx>=NDATA.columns.length).length;
+    const yTop=-HOOK_LEN;
+    if(Math.abs(yTop-or.H)<=Z_MAX_MM){
+      manualParts.push({slotIdx:newSlot,part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,orientamento:or.rot?'ruotato_90':'standard'},color:'#ff9800'});
+      draw(); updateKPIManual();
+      showToastOk(`${part.nome} → nuovo G${newSlot+1}${or.rot?' (ruotato)':''}`);
+      return;
+    }
+  }
+  showToastErr(`${part.nome}: nessuno spazio disponibile!`);
+}
+
+// Controlla se il pezzo entra nello slot, ritorna y_top o null
+function tryFitInSlot(slotIdx,part){
+  const col=NDATA.columns[slotIdx];
+  if(!col) return null;
+  if(col.peso + part.peso_kg > (NDATA.max_kg||60)) return null;
+  if(part.largh_mm > PASSO_MM-60) return null;
+
+  // Calcola ultima y occupata (pezzi automatici + manuali già presenti)
+  let lastY = -HOOK_LEN;
+  col.pezzi.forEach(p=>{ lastY=Math.min(lastY, p.y_top-p.alt_mm); });
+  manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
+    lastY=Math.min(lastY, m.part.y_top-m.part.alt_mm);
+  });
+  const yTop = lastY - GAP_V;
+  const yBot = yTop - part.alt_mm;
+  if(Math.abs(yBot)>Z_MAX_MM) return null;
+  return yTop;
+}
+
+// ── DRAG MANUALE ──
+function startDrag(e,part,mode){
+  dragState={part,mode};
+  const ghost=document.getElementById('drag-ghost');
+  ghost.textContent=`${part.nome} ${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm`;
+  ghost.style.display='block';
+  ghost.style.left=e.clientX+'px';
+  ghost.style.top=(e.clientY-20)+'px';
+  canvas.style.cursor='copy';
+}
+
+document.addEventListener('mousemove',e=>{
+  if(!dragState) return;
+  const ghost=document.getElementById('drag-ghost');
+  ghost.style.left=e.clientX+'px';
+  ghost.style.top=(e.clientY-20)+'px';
+  if(dragState.mode==='manual'&&NDATA){
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.clientX-rect.left;
+    hoverSlot=findNearestSlot(mx);
+    draw();
+  }
+});
+
+document.addEventListener('mouseup',e=>{
+  if(!dragState) return;
+  const ghost=document.getElementById('drag-ghost');
+  ghost.style.display='none';
+  canvas.style.cursor='grab';
+  if(dragState.mode==='manual'&&NDATA&&hoverSlot>=0){
+    placeManuallInSlot(hoverSlot,dragState.part);
+  }
+  dragState=null; hoverSlot=-1; draw();
+});
+
+function findNearestSlot(canvasX){
+  if(!NDATA) return -1;
+  let best=-1,bestD=Infinity;
   NDATA.columns.forEach(col=>{
     const sx=col.start_slot*PASSO_MM+PASSO_MM/2;
     const p=px(sx,0,0);
-    const d=Math.abs(p.x-mx);
-    if(d<bestDist){bestDist=d;bestSlot=col.start_slot;}
+    const d=Math.abs(p.x-canvasX);
+    if(d<bestD){bestD=d;best=col.start_slot;}
   });
-  // Calcola y_top sotto l'ultimo pezzo del gancio
-  const col=NDATA.columns[bestSlot];
-  let lastY = col.pezzi.length>0
-    ? col.pezzi[col.pezzi.length-1].y_top - col.pezzi[col.pezzi.length-1].alt_mm - GAP_V
-    : -HOOK_LEN;
-  // Controlla extra manuali già aggiunti su questo slot
-  manualExtra.filter(m=>m.slot===bestSlot).forEach(m=>{
-    lastY = Math.min(lastY, m.part.y_top - m.part.alt_mm - GAP_V);
-  });
-  if(Math.abs(lastY)-dragPart.alt_mm > Z_MAX_MM){
-    alert('Altezza massima catena superata!'); dragPart=null; return;
+  return best;
+}
+
+function placeManuallInSlot(slotIdx,part){
+  // Prova orientamento normale poi ruotato
+  const orientations=[
+    {L:part.largh_mm,H:part.alt_mm,rot:false},
+    {L:part.alt_mm,  H:part.largh_mm,rot:true}
+  ];
+  for(const or of orientations){
+    const yTop=tryFitInSlot(slotIdx,{...part,largh_mm:or.L,alt_mm:or.H});
+    if(yTop!==null){
+      manualParts.push({slotIdx,part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
+        orientamento:or.rot?'ruotato_90':'standard'},color:'#ff9800'});
+      updateKPIManual();
+      showToastOk(`${part.nome} → G${slotIdx+1}${or.rot?' (ruotato)':''}`);
+      return;
+    }
   }
-  manualExtra.push({slot:bestSlot,part:{...dragPart,y_top:lastY},color:'#ff9800'});
-  draw();
-  dragPart=null;
-});
+  showToastErr(`G${slotIdx+1}: spazio insufficiente per ${part.nome}`);
+}
+
+// ── KPI aggiornati con pezzi manuali ──
+function updateKPIManual(){
+  const extraPeso=manualParts.reduce((s,m)=>s+m.part.peso_kg,0);
+  const totPeso=(NDATA.peso_totale||0)+extraPeso;
+  document.getElementById('kpi-peso').textContent=totPeso.toFixed(1)+' kg';
+}
+
+// ── Toast ──
+function showToastOk(msg){ showToast(msg,'#00e676'); }
+function showToastErr(msg){ showToast(msg,'#f44336'); }
+function showToast(msg,color){
+  const t=document.createElement('div');
+  t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:${color};color:#000;padding:7px 18px;border-radius:20px;
+    font-family:'Courier New',monospace;font-size:11px;font-weight:bold;
+    z-index:9999;pointer-events:none;opacity:1;transition:opacity .5s`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),500);},2500);
+}
 
 // Click su pezzo manuale → rimuovi
 canvas.addEventListener('click',e=>{
-  if(Math.abs(e.clientX-dragX)>5||Math.abs(e.clientY-dragY)>5) return;
+  if(Math.abs(e.clientX-panX)>5||Math.abs(e.clientY-panY)>5) return;
+  if(dragState) return;
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   for(let i=hitBoxes.length-1;i>=0;i--){
     const hb=hitBoxes[i];
-    if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY){
-      if(hb.isManual){
-        manualExtra=manualExtra.filter(m=>m.part!==hb.part);
-        draw();
-      }
+    if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY&&hb.isManual){
+      manualParts=manualParts.filter(m=>m.part!==hb.part);
+      updateKPIManual(); draw();
       break;
     }
   }
   document.getElementById('tooltip').style.display='none';
 });
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // UPLOAD & API
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 function showUpload(){
   document.getElementById('upload-overlay').style.display='flex';
   document.getElementById('toolbar').style.display='none';
   document.getElementById('ruler').style.display='none';
-  NDATA=null; manualExtra=[];
+  NDATA=null; manualParts=[];
 }
 function handleDrop(e){
   e.preventDefault();
@@ -579,17 +795,15 @@ function handleFileSelect(f){
   if(!f) return;
   document.getElementById('upload-overlay').style.display='none';
   document.getElementById('loading').style.display='flex';
-  const fd=new FormData();
-  fd.append('file',f);
+  const fd=new FormData(); fd.append('file',f);
   fetch('/api/nesting/analizza',{method:'POST',body:fd})
     .then(r=>r.json())
     .then(d=>{
       document.getElementById('loading').style.display='none';
       if(d.error){alert('Errore: '+d.error);showUpload();return;}
       NDATA=d;
-      Z_MAX_MM=d.z_max_mm||2000;
-      PASSO_MM=d.passo_mm||400;
-      GAP_V=d.gap_v_mm||60;
+      Z_MAX_MM=d.z_max_mm||2000; PASSO_MM=d.passo_mm||400; GAP_V=d.gap_v_mm||60;
+      document.getElementById('ruler-val').textContent=PASSO_MM;
       document.getElementById('toolbar').style.display='flex';
       document.getElementById('ruler').style.display='block';
       updateKPI(); buildColumnList();
@@ -605,13 +819,13 @@ function handleFileSelect(f){
 function updateKPI(){
   if(!NDATA) return;
   const peso=NDATA.peso_totale||0;
-  const pesoEl=document.getElementById('kpi-peso');
-  pesoEl.textContent=peso.toFixed(1)+' kg';
-  pesoEl.className='kv'+(peso>500?' danger':peso>300?' warn':'');
+  const el=document.getElementById('kpi-peso');
+  el.textContent=peso.toFixed(1)+' kg';
+  el.className='kv'+(peso>500?' danger':peso>300?' warn':'');
   document.getElementById('kpi-ganci').textContent=NDATA.total_slots||'—';
   const m=((NDATA.total_slots||0)*(NDATA.passo_mm||400)/1000).toFixed(1);
   document.getElementById('kpi-catena').textContent=m+' m';
-  const maxKg=Math.max(...(NDATA.columns||[]).map(c=>c.peso||0));
+  const maxKg=Math.max(0,...(NDATA.columns||[]).map(c=>c.peso||0));
   document.getElementById('kpi-maxkg').textContent=maxKg.toFixed(1)+' kg';
   const totH=(NDATA.columns||[]).reduce((s,c)=>s+(c.h_usata_mm||0),0);
   const totA=(NDATA.columns||[]).length*Z_MAX_MM;
@@ -623,18 +837,16 @@ function updateKPI(){
 }
 
 function buildColumnList(){
-  const list=document.getElementById('clist');
-  list.innerHTML='';
+  const list=document.getElementById('clist'); list.innerHTML='';
   (NDATA.columns||[]).forEach(col=>{
     const sat=col.sat_pct||0;
-    const div=document.createElement('div');
-    div.className='ci';
+    const div=document.createElement('div'); div.className='ci';
     div.innerHTML=`<div class="cdot" style="background:${col.color}"></div>
-      <div style="flex:1;font-size:9px">G${col.start_slot+1}·${col.pezzi.length}pz</div>
-      <div style="font-size:9px;color:#80cbc4">${col.peso.toFixed(1)}kg</div>`;
-    // Sat bar
-    div.innerHTML+=`<div style="width:100%;margin-top:2px">
-      <div class="sat-w"><div class="sat-b" style="width:${sat}%;background:${col.color}"></div></div></div>`;
+      <div style="flex:1">G${col.start_slot+1}·${col.pezzi.length}pz</div>
+      <div style="color:#80cbc4">${col.peso.toFixed(1)}kg</div>
+      <div style="width:100%;margin-top:2px">
+        <div class="sat-w"><div class="sat-b" style="width:${sat}%;background:${col.color}"></div></div>
+      </div>`;
     div.onclick=()=>{
       const x=col.start_slot*PASSO_MM+PASSO_MM/2;
       const p=projFn(x,Z_MAX_MM/2,0);
@@ -644,22 +856,24 @@ function buildColumnList(){
   });
 }
 
-// ═══════════════════════════════════════════════
-// PAN / ZOOM / HOVER
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// PAN / ZOOM / HOVER TOOLTIP
+// ═══════════════════════════════════════════════════════
 canvas.addEventListener('mousedown',e=>{
-  dragging=true;dragX=e.clientX;dragY=e.clientY;
-  if(!dragPart) canvas.style.cursor='grabbing';
+  if(dragState) return;
+  isPanning=true; panX=e.clientX; panY=e.clientY;
+  canvas.style.cursor='grabbing';
 });
 canvas.addEventListener('mousemove',e=>{
-  if(dragging&&!dragPart){
-    offX+=e.clientX-dragX; offY+=e.clientY-dragY;
-    dragX=e.clientX; dragY=e.clientY; draw();
+  if(dragState) return;
+  if(isPanning){
+    offX+=e.clientX-panX; offY+=e.clientY-panY;
+    panX=e.clientX; panY=e.clientY; draw(); return;
   }
   handleHover(e);
 });
-canvas.addEventListener('mouseup',()=>{dragging=false;canvas.style.cursor=dragPart?'copy':'grab';});
-canvas.addEventListener('mouseleave',()=>{dragging=false;});
+canvas.addEventListener('mouseup',()=>{ isPanning=false; canvas.style.cursor='grab'; });
+canvas.addEventListener('mouseleave',()=>{ isPanning=false; });
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   const f=e.deltaY<0?1.12:0.89;
@@ -667,13 +881,7 @@ canvas.addEventListener('wheel',e=>{
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   offX=mx-(mx-offX)*f; offY=my-(my-offY)*f; scale*=f; draw();
 },{passive:false});
-function zoom(f){
-  offX=canvas.width/2-(canvas.width/2-offX)*f;
-  offY=canvas.height/2-(canvas.height/2-offY)*f;
-  scale*=f; draw();
-}
 
-// Tooltip hover
 const tip=document.getElementById('tooltip');
 function handleHover(e){
   const rect=canvas.getBoundingClientRect();
@@ -681,39 +889,35 @@ function handleHover(e){
   for(const hb of [...hitBoxes].reverse()){
     if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY){
       canvas.style.cursor=hb.isManual?'pointer':'default';
-      showTip(e,hb.part,hb.col,hb.isManual);
-      return;
+      const sat=hb.col.sat_pct||0;
+      document.getElementById('tip-name').textContent=hb.part.nome;
+      document.getElementById('tip-col').textContent='Gancio G'+(hb.col.start_slot+1);
+      document.getElementById('tip-col').style.color=hb.col.color;
+      document.getElementById('tip-h').textContent=hb.part.alt_mm.toFixed(0)+' mm';
+      document.getElementById('tip-w').textContent=hb.part.largh_mm.toFixed(0)+' mm';
+      document.getElementById('tip-p').textContent=hb.part.peso_kg.toFixed(2)+' kg';
+      document.getElementById('tip-sat').textContent=sat.toFixed(1)+'%';
+      document.getElementById('tip-hint').textContent=hb.isManual?'🖱 Click per rimuovere':'';
+      tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-16)+'px';
+      tip.style.display='block'; return;
     }
   }
-  if(!dragging) canvas.style.cursor=dragPart?'copy':'grab';
+  if(!isPanning) canvas.style.cursor=dragState?'copy':'grab';
   tip.style.display='none';
 }
-function showTip(e,part,col,isManual){
-  document.getElementById('tip-name').textContent=part.nome;
-  document.getElementById('tip-col').textContent='Gancio G'+(col.start_slot+1);
-  document.getElementById('tip-col').style.color=col.color;
-  document.getElementById('tip-h').textContent=part.alt_mm.toFixed(0)+' mm';
-  document.getElementById('tip-w').textContent=part.largh_mm.toFixed(0)+' mm';
-  document.getElementById('tip-p').textContent=part.peso_kg.toFixed(2)+' kg';
-  document.getElementById('tip-sat').textContent=(col.sat_pct||0).toFixed(1)+'%';
-  document.getElementById('tip-hint').style.display=isManual?'block':'none';
-  tip.style.left=(e.clientX+12)+'px';
-  tip.style.top=(e.clientY-18)+'px';
-  tip.style.display='block';
-}
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // HELPERS
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 function hexRgb(hex){
   const h=hex.replace('#','');
   return{r:parseInt(h.substring(0,2),16),g:parseInt(h.substring(2,4),16),b:parseInt(h.substring(4,6),16)};
 }
 function setAct(btn){
   document.querySelectorAll('#toolbar .tb').forEach(b=>{
-    if(!['btn-theme','btn-manual'].includes(b.id)) b.classList.remove('act');
+    if(!['btn-theme','btn-manual'].includes(b.id)) b.classList.remove('act','act-light');
   });
-  btn.classList.add('act');
+  btn.classList.add(darkMode?'act':'act-light');
 }
 resize();
 </script>
