@@ -1,3 +1,4 @@
+import json
 """
 cad_parser.py — ENOROSSI Paint Optimizer v5
 PHASE 1: CAD Parsing & Automated BOM Extraction
@@ -495,6 +496,7 @@ def scrivi_bom_nel_db(result: ParseResult, db, ItemMasterCAD, BOMRecordCAD,
             esistente.cog_y_mm       = g.cog_y_mm
             esistente.cog_z_mm       = g.cog_z_mm
             esistente.passo_gancio_m = g.passo_gancio_m
+            esistente.poly_pts_json  = json.dumps(getattr(g,'poly_pts',[]))
             aggiornati += 1
         else:
             item = ItemMasterCAD(
@@ -514,6 +516,7 @@ def scrivi_bom_nel_db(result: ParseResult, db, ItemMasterCAD, BOMRecordCAD,
                 complessita      = g.complessita_aggancio,
                 hash_geom        = g.hash_geom,
                 mesh_presente    = g.mesh_presente,
+                poly_pts_json    = json.dumps(getattr(g,'poly_pts',[])),
             )
             db.session.add(item)
             inseriti += 1

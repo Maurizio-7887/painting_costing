@@ -351,6 +351,8 @@ class ItemMasterCAD(db.Model):
     complessita      = db.Column(db.Integer, default=1)
     hash_geom        = db.Column(db.String(20))
     mesh_presente    = db.Column(db.Boolean, default=False)
+    poly_pts_json    = db.Column(db.Text, default='[]')   # silhouette 2D [[x,y],...] JSON
+    svg_uri          = db.Column(db.Text, default='')     # miniatura SVG data-uri
     creato_il        = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
