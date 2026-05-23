@@ -2,965 +2,719 @@
 {% block title %}Nesting Catena CAD{% endblock %}
 {% block content %}
 <style>
-body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
-#app { display:flex; height:calc(100vh - 60px); }
+body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
+#app{display:flex;height:calc(100vh - 60px);overflow:hidden}
 
 /* SIDEBAR */
-#sidebar {
-  width:230px; min-width:180px; background:#0d1117; border-right:1px solid #1a2633;
-  display:flex; flex-direction:column; padding:12px 8px; overflow-y:auto; flex-shrink:0;
-}
-#sidebar h3 { color:#00e676; font-size:11px; margin:0 0 10px; text-transform:uppercase; letter-spacing:1px; }
-.kpi { background:#111b27; border-radius:6px; padding:8px 10px; margin-bottom:6px; }
-.kpi .kl { font-size:9px; color:#4a6070; text-transform:uppercase; }
-.kv { font-size:18px; font-weight:bold; color:#00e676; }
-.kv.warn { color:#ff9800; }
-.kv.danger { color:#f44336; }
-#clist { margin-top:10px; }
-.ci { display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:4px;
-       cursor:pointer; margin-bottom:3px; transition:background 0.15s; }
-.ci:hover { background:#1a2633; }
-.cdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.cn { font-size:10px; flex:1; }
-.ck { font-size:10px; color:#80cbc4; white-space:nowrap; }
+#sidebar{width:220px;min-width:180px;background:#0d1117;border-right:1px solid #1a2633;
+  display:flex;flex-direction:column;padding:10px 8px;overflow-y:auto;flex-shrink:0}
+#sidebar h3{color:#00e676;font-size:10px;margin:0 0 8px;text-transform:uppercase;letter-spacing:1px}
+.kpi{background:#111b27;border-radius:5px;padding:7px 9px;margin-bottom:5px}
+.kl{font-size:9px;color:#4a6070;text-transform:uppercase}
+.kv{font-size:16px;font-weight:bold;color:#00e676}
+.kv.warn{color:#ff9800}.kv.danger{color:#f44336}
+.sat-w{height:3px;background:#1a2633;border-radius:2px;margin-top:3px}
+.sat-b{height:3px;border-radius:2px;background:#00e676;transition:width .4s}
+.ci{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:3px;
+  cursor:pointer;margin-bottom:2px;font-size:9px;transition:background .15s}
+.ci:hover{background:#1a2633}
+.cdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 
-/* SAT BAR */
-.sat-wrap { height:4px; background:#1a2633; border-radius:2px; margin-top:3px; }
-.sat-bar  { height:4px; border-radius:2px; background:#00e676; transition:width .4s; }
-
-/* CANVAS AREA */
-#canvaswrap { flex:1; position:relative; overflow:hidden; background:#080c0e; transition:background .3s; }
-#canvaswrap.light { background:#f4f4f0; }
-#c { display:block; width:100%; height:100%; cursor:grab; }
+/* CANVAS */
+#canvaswrap{flex:1;position:relative;overflow:hidden;background:#080c0e;transition:background .3s}
+#canvaswrap.light{background:#f5f5f0}
+#c{display:block;width:100%;height:100%;cursor:grab}
 
 /* TOOLBAR */
-#toolbar {
-  position:absolute; top:12px; left:50%; transform:translateX(-50%);
-  display:flex; gap:6px; z-index:10; flex-wrap:wrap; justify-content:center;
-}
-.tbtn {
-  background:#0d1117; border:1px solid #1a2633; color:#b0bec5;
-  padding:6px 14px; border-radius:20px; cursor:pointer; font-size:12px;
-  font-family:'Courier New',monospace; transition:all 0.2s;
-}
-.tbtn:hover { border-color:#00e676; color:#00e676; }
-.tbtn.active { background:#00e676; color:#080c0e; border-color:#00e676; font-weight:bold; }
-.tbtn.danger { background:#c62828; color:#fff; border-color:#f44336; }
-.tbtn.light-active { background:#fff; color:#080c0e; border-color:#ccc; }
+#toolbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  display:flex;gap:5px;z-index:10;flex-wrap:wrap;justify-content:center}
+.tb{background:#0d1117;border:1px solid #1a2633;color:#b0bec5;padding:5px 12px;
+  border-radius:16px;cursor:pointer;font-size:11px;font-family:'Courier New',monospace;transition:all .2s}
+.tb:hover{border-color:#00e676;color:#00e676}
+.tb.act{background:#00e676;color:#080c0e;border-color:#00e676;font-weight:bold}
+.tb.danger{background:#c62828;color:#fff;border-color:#f44336}
 
-/* UPLOAD OVERLAY */
-#upload-overlay {
-  position:absolute; inset:0; display:flex; flex-direction:column;
-  align-items:center; justify-content:center; background:#080c0e; z-index:20;
-}
-#dropzone {
-  border:2px dashed #1a2633; border-radius:16px; padding:60px 80px;
-  text-align:center; cursor:pointer; transition:all 0.2s; max-width:500px;
-}
-#dropzone:hover, #dropzone.drag-over { border-color:#00e676; background:#0a1a12; }
-#dropzone h2 { color:#00e676; margin:0 0 8px; font-size:22px; }
-#dropzone p { color:#4a6070; margin:4px 0; font-size:13px; }
-#file-input { display:none; }
-#upload-btn {
-  margin-top:20px; background:#00e676; color:#080c0e; border:none;
-  padding:10px 28px; border-radius:20px; cursor:pointer; font-size:14px;
-  font-family:'Courier New',monospace; font-weight:bold;
-}
-#upload-btn:hover { background:#00c853; }
+/* UPLOAD */
+#upload-overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;background:#080c0e;z-index:20}
+#dropzone{border:2px dashed #1a2633;border-radius:14px;padding:50px 70px;
+  text-align:center;cursor:pointer;transition:all .2s;max-width:480px}
+#dropzone:hover,#dropzone.drag-over{border-color:#00e676;background:#0a1a12}
+#dropzone h2{color:#00e676;margin:0 0 8px;font-size:20px}
+#dropzone p{color:#4a6070;margin:3px 0;font-size:12px}
+#file-input{display:none}
+#upload-btn{margin-top:18px;background:#00e676;color:#080c0e;border:none;
+  padding:9px 24px;border-radius:18px;cursor:pointer;font-size:13px;
+  font-family:'Courier New',monospace;font-weight:bold}
 
 /* LOADING */
-#loading {
-  position:absolute; inset:0; display:none; flex-direction:column;
-  align-items:center; justify-content:center; background:#080c0e; z-index:20;
-}
-.spinner {
-  width:48px; height:48px; border:4px solid #1a2633;
-  border-top:4px solid #00e676; border-radius:50%;
-  animation:spin 0.8s linear infinite; margin-bottom:20px;
-}
-@keyframes spin { to { transform:rotate(360deg); } }
-#loading p { color:#4a6070; font-size:14px; }
+#loading{position:absolute;inset:0;display:none;flex-direction:column;
+  align-items:center;justify-content:center;background:#080c0e;z-index:20}
+.spinner{width:44px;height:44px;border:4px solid #1a2633;border-top:4px solid #00e676;
+  border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* TOOLTIP */
-#tooltip {
-  position:fixed; background:#0d1117; border:1px solid #1a2633;
-  border-radius:8px; padding:12px; min-width:200px; display:none; z-index:100;
-  pointer-events:none; font-size:11px;
-}
-.tn { font-size:13px; font-weight:bold; color:#00e676; margin-bottom:8px; }
-.tcol { font-size:10px; margin-bottom:8px; }
-.timg { margin-bottom:8px; }
-.timg img { max-width:160px; max-height:120px; border-radius:4px; }
-.tr { display:flex; justify-content:space-between; gap:16px; margin-bottom:3px; }
-.tl { color:#4a6070; }
-.tv { color:#80cbc4; font-weight:bold; }
+#tooltip{position:fixed;background:#0d1117;border:1px solid #1a2633;border-radius:7px;
+  padding:10px;min-width:190px;display:none;z-index:100;pointer-events:none;font-size:10px}
+.tn{font-size:12px;font-weight:bold;color:#00e676;margin-bottom:6px}
+.tr{display:flex;justify-content:space-between;gap:12px;margin-bottom:2px}
+.tl{color:#4a6070}.tv{color:#80cbc4;font-weight:bold}
 
-/* RULER */
-#ruler { position:absolute; bottom:16px; left:16px; font-size:10px; color:#4a6070; display:none; }
+/* LIBRERIA MANUALE */
+#lib-panel{position:absolute;right:0;top:0;bottom:0;width:180px;
+  background:#0d1117;border-left:1px solid #1a2633;display:none;
+  flex-direction:column;z-index:15;padding:8px;overflow-y:auto}
+#lib-panel h4{color:#00e676;font-size:9px;text-transform:uppercase;margin:0 0 6px}
+.lib-item{border:1px solid #1a2633;border-radius:5px;padding:5px 6px;margin-bottom:5px;
+  cursor:grab;transition:border-color .15s;user-select:none}
+.lib-item:hover,.lib-item.dragging{border-color:#00e676;background:#0a1a12}
+.lib-item canvas{display:block;margin:0 auto 3px}
+.lib-nm{font-size:8px;color:#80cbc4;text-align:center;word-break:break-all}
+.lib-dm{font-size:7px;color:#4a6070;text-align:center}
 
-/* MANUAL PANEL */
-#manual-panel {
-  position:absolute; right:0; top:0; bottom:0; width:200px;
-  background:#0d1117; border-left:1px solid #1a2633;
-  display:none; flex-direction:column; z-index:15; padding:8px;
-  overflow-y:auto;
-}
-#manual-panel h4 { color:#00e676; font-size:10px; text-transform:uppercase; margin:0 0 8px; }
-.lib-item {
-  border:1px solid #1a2633; border-radius:6px; padding:6px 8px; margin-bottom:6px;
-  cursor:grab; transition:border-color .15s; user-select:none;
-}
-.lib-item:hover { border-color:#00e676; }
-.lib-item canvas { display:block; margin:0 auto 4px; }
-.lib-name { font-size:9px; color:#80cbc4; text-align:center; }
-.lib-dims { font-size:8px; color:#4a6070; text-align:center; }
+#ruler{position:absolute;bottom:14px;left:14px;font-size:9px;color:#4a6070;display:none}
 </style>
 
 <div id="app">
-  <!-- SIDEBAR -->
   <div id="sidebar">
     <h3>⛓ Nesting Catena</h3>
+    <div class="kpi"><div class="kl">Peso totale</div><div class="kv" id="kpi-peso">—</div></div>
+    <div class="kpi"><div class="kl">N° ganci</div><div class="kv" id="kpi-ganci">—</div></div>
+    <div class="kpi"><div class="kl">Catena usata</div><div class="kv" id="kpi-catena">—</div></div>
+    <div class="kpi"><div class="kl">Max kg/gancio</div><div class="kv" id="kpi-maxkg">—</div></div>
     <div class="kpi">
-      <div class="kl">Peso totale</div>
-      <div class="kv" id="kpi-peso">—</div>
-    </div>
-    <div class="kpi">
-      <div class="kl">N° ganci</div>
-      <div class="kv" id="kpi-ganci">—</div>
-    </div>
-    <div class="kpi">
-      <div class="kl">Catena usata</div>
-      <div class="kv" id="kpi-catena">—</div>
-    </div>
-    <div class="kpi">
-      <div class="kl">Max kg/gancio</div>
-      <div class="kv" id="kpi-maxkg">—</div>
-    </div>
-    <div class="kpi">
-      <div class="kl">Saturazione catena</div>
+      <div class="kl">Saturazione</div>
       <div class="kv" id="kpi-sat">—</div>
-      <div class="sat-wrap"><div class="sat-bar" id="sat-bar" style="width:0%"></div></div>
+      <div class="sat-w"><div class="sat-b" id="sat-bar" style="width:0%"></div></div>
     </div>
-
-    <div style="margin-top:12px;">
-      <button class="tbtn" style="width:100%;font-size:11px;" onclick="showUpload()">📁 Nuovo file STEP</button>
+    <div style="margin-top:10px">
+      <button class="tb" style="width:100%;font-size:10px" onclick="showUpload()">📁 Nuovo STEP</button>
     </div>
-    <div style="margin-top:6px;">
-      <button class="tbtn" style="width:100%;font-size:11px;" id="btn-manual" onclick="toggleManual()">✋ Nesting Manuale</button>
+    <div style="margin-top:5px">
+      <button class="tb" id="btn-manual" style="width:100%;font-size:10px" onclick="toggleManual()">✋ Manuale</button>
     </div>
-
-    <div id="clist"></div>
+    <div id="clist" style="margin-top:8px"></div>
   </div>
 
-  <!-- CANVAS AREA -->
   <div id="canvaswrap">
-    <!-- UPLOAD OVERLAY -->
     <div id="upload-overlay">
       <div id="dropzone" onclick="document.getElementById('file-input').click()"
            ondragover="event.preventDefault();this.classList.add('drag-over')"
            ondragleave="this.classList.remove('drag-over')"
            ondrop="handleDrop(event)">
         <h2>⛓ Nesting Catena CAD</h2>
-        <p>Carica un file STEP/STP per analizzare i componenti</p>
-        <p style="font-size:11px;margin-top:16px;">Supporta assemblaggi multi-parte</p>
-        <button id="upload-btn">📁 Seleziona file STEP</button>
+        <p>Carica file STEP/STP assembly</p>
+        <p style="font-size:10px;margin-top:12px">Shapely collision detection · silhouette reali</p>
+        <button id="upload-btn">📁 Seleziona STEP</button>
       </div>
       <input type="file" id="file-input" accept=".stp,.step,.STP,.STEP" onchange="handleFileSelect(this.files[0])">
     </div>
 
-    <!-- LOADING -->
     <div id="loading">
       <div class="spinner"></div>
-      <p id="loading-text">Analisi STEP in corso...</p>
+      <p id="loading-text" style="color:#4a6070;font-size:13px">Analisi STEP in corso...</p>
     </div>
 
-    <!-- TOOLBAR -->
-    <div id="toolbar" style="display:none;">
-      <button class="tbtn active" id="btn-iso"   onclick="setView('iso');  setActive(this)">○ ISO</button>
-      <button class="tbtn"        id="btn-front" onclick="setView('front');setActive(this)">↔ Frontale</button>
-      <button class="tbtn"        id="btn-top"   onclick="setView('top');  setActive(this)">↕ Top</button>
-      <button class="tbtn"        id="btn-theme" onclick="toggleTheme(this)">☀ Chiaro</button>
-      <button class="tbtn" onclick="zoom(1.3)">+</button>
-      <button class="tbtn" onclick="zoom(0.77)">-</button>
-      <button class="tbtn danger" onclick="showUpload()">↺ Reset</button>
+    <div id="toolbar" style="display:none">
+      <button class="tb act" id="btn-iso"   onclick="setView('iso');  setAct(this)">○ ISO</button>
+      <button class="tb"     id="btn-front" onclick="setView('front');setAct(this)">↔ Frontale</button>
+      <button class="tb"     id="btn-top"   onclick="setView('top');  setAct(this)">↕ Top</button>
+      <button class="tb"     id="btn-theme" onclick="toggleTheme(this)">☀ Chiaro</button>
+      <button class="tb" onclick="zoom(1.2)">+</button>
+      <button class="tb" onclick="zoom(0.83)">-</button>
+      <button class="tb danger" onclick="showUpload()">↺ Reset</button>
     </div>
 
-    <!-- CANVAS -->
     <canvas id="c"></canvas>
-
-    <!-- RULER -->
     <div id="ruler">scala: 1 gancio = 400mm</div>
 
-    <!-- MANUAL NESTING PANEL -->
-    <div id="manual-panel">
-      <h4>📦 Libreria Pezzi</h4>
-      <div style="font-size:9px;color:#4a6070;margin-bottom:8px;">Trascina sul gancio</div>
+    <div id="lib-panel">
+      <h4>📦 Libreria — trascina sul gancio</h4>
       <div id="lib-list"></div>
     </div>
   </div>
 </div>
 
-<!-- TOOLTIP -->
 <div id="tooltip">
   <div class="tn" id="tip-name"></div>
-  <div class="tcol" id="tip-col"></div>
-  <div class="timg" id="tip-img"></div>
+  <div style="font-size:9px;margin-bottom:5px" id="tip-col"></div>
   <div class="tr"><span class="tl">Altezza</span><span class="tv" id="tip-h"></span></div>
   <div class="tr"><span class="tl">Larghezza</span><span class="tv" id="tip-w"></span></div>
   <div class="tr"><span class="tl">Peso</span><span class="tv" id="tip-p"></span></div>
-  <div class="tr"><span class="tl">Saturazione gancio</span><span class="tv" id="tip-sat"></span></div>
+  <div class="tr"><span class="tl">Sat. gancio</span><span class="tv" id="tip-sat"></span></div>
+  <div style="margin-top:6px;font-size:9px;color:#4a6070" id="tip-hint">Click → rimuovi dal gancio</div>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════
-// CONSTANTS & STATE
+// STATE
 // ═══════════════════════════════════════════════
-const PASSO_MM  = 400;
-const HOOK_LEN  = 120;
-const GAP_MM    = 30;
-let Z_MAX_MM  = 2000;  // aggiornato da risposta API
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('canvaswrap');
 
-const canvas    = document.getElementById('c');
-const ctx       = canvas.getContext('2d');
-const wrap      = document.getElementById('canvaswrap');
-
-let NDATA       = null;
-let viewMode    = 'iso';
-let projFn      = iso;
-let scale       = 0.28;
-let offX        = 0, offY = 0;
-let dragging    = false;
-let dragX       = 0, dragY = 0;
-let darkMode    = true;   // sfondo nero default
-let manualMode  = false;
-let manualLayout = [];    // [{slot, pezzi:[{...}]}] per nesting manuale
-
-// ═══════════════════════════════════════════════
-// RESIZE
-// ═══════════════════════════════════════════════
-function resize() {
-    canvas.width  = wrap.clientWidth;
-    canvas.height = wrap.clientHeight;
-    if (NDATA) draw();
-}
-window.addEventListener('resize', resize);
-resize();
+let NDATA     = null;
+let viewMode  = 'iso';
+let scale     = 0.28;
+let offX      = 0, offY = 0;
+let dragging  = false, dragX = 0, dragY = 0;
+let darkMode  = true;
+let manualMode = false;
+let manualExtra = []; // [{slot, part}] pezzi aggiunti manualmente
+let Z_MAX_MM  = 2000;
+let PASSO_MM  = 400;
+let HOOK_LEN  = 120;
+let GAP_V     = 60;
+let hitBoxes  = [];
+let dragPart  = null; // pezzo in drag dalla libreria
 
 // ═══════════════════════════════════════════════
 // PROJECTIONS
 // ═══════════════════════════════════════════════
-const COS30 = Math.cos(Math.PI/6);
-const SIN30 = Math.sin(Math.PI/6);
+const C30 = Math.cos(Math.PI/6), S30 = Math.sin(Math.PI/6);
+const proj = {
+  iso:   (x,y,z) => ({ sx:(x-z)*C30, sy:-y-(x+z)*S30 }),
+  front: (x,y,z) => ({ sx:x, sy:-y }),
+  top:   (x,y,z) => ({ sx:x, sy:-z }),
+};
+let projFn = proj.iso;
 
-function iso(x, y, z) {
-    return { sx: (x - z) * COS30, sy: -(y) - (x + z) * SIN30 };
+function setView(v){
+  viewMode=v; projFn=proj[v==='top'?'top':v];
+  resetView();
 }
-function front(x, y, z) {
-    return { sx: x, sy: -y };
+function resetView(){
+  if(!NDATA) return;
+  const tX = NDATA.total_slots * PASSO_MM;
+  const p  = projFn(tX/2, Z_MAX_MM/2, 0);
+  scale = viewMode==='iso' ? 0.28 : 0.38;
+  offX  = canvas.width/2  - p.sx*scale;
+  offY  = canvas.height/2 - p.sy*scale;
+  draw();
 }
-function top_proj(x, y, z) {
-    return { sx: x, sy: -z };
-}
-
-function setView(v) {
-    viewMode = v;
-    if (v==='iso')   projFn = iso;
-    if (v==='front') projFn = front;
-    if (v==='top')   projFn = top_proj;
-    resetView();
-}
-
-function resetView() {
-    if (!NDATA) return;
-    const totalX = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots || 1) * PASSO_MM;
-    const p = projFn(totalX/2, Z_MAX_MM/2, 0);
-    scale = viewMode==='iso' ? 0.28 : 0.38;
-    offX  = canvas.width/2  - p.sx * scale;
-    offY  = canvas.height/2 - p.sy * scale;
-    draw();
-}
-
-function px(x, y, z) {
-    const p = projFn(x, y, z);
-    return { x: p.sx * scale + offX, y: p.sy * scale + offY };
+function px(x,y,z){
+  const p=projFn(x,y,z);
+  return {x:p.sx*scale+offX, y:p.sy*scale+offY};
 }
 
 // ═══════════════════════════════════════════════
-// THEME TOGGLE
+// THEME
 // ═══════════════════════════════════════════════
-function toggleTheme(btn) {
-    darkMode = !darkMode;
-    wrap.classList.toggle('light', !darkMode);
-    btn.textContent = darkMode ? '☀ Chiaro' : '🌙 Scuro';
-    if (NDATA) draw();
+function toggleTheme(btn){
+  darkMode=!darkMode;
+  wrap.classList.toggle('light',!darkMode);
+  btn.textContent = darkMode ? '☀ Chiaro' : '🌙 Scuro';
+  if(NDATA) draw();
 }
-
-function bgColor()      { return darkMode ? '#080c0e' : '#f4f4f0'; }
-function gridColor()    { return darkMode ? 'rgba(13,19,24,0.8)'  : 'rgba(180,180,180,0.5)'; }
-function chainColor()   { return darkMode ? '#37474F' : '#90a4ae'; }
-function textColor()    { return darkMode ? '#4a6070' : '#555'; }
-function dimColor()     { return darkMode ? '#00e676' : '#1976d2'; }  // colore misure in 2D
-function gapLblColor()  { return darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'; }
+const bg    = ()=> darkMode?'#080c0e':'#f5f5f0';
+const grid  = ()=> darkMode?'rgba(13,19,24,0.7)':'rgba(180,180,180,0.4)';
+const dim   = ()=> darkMode?'#00e676':'#1565C0';
+const txt   = ()=> darkMode?'#4a6070':'#555';
 
 // ═══════════════════════════════════════════════
-// MANUAL NESTING PANEL
+// RESIZE
 // ═══════════════════════════════════════════════
-function toggleManual() {
-    manualMode = !manualMode;
-    document.getElementById('manual-panel').style.display = manualMode ? 'flex' : 'none';
-    document.getElementById('btn-manual').classList.toggle('active', manualMode);
-    if (manualMode && NDATA) buildLibPanel();
+function resize(){ canvas.width=wrap.clientWidth; canvas.height=wrap.clientHeight; if(NDATA) draw(); }
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════
+// DRAW
+// ═══════════════════════════════════════════════
+function draw(){
+  if(!NDATA) return;
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=bg(); ctx.fillRect(0,0,W,H);
+  hitBoxes=[];
+
+  const nCols = NDATA.columns.length;
+  const tX    = nCols * PASSO_MM;
+
+  // Griglia
+  ctx.strokeStyle=grid(); ctx.lineWidth=0.5;
+  for(let gx=0; gx<=tX+PASSO_MM; gx+=PASSO_MM){
+    const a=px(gx,-Z_MAX_MM-80,-180), b=px(gx,-Z_MAX_MM-80,180);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+
+  // Linea z_max
+  ctx.strokeStyle='rgba(255,61,61,0.18)'; ctx.lineWidth=1;
+  ctx.setLineDash([7,5]);
+  const za=px(0,-Z_MAX_MM,-140), zb=px(tX+PASSO_MM,-Z_MAX_MM,-140);
+  ctx.beginPath(); ctx.moveTo(za.x,za.y); ctx.lineTo(zb.x,zb.y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Catena
+  drawChain(tX);
+
+  // Colonne (depth sort)
+  const sorted = [...NDATA.columns].sort((a,b)=>
+    viewMode==='iso' ? b.start_slot-a.start_slot : a.start_slot-b.start_slot
+  );
+  sorted.forEach(col => drawColumn(col));
+
+  // Extra manuali
+  manualExtra.forEach(({slot, part, color}) => {
+    const colX = slot * PASSO_MM + PASSO_MM/2;
+    const col  = NDATA.columns[slot] || {color: color||'#ff9800', pezzi:[]};
+    drawPartShape(colX, part.y_top||-(HOOK_LEN+10), part, '#ff9800', col, true);
+  });
+
+  // Misure in vista frontale
+  if(viewMode==='front') NDATA.columns.forEach(col => drawMeasures(col));
 }
 
-function buildLibPanel() {
-    const list = document.getElementById('lib-list');
-    list.innerHTML = '';
-    // Raccoglie tutti i pezzi unici dal nesting corrente
-    const seen = new Set();
-    const parts = [];
-    (NDATA.columns || []).forEach(col => {
-        (col.pezzi || []).forEach(p => {
-            if (!seen.has(p.nome)) { seen.add(p.nome); parts.push(p); }
-        });
-    });
-    parts.forEach(part => {
-        const div = document.createElement('div');
-        div.className = 'lib-item';
-        div.draggable = true;
-        // Miniatura canvas
-        const mc = document.createElement('canvas');
-        mc.width = 80; mc.height = 60;
-        drawMiniature(mc, part);
-        div.appendChild(mc);
-        const nm = document.createElement('div');
-        nm.className = 'lib-name';
-        nm.textContent = part.nome;
-        div.appendChild(nm);
-        const dm = document.createElement('div');
-        dm.className = 'lib-dims';
-        dm.textContent = `${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)} mm · ${part.peso_kg.toFixed(1)} kg`;
-        div.appendChild(dm);
-        div.addEventListener('dragstart', e => {
-            e.dataTransfer.setData('partJson', JSON.stringify(part));
-        });
-        list.appendChild(div);
-    });
+function drawChain(tX){
+  const fullX = tX + PASSO_MM*2;
+  // Barra
+  const cc = darkMode?'#263545':'#90a4ae';
+  drawBox(0,0,fullX,0,0,40,cc);
+
+  ctx.fillStyle=txt(); ctx.font=`${Math.max(7,9*scale)}px 'Courier New'`;
+  for(let g=0; g<=NDATA.total_slots+2; g+=5){
+    const x=g*PASSO_MM;
+    const a=px(x,20,0), b=px(x,-25,0);
+    ctx.strokeStyle=txt(); ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.textAlign='center'; ctx.fillText('G'+g, a.x, a.y-4*scale);
+  }
+  const la=px(-PASSO_MM*.4,45,0);
+  ctx.fillStyle=txt(); ctx.textAlign='left';
+  ctx.font=`bold ${Math.max(7,8*scale)}px 'Courier New'`;
+  ctx.fillText(`CATENA ${NDATA.passo_mm}mm — ${NDATA.total_slots} GANCI`, la.x, la.y);
+  const lb=px(tX+PASSO_MM*.1,45,0);
+  ctx.fillStyle=dim();
+  ctx.fillText(`${(NDATA.total_slots*NDATA.passo_mm/1000).toFixed(1)} m`, lb.x, lb.y);
 }
 
-function drawMiniature(mc, part) {
-    const mctx = mc.getContext('2d');
-    mctx.fillStyle = darkMode ? '#111b27' : '#e8e8e8';
-    mctx.fillRect(0, 0, mc.width, mc.height);
-    const poly = part.poly_pts;
-    const W = mc.width - 8, H = mc.height - 8;
-    mctx.strokeStyle = part.color || '#00e676';
-    mctx.lineWidth = 1.5;
-    mctx.fillStyle = (part.color || '#00e676').replace(')', ',0.2)').replace('rgb','rgba');
-    if (poly && poly.length >= 3) {
-        const pxs = poly.map(p => p[0]), pys = poly.map(p => p[1]);
-        const pW = Math.max(...pxs)-Math.min(...pxs)||1;
-        const pH = Math.max(...pys)-Math.min(...pys)||1;
-        const sc = Math.min(W/pW, H/pH);
-        mctx.beginPath();
-        poly.forEach((p,i) => {
-            const x = mc.width/2  + p[0]*sc;
-            const y = mc.height/2 - p[1]*sc;
-            i===0 ? mctx.moveTo(x,y) : mctx.lineTo(x,y);
-        });
-        mctx.closePath();
-        mctx.fill(); mctx.stroke();
-    } else {
-        const scX = W / (part.largh_mm||100);
-        const scY = H / (part.alt_mm||100);
-        const sc2 = Math.min(scX, scY);
-        const rw = (part.largh_mm||100)*sc2, rh = (part.alt_mm||100)*sc2;
-        mctx.beginPath();
-        mctx.rect(mc.width/2-rw/2, mc.height/2-rh/2, rw, rh);
-        mctx.fill(); mctx.stroke();
+function drawBox(x1,y,x2,y2,z,depth,color){
+  const H=22;
+  const p1=px(x1,y+H/2,-depth/2),p2=px(x2,y+H/2,-depth/2);
+  const p3=px(x2,y-H/2,-depth/2),p4=px(x1,y-H/2,-depth/2);
+  const p5=px(x1,y+H/2,depth/2), p6=px(x2,y+H/2,depth/2);
+  const rgb=hexRgb(color);
+  ctx.fillStyle=`rgba(${Math.min(255,rgb.r+30)},${Math.min(255,rgb.g+30)},${Math.min(255,rgb.b+30)},.9)`;
+  ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p6.x,p6.y); ctx.lineTo(p5.x,p5.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=color;
+  ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y); ctx.closePath(); ctx.fill();
+}
+
+function drawColumn(col){
+  const x = col.start_slot*PASSO_MM + PASSO_MM/2;
+  const color = col.color;
+  // Gancio
+  const ga=px(x,0,0), gb=px(x,-HOOK_LEN,0);
+  ctx.strokeStyle='#b0bec5'; ctx.lineWidth=Math.max(2,3*scale); ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(ga.x,ga.y); ctx.lineTo(gb.x,gb.y); ctx.stroke();
+  const hc=px(x+55,-HOOK_LEN-50,0);
+  ctx.strokeStyle='#90a4ae'; ctx.lineWidth=Math.max(2,2.5*scale);
+  ctx.beginPath(); ctx.arc(hc.x,hc.y,35*scale*C30,Math.PI*.5,Math.PI*1.5); ctx.stroke();
+
+  // Label gancio
+  const lp=px(x,70,0);
+  ctx.fillStyle=color; ctx.font=`bold ${Math.max(7,9*scale)}px 'Courier New'`;
+  ctx.textAlign='center';
+  ctx.fillText(`G${col.start_slot+1}·${col.peso.toFixed(1)}kg`, lp.x, lp.y);
+
+  // Pezzi — usa y_top dal nesting engine
+  col.pezzi.forEach((part,pi) => {
+    drawPartShape(x, part.y_top, part, color, col, false);
+  });
+}
+
+function drawPartShape(x, yTop, part, color, col, isManual){
+  const W = Math.max(part.largh_mm, 20);
+  const H = part.alt_mm;
+  const D = Math.max(part.D_mm||60, 15);
+  const yBot = yTop - H;
+  const poly = part.poly_pts;
+  const rgb  = hexRgb(color);
+  const frontC = `rgba(${rgb.r},${rgb.g},${rgb.b},${isManual?0.6:0.82})`;
+  const sideC  = `rgba(${Math.max(0,rgb.r-40)},${Math.max(0,rgb.g-40)},${Math.max(0,rgb.b-40)},.75)`;
+  const topC   = `rgba(${Math.min(255,rgb.r+40)},${Math.min(255,rgb.g+40)},${Math.min(255,rgb.b+40)},.9)`;
+
+  const TLF=px(x-W/2,yTop,-D/2), TRF=px(x+W/2,yTop,-D/2);
+  const BLF=px(x-W/2,yBot,-D/2), BRF=px(x+W/2,yBot,-D/2);
+  const TLB=px(x-W/2,yTop, D/2), TRB=px(x+W/2,yTop, D/2);
+  const BRB=px(x+W/2,yBot, D/2);
+
+  if(poly && poly.length>=3){
+    // Silhouette reale
+    const pxArr=poly.map(p=>p[0]), pyArr=poly.map(p=>p[1]);
+    const pW=Math.max(...pxArr)-Math.min(...pxArr)||1;
+    const pH=Math.max(...pyArr)-Math.min(...pyArr)||1;
+    const scX=W/pW, scY=H/pH;
+    const cy2 = yTop - H/2;
+    const silF=poly.map(p=>px(x+p[0]*scX, cy2+p[1]*scY, -D/2));
+    const silB=poly.map(p=>px(x+p[0]*scX, cy2+p[1]*scY,  D/2));
+
+    // Faccia frontale
+    ctx.fillStyle=frontC;
+    ctx.beginPath();
+    silF.forEach((p,i)=> i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=isManual?'#ff9800':color; ctx.lineWidth=1; ctx.stroke();
+
+    // Estrusione iso
+    if(viewMode==='iso'){
+      ctx.fillStyle=sideC;
+      for(let i=0;i<silF.length-1;i++){
+        ctx.beginPath();
+        ctx.moveTo(silF[i].x,silF[i].y); ctx.lineTo(silF[i+1].x,silF[i+1].y);
+        ctx.lineTo(silB[i+1].x,silB[i+1].y); ctx.lineTo(silB[i].x,silB[i].y);
+        ctx.closePath(); ctx.fill();
+      }
     }
+  } else {
+    // Fallback box
+    if(viewMode==='iso'){
+      ctx.fillStyle=topC;
+      ctx.beginPath();ctx.moveTo(TLF.x,TLF.y);ctx.lineTo(TRF.x,TRF.y);ctx.lineTo(TRB.x,TRB.y);ctx.lineTo(TLB.x,TLB.y);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.stroke();
+      ctx.fillStyle=sideC;
+      ctx.beginPath();ctx.moveTo(TRF.x,TRF.y);ctx.lineTo(TRB.x,TRB.y);ctx.lineTo(BRB.x,BRB.y);ctx.lineTo(BRF.x,BRF.y);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.stroke();
+    }
+    ctx.fillStyle=frontC;
+    ctx.beginPath();ctx.moveTo(TLF.x,TLF.y);ctx.lineTo(TRF.x,TRF.y);ctx.lineTo(BRF.x,BRF.y);ctx.lineTo(BLF.x,BLF.y);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=isManual?'#ff9800':color;ctx.lineWidth=.8;ctx.stroke();
+  }
+
+  // Nome
+  const facH=Math.abs(BLF.y-TLF.y);
+  if(facH>12){
+    const cx3=(TLF.x+TRF.x)/2, cy3=(TLF.y+BLF.y)/2+3;
+    ctx.fillStyle=darkMode?'rgba(255,255,255,.8)':'rgba(0,0,0,.7)';
+    ctx.font=`${Math.max(6,Math.min(10,facH*.12))}px 'Courier New'`;
+    ctx.textAlign='center';
+    ctx.fillText((part.nome||'').substring(0,16), cx3, cy3);
+  }
+
+  // Hitbox
+  const allP=[TLF,TRF,BLF,BRF,TLB,TRB,BRB];
+  hitBoxes.push({
+    minX:Math.min(...allP.map(p=>p.x)), maxX:Math.max(...allP.map(p=>p.x)),
+    minY:Math.min(...allP.map(p=>p.y)), maxY:Math.max(...allP.map(p=>p.y)),
+    part, col, isManual
+  });
 }
 
-// Drag-and-drop sul canvas per nesting manuale
-canvas.addEventListener('dragover', e => e.preventDefault());
-canvas.addEventListener('drop', e => {
-    e.preventDefault();
-    try {
-        const part = JSON.parse(e.dataTransfer.getData('partJson'));
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        // Trova il gancio più vicino al punto di drop
-        let bestSlot = 0, bestDist = Infinity;
-        (NDATA.columns || []).forEach(col => {
-            const sx = col.start_slot * PASSO_MM + PASSO_MM/2;
-            const pp = px(sx, 0, 0);
-            const d = Math.abs(pp.x - mx);
-            if (d < bestDist) { bestDist = d; bestSlot = col.start_slot; }
-        });
-        // Aggiunge il pezzo al layout manuale
-        let col = manualLayout.find(c => c.slot === bestSlot);
-        if (!col) { col = { slot: bestSlot, pezzi: [] }; manualLayout.push(col); }
-        col.pezzi.push({...part});
-        draw();
-    } catch(err) { console.warn('drop err', err); }
+// ── MISURE (vista frontale) ──────────────────────
+function drawMeasures(col){
+  const x = col.start_slot*PASSO_MM + PASSO_MM/2;
+  col.pezzi.forEach((part,pi) => {
+    const W=Math.max(part.largh_mm,20), H=part.alt_mm;
+    const yTop=part.y_top, yBot=yTop-H;
+
+    // Freccia altezza pezzo (lato destro)
+    const ox=W/2+35;
+    const pT=px(x+ox,yTop,0), pB=px(x+ox,yBot,0);
+    if(Math.abs(pT.y-pB.y)>18) drawArrow(pT,pB,dim(),`${H.toFixed(0)}mm`,'v');
+
+    // Freccia larghezza (sopra il pezzo)
+    const pL=px(x-W/2,yTop+18,0), pR=px(x+W/2,yTop+18,0);
+    if(Math.abs(pR.x-pL.x)>24) drawArrow(pL,pR,dim(),`${W.toFixed(0)}mm`,'h');
+
+    // Gap sotto il pezzo
+    if(pi < col.pezzi.length-1){
+      const nextYTop = col.pezzi[pi+1].y_top;
+      const gapMm = Math.round(yBot - nextYTop);  // gap tra fondo pezzo e top successivo... atteso = GAP_V
+      const gA=px(x-W/2-25,yBot,0), gB=px(x-W/2-25,nextYTop,0);
+      if(Math.abs(gA.y-gB.y)>8){
+        ctx.strokeStyle='rgba(100,100,100,.4)'; ctx.lineWidth=.7; ctx.setLineDash([3,3]);
+        ctx.beginPath();ctx.moveTo(gA.x,gA.y);ctx.lineTo(gB.x,gB.y);ctx.stroke();
+        ctx.setLineDash([]);
+        const gm={x:(gA.x+gB.x)/2-22, y:(gA.y+gB.y)/2+3};
+        ctx.fillStyle='rgba(100,100,100,.7)'; ctx.font=`${Math.max(7,8*scale)}px 'Courier New'`;
+        ctx.textAlign='right'; ctx.fillText(`${gapMm}mm`, gm.x, gm.y);
+      }
+    }
+  });
+}
+
+function drawArrow(A,B,color,label,dir){
+  const dx=B.x-A.x,dy=B.y-A.y,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<8) return;
+  const ux=dx/len,uy=dy/len,hs=5;
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=.9;
+  ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+  [[A,1],[B,-1]].forEach(([pt,d])=>{
+    ctx.beginPath();ctx.moveTo(pt.x,pt.y);
+    ctx.lineTo(pt.x-d*ux*hs+uy*hs/2,pt.y-d*uy*hs-ux*hs/2);
+    ctx.lineTo(pt.x-d*ux*hs-uy*hs/2,pt.y-d*uy*hs+ux*hs/2);
+    ctx.closePath();ctx.fill();
+  });
+  const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;
+  const off=dir==='v'?{x:18,y:4}:{x:0,y:-10};
+  ctx.font=`${Math.max(7,8*scale)}px 'Courier New'`;
+  ctx.textAlign=dir==='v'?'left':'center';
+  ctx.fillText(label,mx+off.x,my+off.y);
+}
+
+// ═══════════════════════════════════════════════
+// NESTING MANUALE — LIBRERIA & DRAG
+// ═══════════════════════════════════════════════
+function toggleManual(){
+  manualMode=!manualMode;
+  document.getElementById('lib-panel').style.display=manualMode?'flex':'none';
+  document.getElementById('btn-manual').classList.toggle('act',manualMode);
+  if(manualMode && NDATA) buildLibPanel();
+}
+
+function buildLibPanel(){
+  const list=document.getElementById('lib-list');
+  list.innerHTML='';
+  (NDATA.library||[]).forEach(part=>{
+    const div=document.createElement('div');
+    div.className='lib-item';
+    const mc=document.createElement('canvas');
+    mc.width=80;mc.height=55;
+    drawMiniature(mc,part);
+    div.appendChild(mc);
+    const nm=document.createElement('div');nm.className='lib-nm';nm.textContent=part.nome;div.appendChild(nm);
+    const dm=document.createElement('div');dm.className='lib-dm';
+    dm.textContent=`${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm · ${part.peso_kg.toFixed(1)}kg`;
+    div.appendChild(dm);
+    // Drag dalla libreria
+    div.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      dragPart={...part};
+      div.classList.add('dragging');
+      document.addEventListener('mouseup',()=>{div.classList.remove('dragging');dragPart=null;},{once:true});
+    });
+    list.appendChild(div);
+  });
+}
+
+function drawMiniature(mc,part){
+  const mctx=mc.getContext('2d');
+  mctx.fillStyle=darkMode?'#111b27':'#e8e8e8'; mctx.fillRect(0,0,mc.width,mc.height);
+  const poly=part.poly_pts;
+  const W=mc.width-8,H=mc.height-8;
+  mctx.strokeStyle='#00e676'; mctx.lineWidth=1.5;
+  mctx.fillStyle='rgba(0,230,118,0.15)';
+  if(poly&&poly.length>=3){
+    const pxs=poly.map(p=>p[0]),pys=poly.map(p=>p[1]);
+    const pW=Math.max(...pxs)-Math.min(...pxs)||1,pH=Math.max(...pys)-Math.min(...pys)||1;
+    const sc=Math.min(W/pW,H/pH);
+    mctx.beginPath();
+    poly.forEach((p,i)=>{
+      const px2=mc.width/2+p[0]*sc,py2=mc.height/2-p[1]*sc;
+      i===0?mctx.moveTo(px2,py2):mctx.lineTo(px2,py2);
+    });
+    mctx.closePath();mctx.fill();mctx.stroke();
+  } else {
+    const sc=Math.min(W/(part.largh_mm||100),H/(part.alt_mm||100));
+    const rw=(part.largh_mm||100)*sc,rh=(part.alt_mm||100)*sc;
+    mctx.beginPath();mctx.rect(mc.width/2-rw/2,mc.height/2-rh/2,rw,rh);
+    mctx.fill();mctx.stroke();
+  }
+}
+
+// Drop del pezzo dalla libreria sul canvas
+canvas.addEventListener('mouseup', e=>{
+  if(!dragPart||!NDATA) return;
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left;
+  // Trova gancio più vicino
+  let bestSlot=0,bestDist=Infinity;
+  NDATA.columns.forEach(col=>{
+    const sx=col.start_slot*PASSO_MM+PASSO_MM/2;
+    const p=px(sx,0,0);
+    const d=Math.abs(p.x-mx);
+    if(d<bestDist){bestDist=d;bestSlot=col.start_slot;}
+  });
+  // Calcola y_top sotto l'ultimo pezzo del gancio
+  const col=NDATA.columns[bestSlot];
+  let lastY = col.pezzi.length>0
+    ? col.pezzi[col.pezzi.length-1].y_top - col.pezzi[col.pezzi.length-1].alt_mm - GAP_V
+    : -HOOK_LEN;
+  // Controlla extra manuali già aggiunti su questo slot
+  manualExtra.filter(m=>m.slot===bestSlot).forEach(m=>{
+    lastY = Math.min(lastY, m.part.y_top - m.part.alt_mm - GAP_V);
+  });
+  if(Math.abs(lastY)-dragPart.alt_mm > Z_MAX_MM){
+    alert('Altezza massima catena superata!'); dragPart=null; return;
+  }
+  manualExtra.push({slot:bestSlot,part:{...dragPart,y_top:lastY},color:'#ff9800'});
+  draw();
+  dragPart=null;
 });
 
-// ═══════════════════════════════════════════════
-// DRAW PRINCIPALE
-// ═══════════════════════════════════════════════
-const hitBoxes = [];
-
-function draw() {
-    if (!NDATA) return;
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    // Sfondo
-    ctx.fillStyle = bgColor();
-    ctx.fillRect(0, 0, W, H);
-
-    hitBoxes.length = 0;
-
-    // ── Griglia a terra ──
-    ctx.strokeStyle = gridColor();
-    ctx.lineWidth = 0.5;
-    const totalX = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots || 1) * PASSO_MM;
-    for (let gx = 0; gx <= totalX + PASSO_MM; gx += PASSO_MM) {
-        const a = px(gx, -Z_MAX_MM-100, -200);
-        const b = px(gx, -Z_MAX_MM-100,  200);
-        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+// Click su pezzo manuale → rimuovi
+canvas.addEventListener('click',e=>{
+  if(Math.abs(e.clientX-dragX)>5||Math.abs(e.clientY-dragY)>5) return;
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  for(let i=hitBoxes.length-1;i>=0;i--){
+    const hb=hitBoxes[i];
+    if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY){
+      if(hb.isManual){
+        manualExtra=manualExtra.filter(m=>m.part!==hb.part);
+        draw();
+      }
+      break;
     }
-    for (let gz = -200; gz <= 200; gz += 100) {
-        const a = px(0,              -Z_MAX_MM-100, gz);
-        const b = px(totalX+PASSO_MM,-Z_MAX_MM-100, gz);
-        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    }
-
-    // ── Linea Z_MAX ──
-    ctx.strokeStyle = 'rgba(255,61,61,0.2)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([8,6]);
-    const za = px(0,              -Z_MAX_MM, -150);
-    const zb = px(totalX+PASSO_MM,-Z_MAX_MM, -150);
-    ctx.beginPath(); ctx.moveTo(za.x,za.y); ctx.lineTo(zb.x,zb.y); ctx.stroke();
-    ctx.setLineDash([]);
-
-    // ── CATENA ──
-    drawChain();
-
-    // ── Colonne (depth sort) ──
-    const sortedCols = [...NDATA.columns].sort((a,b) =>
-        viewMode==='iso' ? b.start_slot - a.start_slot : a.start_slot - b.start_slot
-    );
-    sortedCols.forEach(col => drawColumn(col));
-
-    // ── Pezzi manuali aggiunti ──
-    manualLayout.forEach(mc => {
-        const col = NDATA.columns.find(c => c.start_slot === mc.slot);
-        if (!col) return;
-        const x = col.start_slot * PASSO_MM + PASSO_MM/2;
-        let curY = -(HOOK_LEN + 10);
-        // prima i pezzi automatici
-        (col.pezzi||[]).forEach(p => { curY -= p.alt_mm + GAP_MM; });
-        // poi quelli manuali
-        mc.pezzi.forEach(part => {
-            const W2 = Math.max(part.largh_mm, 30);
-            const D  = Math.max(part.D_mm || 60, 20);
-            drawPart(x, curY - part.alt_mm, W2, part.alt_mm, D, '#ff9800', part, col, -1);
-            curY -= part.alt_mm + GAP_MM;
-        });
-    });
-
-    // ── In vista Frontale: disegna misure gap tra pezzi ──
-    if (viewMode === 'front') {
-        sortedCols.forEach(col => drawGapLabels(col));
-    }
-}
-
-// ═══════════════════════════════════════════════
-// CATENA
-// ═══════════════════════════════════════════════
-function drawChain() {
-    const totalX = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots || 1) * PASSO_MM;
-    const fullX  = totalX + PASSO_MM * 3;
-    drawBeam(0, 0, fullX, 0, 0, 40, chainColor(), darkMode?'#263545':'#b0bec5', darkMode?'#4a6070':'#90a4ae');
-
-    // Tick ogni 5 ganci
-    for (let g = 0; g <= NDATA.total_slots + 3; g += 5) {
-        const x = g * PASSO_MM;
-        const a = px(x,  20, 0);
-        const b = px(x, -30, 0);
-        ctx.strokeStyle = textColor();
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-        ctx.fillStyle = textColor();
-        ctx.font = `${Math.max(8,10*scale)}px 'Courier New'`;
-        ctx.textAlign = 'center';
-        ctx.fillText('G'+g, a.x, a.y - 5*scale);
-    }
-
-    const la = px(-PASSO_MM*0.5, 50, 0);
-    ctx.fillStyle = textColor();
-    ctx.font = `bold ${Math.max(7,9*scale)}px 'Courier New'`;
-    ctx.textAlign = 'left';
-    ctx.fillText('CATENA '+NDATA.passo_mm+'mm — '+NDATA.total_slots+' GANCI', la.x, la.y);
-
-    const lb = px(totalX + PASSO_MM*0.2, 50, 0);
-    ctx.fillStyle = dimColor();
-    ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
-    ctx.fillText((NDATA.total_slots * NDATA.passo_mm / 1000).toFixed(1)+' m usati', lb.x, lb.y);
-}
-
-function drawBeam(x1, y, x2, y2, z, depth, faceColor, topColor, sideColor) {
-    const H = 24;
-    const p1 = px(x1, y+H/2, -depth/2);
-    const p2 = px(x2, y+H/2, -depth/2);
-    const p3 = px(x2, y-H/2, -depth/2);
-    const p4 = px(x1, y-H/2, -depth/2);
-    const p5 = px(x1, y+H/2,  depth/2);
-    const p6 = px(x2, y+H/2,  depth/2);
-    ctx.fillStyle = topColor;
-    ctx.beginPath();
-    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p6.x,p6.y); ctx.lineTo(p5.x,p5.y);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = faceColor;
-    ctx.beginPath();
-    ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = sideColor;
-    ctx.beginPath();
-    ctx.moveTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
-    ctx.lineTo(px(x2,y-H/2,depth/2).x, px(x2,y-H/2,depth/2).y); ctx.lineTo(p6.x,p6.y);
-    ctx.closePath(); ctx.fill();
-}
-
-// ═══════════════════════════════════════════════
-// COLONNA
-// ═══════════════════════════════════════════════
-function drawColumn(col) {
-    const x     = col.start_slot * PASSO_MM + PASSO_MM/2;
-    const color = col.color || '#00e676';
-
-    drawHook(x, color);
-
-    const lp = px(x, 80, 0);
-    ctx.fillStyle = color;
-    ctx.font = `bold ${Math.max(8,10*scale)}px 'Courier New'`;
-    ctx.textAlign = 'center';
-    ctx.fillText('G'+(col.start_slot+1)+'·'+col.peso.toFixed(1)+'kg', lp.x, lp.y);
-
-    let curY = -(HOOK_LEN + 10);
-    col.pezzi.forEach((part, pi) => {
-        const altH = part.alt_mm;
-        const W    = Math.max(part.largh_mm, 30);
-        const D    = Math.max(part.D_mm || 60, 20);
-        drawPart(x, curY - altH, W, altH, D, color, part, col, pi);
-        curY -= altH + GAP_MM;
-    });
-
-    // Linea Z_MAX
-    const zm1 = px(x - PASSO_MM*0.4, -Z_MAX_MM, -100);
-    const zm2 = px(x + PASSO_MM*0.4, -Z_MAX_MM, -100);
-    ctx.strokeStyle = 'rgba(255,61,61,0.18)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.moveTo(zm1.x,zm1.y); ctx.lineTo(zm2.x,zm2.y); ctx.stroke();
-}
-
-function drawHook(x, color) {
-    const ga = px(x, 0, 0);
-    const gb = px(x, -HOOK_LEN, 0);
-    ctx.strokeStyle = '#b0bec5';
-    ctx.lineWidth = Math.max(2, 3*scale);
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(ga.x,ga.y); ctx.lineTo(gb.x,gb.y); ctx.stroke();
-    const hc = px(x + 60, -HOOK_LEN - 60, 0);
-    ctx.strokeStyle = '#90a4ae';
-    ctx.lineWidth = Math.max(2, 3*scale);
-    ctx.beginPath();
-    ctx.arc(hc.x, hc.y, 40*scale*COS30, Math.PI*0.5, Math.PI*1.5);
-    ctx.stroke();
-    const ball = px(x, 0, 0);
-    ctx.fillStyle = '#b0bec5';
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, Math.max(3, 5*scale), 0, Math.PI*2);
-    ctx.fill();
-}
-
-// ═══════════════════════════════════════════════
-// DRAW PART — con silhouette reale + fallback box
-// ═══════════════════════════════════════════════
-function drawPart(x, yTop, W, H, D, color, part, col, pi) {
-    const xL = x - W/2, xR = x + W/2;
-    const yB = yTop, yT = yTop + H;
-
-    const rgb = hexToRgb(color);
-    const topC   = `rgba(${Math.min(255,rgb.r+40)},${Math.min(255,rgb.g+40)},${Math.min(255,rgb.b+40)},0.9)`;
-    const frontC = `rgba(${rgb.r},${rgb.g},${rgb.b},0.82)`;
-    const rightC = `rgba(${Math.max(0,rgb.r-40)},${Math.max(0,rgb.g-40)},${Math.max(0,rgb.b-40)},0.78)`;
-
-    const TLF = px(xL, yT, -D/2), TRF = px(xR, yT, -D/2);
-    const BRF = px(xR, yB, -D/2), BLF = px(xL, yB, -D/2);
-    const TLB = px(xL, yT,  D/2), TRB = px(xR, yT,  D/2);
-    const BRB = px(xR, yB,  D/2);
-
-    const poly = part.poly_pts;
-
-    if (poly && poly.length >= 3) {
-        // ── SILHOUETTE REALE ──
-        const pxArr = poly.map(p=>p[0]), pyArr = poly.map(p=>p[1]);
-        const pW = Math.max(...pxArr)-Math.min(...pxArr)||1;
-        const pH = Math.max(...pyArr)-Math.min(...pyArr)||1;
-        const scX = W/pW, scY = H/pH;
-
-        const silF = poly.map(p => px(x+p[0]*scX, yTop+H/2+p[1]*scY, -D/2));
-        const silB = poly.map(p => px(x+p[0]*scX, yTop+H/2+p[1]*scY,  D/2));
-
-        // Faccia frontale
-        ctx.fillStyle = frontC;
-        ctx.beginPath();
-        silF.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = color; ctx.lineWidth=1.2; ctx.stroke();
-
-        // Estrusione laterale (vista iso)
-        if (viewMode==='iso') {
-            ctx.fillStyle = rightC;
-            for (let i=0; i<silF.length-1; i++) {
-                ctx.beginPath();
-                ctx.moveTo(silF[i].x,silF[i].y); ctx.lineTo(silF[i+1].x,silF[i+1].y);
-                ctx.lineTo(silB[i+1].x,silB[i+1].y); ctx.lineTo(silB[i].x,silB[i].y);
-                ctx.closePath(); ctx.fill();
-            }
-            ctx.strokeStyle = color; ctx.lineWidth=0.5; ctx.stroke();
-        }
-    } else {
-        // ── FALLBACK BOX ──
-        if (viewMode==='iso') {
-            ctx.fillStyle = topC;
-            ctx.beginPath();
-            ctx.moveTo(TLF.x,TLF.y); ctx.lineTo(TRF.x,TRF.y); ctx.lineTo(TRB.x,TRB.y); ctx.lineTo(TLB.x,TLB.y);
-            ctx.closePath(); ctx.fill();
-            ctx.strokeStyle=color; ctx.lineWidth=0.8; ctx.stroke();
-
-            ctx.fillStyle = rightC;
-            ctx.beginPath();
-            ctx.moveTo(TRF.x,TRF.y); ctx.lineTo(TRB.x,TRB.y); ctx.lineTo(BRB.x,BRB.y); ctx.lineTo(BRF.x,BRF.y);
-            ctx.closePath(); ctx.fill();
-            ctx.strokeStyle=color; ctx.lineWidth=0.8; ctx.stroke();
-        }
-        ctx.fillStyle = frontC;
-        ctx.beginPath();
-        ctx.moveTo(TLF.x,TLF.y); ctx.lineTo(TRF.x,TRF.y); ctx.lineTo(BRF.x,BRF.y); ctx.lineTo(BLF.x,BLF.y);
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle=color; ctx.lineWidth=0.8; ctx.stroke();
-    }
-
-    // Nome pezzo
-    const facH = Math.abs(BLF.y - TLF.y);
-    if (facH > 14) {
-        const cx2 = (TLF.x+TRF.x)/2;
-        const cy2 = (TLF.y+BLF.y)/2 + 4;
-        ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)';
-        ctx.font = `${Math.max(7,Math.min(11,facH*0.13))}px 'Courier New'`;
-        ctx.textAlign = 'center';
-        ctx.fillText((part.nome||'').substring(0,16), cx2, cy2);
-    }
-
-    // Hitbox
-    const allPts = [TLF,TRF,BRF,BLF,TLB,TRB,BRB];
-    hitBoxes.push({
-        minX: Math.min(...allPts.map(p=>p.x)),
-        maxX: Math.max(...allPts.map(p=>p.x)),
-        minY: Math.min(...allPts.map(p=>p.y)),
-        maxY: Math.max(...allPts.map(p=>p.y)),
-        part, col
-    });
-}
-
-// ═══════════════════════════════════════════════
-// MISURE GAP (solo vista Frontale)
-// ═══════════════════════════════════════════════
-function drawGapLabels(col) {
-    const x = col.start_slot * PASSO_MM + PASSO_MM/2;
-    let curY = -(HOOK_LEN + 10);
-    const pezzi = col.pezzi;
-
-    pezzi.forEach((part, pi) => {
-        const altH = part.alt_mm;
-        const yTop = curY - altH;
-        const yBot = curY;
-
-        // Gap SOPRA il pezzo (tra fondo del precedente e top di questo)
-        if (pi > 0) {
-            const prevYBot = curY + GAP_MM;  // bottom del gap = top del pezzo corrente + gap
-            drawDimension(x, yTop, x, yBot + GAP_MM, GAP_MM, dimColor());
-        }
-
-        // Dimensione altezza pezzo
-        const pTop = px(x + Math.max(part.largh_mm,30)/2 + 30, yTop, 0);
-        const pBot = px(x + Math.max(part.largh_mm,30)/2 + 30, yBot, 0);
-        if (Math.abs(pBot.y - pTop.y) > 20) {
-            drawArrow(pTop, pBot, dimColor(), `${altH.toFixed(0)} mm`);
-        }
-
-        // Dimensione larghezza pezzo
-        const pL = px(x - Math.max(part.largh_mm,30)/2, yTop - 20, 0);
-        const pR = px(x + Math.max(part.largh_mm,30)/2, yTop - 20, 0);
-        if (Math.abs(pR.x - pL.x) > 30) {
-            drawArrow(pL, pR, dimColor(), `${part.largh_mm.toFixed(0)} mm`);
-        }
-
-        curY -= altH + GAP_MM;
-    });
-}
-
-function drawDimension(x1, y1, x2, y2, val, color) {
-    // Piccola freccia di gap tra due punti in vista frontale
-    const ox = 18;  // offset laterale
-    const A = px(x1 - ox, y1, 0);
-    const B = px(x2 - ox, y2, 0);
-    if (Math.abs(B.y - A.y) < 8) return;
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Etichetta
-    const mid = { x:(A.x+B.x)/2 - 28, y:(A.y+B.y)/2 };
-    ctx.fillStyle = color;
-    ctx.font = `bold ${Math.max(8,9*scale)}px 'Courier New'`;
-    ctx.textAlign = 'right';
-    ctx.fillText(`${val.toFixed(0)} mm`, mid.x, mid.y + 4);
-}
-
-function drawArrow(A, B, color, label) {
-    const dx = B.x-A.x, dy = B.y-A.y;
-    const len = Math.sqrt(dx*dx+dy*dy);
-    if (len < 10) return;
-    const ux = dx/len, uy = dy/len;
-    const hs = 6;  // arrowhead size
-
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 1;
-
-    // Linea
-    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-
-    // Frecce ai due estremi
-    [[A,1],[B,-1]].forEach(([pt, dir]) => {
-        ctx.beginPath();
-        ctx.moveTo(pt.x, pt.y);
-        ctx.lineTo(pt.x - dir*ux*hs + uy*hs/2, pt.y - dir*uy*hs - ux*hs/2);
-        ctx.lineTo(pt.x - dir*ux*hs - uy*hs/2, pt.y - dir*uy*hs + ux*hs/2);
-        ctx.closePath(); ctx.fill();
-    });
-
-    // Label centrale
-    const mx = (A.x+B.x)/2, my = (A.y+B.y)/2;
-    const perpX = -uy, perpY = ux;
-    ctx.font = `${Math.max(8,9*scale)}px 'Courier New'`;
-    ctx.textAlign = 'center';
-    ctx.fillText(label, mx + perpX*16, my + perpY*16 + 4);
-}
+  }
+  document.getElementById('tooltip').style.display='none';
+});
 
 // ═══════════════════════════════════════════════
 // UPLOAD & API
 // ═══════════════════════════════════════════════
-function showUpload() {
-    document.getElementById('upload-overlay').style.display = 'flex';
-    document.getElementById('toolbar').style.display = 'none';
-    document.getElementById('ruler').style.display = 'none';
-    NDATA = null;
-    manualLayout = [];
+function showUpload(){
+  document.getElementById('upload-overlay').style.display='flex';
+  document.getElementById('toolbar').style.display='none';
+  document.getElementById('ruler').style.display='none';
+  NDATA=null; manualExtra=[];
 }
-
-function handleDrop(e) {
-    e.preventDefault();
-    document.getElementById('dropzone').classList.remove('drag-over');
-    const f = e.dataTransfer.files[0];
-    if (f) handleFileSelect(f);
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag-over');
+  const f=e.dataTransfer.files[0]; if(f) handleFileSelect(f);
 }
-
-function handleFileSelect(f) {
-    if (!f) return;
-    document.getElementById('upload-overlay').style.display = 'none';
-    document.getElementById('loading').style.display = 'flex';
-    const fd = new FormData();
-    fd.append('file', f);
-    fd.append('gap_mm', document.getElementById('gap-input')?.value || 50);
-    fetch('/api/nesting/analizza', { method:'POST', body:fd })
-        .then(r => r.json())
-        .then(d => {
-            document.getElementById('loading').style.display = 'none';
-            if (d.error) { alert('Errore: '+d.error); showUpload(); return; }
-            NDATA = d;
-            Z_MAX_MM = d.z_max_mm || 2000;
-            document.getElementById('toolbar').style.display = 'flex';
-            document.getElementById('ruler').style.display = 'block';
-            updateKPI();
-            buildColumnList();
-            if (manualMode) buildLibPanel();
-            resetView();
-        })
-        .catch(e => {
-            document.getElementById('loading').style.display = 'none';
-            alert('Errore connessione: '+e);
-            showUpload();
-        });
-}
-
-function updateKPI() {
-    if (!NDATA) return;
-    const pesoEl = document.getElementById('kpi-peso');
-    const peso = NDATA.peso_totale || 0;
-    pesoEl.textContent = peso.toFixed(1)+' kg';
-    pesoEl.className = 'kv' + (peso > 500 ? ' danger' : peso > 300 ? ' warn' : '');
-    document.getElementById('kpi-ganci').textContent = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots) || '—';
-    const m = (((NDATA.columns ? NDATA.columns.length : NDATA.total_slots)||0) * (NDATA.passo_mm||400) / 1000).toFixed(1);
-    document.getElementById('kpi-catena').textContent = m+' m';
-    const maxKg = Math.max(...(NDATA.columns||[]).map(c=>c.peso||0));
-    document.getElementById('kpi-maxkg').textContent = maxKg.toFixed(1)+' kg';
-
-    // Saturazione catena
-    const Z_MAX = NDATA.z_max_mm || Z_MAX_MM;
-    let totUsed = 0, totAvail = 0;
-    (NDATA.columns||[]).forEach(col => {
-        const used = (col.pezzi||[]).reduce((s,p) => s + p.alt_mm + GAP_MM, 0);
-        totUsed += used; totAvail += Z_MAX;
-    });
-    const sat = totAvail > 0 ? Math.min(100, totUsed/totAvail*100) : 0;
-    document.getElementById('kpi-sat').textContent = sat.toFixed(1)+'%';
-    document.getElementById('sat-bar').style.width = sat+'%';
-    document.getElementById('sat-bar').style.background =
-        sat > 85 ? '#f44336' : sat > 65 ? '#ff9800' : '#00e676';
-}
-
-function buildColumnList() {
-    const list = document.getElementById('clist');
-    list.innerHTML = '';
-    (NDATA.columns||[]).forEach(col => {
-        const used = (col.pezzi||[]).reduce((s,p) => s+p.alt_mm+GAP_MM, 0);
-        const sat  = Math.min(100, used / (NDATA.z_max_mm||Z_MAX_MM) * 100);
-        const div  = document.createElement('div');
-        div.className = 'ci';
-        div.innerHTML = `
-            <div class="cdot" style="background:${col.color}"></div>
-            <div class="cn">G${col.start_slot+1} · ${col.pezzi.length} pz</div>
-            <div class="ck">${col.peso.toFixed(1)} kg</div>`;
-        div.innerHTML += `<div style="width:100%;margin-top:2px;">
-            <div class="sat-wrap"><div class="sat-bar" style="width:${sat}%;background:${col.color}"></div></div></div>`;
-        div.onclick = () => scrollToColumn(col);
-        list.appendChild(div);
+function handleFileSelect(f){
+  if(!f) return;
+  document.getElementById('upload-overlay').style.display='none';
+  document.getElementById('loading').style.display='flex';
+  const fd=new FormData();
+  fd.append('file',f);
+  fetch('/api/nesting/analizza',{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(d=>{
+      document.getElementById('loading').style.display='none';
+      if(d.error){alert('Errore: '+d.error);showUpload();return;}
+      NDATA=d;
+      Z_MAX_MM=d.z_max_mm||2000;
+      PASSO_MM=d.passo_mm||400;
+      GAP_V=d.gap_v_mm||60;
+      document.getElementById('toolbar').style.display='flex';
+      document.getElementById('ruler').style.display='block';
+      updateKPI(); buildColumnList();
+      if(manualMode) buildLibPanel();
+      resetView();
+    })
+    .catch(err=>{
+      document.getElementById('loading').style.display='none';
+      alert('Errore: '+err); showUpload();
     });
 }
 
-function scrollToColumn(col) {
-    const x = col.start_slot * PASSO_MM + PASSO_MM/2;
-    const p = projFn(x, Z_MAX_MM/2, 0);
-    offX = canvas.width/2  - p.sx * scale;
-    offY = canvas.height/2 - p.sy * scale;
-    draw();
+function updateKPI(){
+  if(!NDATA) return;
+  const peso=NDATA.peso_totale||0;
+  const pesoEl=document.getElementById('kpi-peso');
+  pesoEl.textContent=peso.toFixed(1)+' kg';
+  pesoEl.className='kv'+(peso>500?' danger':peso>300?' warn':'');
+  document.getElementById('kpi-ganci').textContent=NDATA.total_slots||'—';
+  const m=((NDATA.total_slots||0)*(NDATA.passo_mm||400)/1000).toFixed(1);
+  document.getElementById('kpi-catena').textContent=m+' m';
+  const maxKg=Math.max(...(NDATA.columns||[]).map(c=>c.peso||0));
+  document.getElementById('kpi-maxkg').textContent=maxKg.toFixed(1)+' kg';
+  const totH=(NDATA.columns||[]).reduce((s,c)=>s+(c.h_usata_mm||0),0);
+  const totA=(NDATA.columns||[]).length*Z_MAX_MM;
+  const sat=totA>0?Math.min(100,totH/totA*100):0;
+  document.getElementById('kpi-sat').textContent=sat.toFixed(1)+'%';
+  const sb=document.getElementById('sat-bar');
+  sb.style.width=sat+'%';
+  sb.style.background=sat>85?'#f44336':sat>65?'#ff9800':'#00e676';
+}
+
+function buildColumnList(){
+  const list=document.getElementById('clist');
+  list.innerHTML='';
+  (NDATA.columns||[]).forEach(col=>{
+    const sat=col.sat_pct||0;
+    const div=document.createElement('div');
+    div.className='ci';
+    div.innerHTML=`<div class="cdot" style="background:${col.color}"></div>
+      <div style="flex:1;font-size:9px">G${col.start_slot+1}·${col.pezzi.length}pz</div>
+      <div style="font-size:9px;color:#80cbc4">${col.peso.toFixed(1)}kg</div>`;
+    // Sat bar
+    div.innerHTML+=`<div style="width:100%;margin-top:2px">
+      <div class="sat-w"><div class="sat-b" style="width:${sat}%;background:${col.color}"></div></div></div>`;
+    div.onclick=()=>{
+      const x=col.start_slot*PASSO_MM+PASSO_MM/2;
+      const p=projFn(x,Z_MAX_MM/2,0);
+      offX=canvas.width/2-p.sx*scale; offY=canvas.height/2-p.sy*scale; draw();
+    };
+    list.appendChild(div);
+  });
 }
 
 // ═══════════════════════════════════════════════
-// PAN / ZOOM
+// PAN / ZOOM / HOVER
 // ═══════════════════════════════════════════════
-canvas.addEventListener('mousedown', e => {
-    dragging=true; dragX=e.clientX; dragY=e.clientY;
-    canvas.style.cursor='grabbing';
+canvas.addEventListener('mousedown',e=>{
+  dragging=true;dragX=e.clientX;dragY=e.clientY;
+  if(!dragPart) canvas.style.cursor='grabbing';
 });
-canvas.addEventListener('mousemove', e => {
-    if (dragging) {
-        offX += e.clientX - dragX;
-        offY += e.clientY - dragY;
-        dragX=e.clientX; dragY=e.clientY;
-        draw();
+canvas.addEventListener('mousemove',e=>{
+  if(dragging&&!dragPart){
+    offX+=e.clientX-dragX; offY+=e.clientY-dragY;
+    dragX=e.clientX; dragY=e.clientY; draw();
+  }
+  handleHover(e);
+});
+canvas.addEventListener('mouseup',()=>{dragging=false;canvas.style.cursor=dragPart?'copy':'grab';});
+canvas.addEventListener('mouseleave',()=>{dragging=false;});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY<0?1.12:0.89;
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  offX=mx-(mx-offX)*f; offY=my-(my-offY)*f; scale*=f; draw();
+},{passive:false});
+function zoom(f){
+  offX=canvas.width/2-(canvas.width/2-offX)*f;
+  offY=canvas.height/2-(canvas.height/2-offY)*f;
+  scale*=f; draw();
+}
+
+// Tooltip hover
+const tip=document.getElementById('tooltip');
+function handleHover(e){
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  for(const hb of [...hitBoxes].reverse()){
+    if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY){
+      canvas.style.cursor=hb.isManual?'pointer':'default';
+      showTip(e,hb.part,hb.col,hb.isManual);
+      return;
     }
-    handleHover(e);
-});
-canvas.addEventListener('mouseup',   () => { dragging=false; canvas.style.cursor='grab'; });
-canvas.addEventListener('mouseleave',() => { dragging=false; });
-canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-    const f = e.deltaY < 0 ? 1.12 : 0.89;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    offX = mx - (mx-offX)*f;
-    offY = my - (my-offY)*f;
-    scale *= f;
-    draw();
-}, { passive:false });
-
-function zoom(f) {
-    offX = canvas.width/2  - (canvas.width/2  - offX)*f;
-    offY = canvas.height/2 - (canvas.height/2 - offY)*f;
-    scale *= f;
-    draw();
+  }
+  if(!dragging) canvas.style.cursor=dragPart?'copy':'grab';
+  tip.style.display='none';
 }
-
-// ═══════════════════════════════════════════════
-// TOOLTIP
-// ═══════════════════════════════════════════════
-const tip = document.getElementById('tooltip');
-
-function handleHover(e) {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    for (const hb of hitBoxes) {
-        if (mx>=hb.minX && mx<=hb.maxX && my>=hb.minY && my<=hb.maxY) {
-            canvas.style.cursor='pointer';
-            showTip(e, hb.part, hb.col);
-            return;
-        }
-    }
-    if (!dragging) canvas.style.cursor='grab';
-    tip.style.display='none';
-}
-
-canvas.addEventListener('click', e => {
-    if (Math.abs(e.clientX-dragX)>5 || Math.abs(e.clientY-dragY)>5) return;
-    tip.style.display='none';
-});
-
-function showTip(e, part, col) {
-    const used = (col.pezzi||[]).reduce((s,p)=>s+p.alt_mm+GAP_MM,0);
-    const sat  = Math.min(100, used/(NDATA.z_max_mm||Z_MAX_MM)*100);
-    document.getElementById('tip-name').textContent = part.nome;
-    document.getElementById('tip-col').textContent  = 'Gancio G'+(col.start_slot+1);
-    document.getElementById('tip-col').style.color  = col.color;
-    document.getElementById('tip-img').innerHTML = part.svg_uri
-        ? `<img src="${part.svg_uri}" style="max-width:140px;max-height:100px;border-radius:4px;">` : '';
-    document.getElementById('tip-h').textContent   = part.alt_mm.toFixed(0)+' mm';
-    document.getElementById('tip-w').textContent   = part.largh_mm.toFixed(0)+' mm';
-    document.getElementById('tip-p').textContent   = part.peso_kg.toFixed(2)+' kg';
-    document.getElementById('tip-sat').textContent = sat.toFixed(1)+'%';
-    tip.style.left = (e.clientX+14)+'px';
-    tip.style.top  = (e.clientY-20)+'px';
-    tip.style.display='block';
+function showTip(e,part,col,isManual){
+  document.getElementById('tip-name').textContent=part.nome;
+  document.getElementById('tip-col').textContent='Gancio G'+(col.start_slot+1);
+  document.getElementById('tip-col').style.color=col.color;
+  document.getElementById('tip-h').textContent=part.alt_mm.toFixed(0)+' mm';
+  document.getElementById('tip-w').textContent=part.largh_mm.toFixed(0)+' mm';
+  document.getElementById('tip-p').textContent=part.peso_kg.toFixed(2)+' kg';
+  document.getElementById('tip-sat').textContent=(col.sat_pct||0).toFixed(1)+'%';
+  document.getElementById('tip-hint').style.display=isManual?'block':'none';
+  tip.style.left=(e.clientX+12)+'px';
+  tip.style.top=(e.clientY-18)+'px';
+  tip.style.display='block';
 }
 
 // ═══════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════
-function hexToRgb(hex) {
-    const h = hex.replace('#','');
-    return {
-        r: parseInt(h.substring(0,2),16),
-        g: parseInt(h.substring(2,4),16),
-        b: parseInt(h.substring(4,6),16)
-    };
+function hexRgb(hex){
+  const h=hex.replace('#','');
+  return{r:parseInt(h.substring(0,2),16),g:parseInt(h.substring(2,4),16),b:parseInt(h.substring(4,6),16)};
 }
-
-function setActive(btn) {
-    document.querySelectorAll('#toolbar .tbtn').forEach(b => {
-        if (b !== document.getElementById('btn-theme') &&
-            b !== document.getElementById('btn-manual')) b.classList.remove('active');
-    });
-    btn.classList.add('active');
+function setAct(btn){
+  document.querySelectorAll('#toolbar .tb').forEach(b=>{
+    if(!['btn-theme','btn-manual'].includes(b.id)) b.classList.remove('act');
+  });
+  btn.classList.add('act');
 }
-
 resize();
 </script>
 {% endblock %}
