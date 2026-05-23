@@ -218,7 +218,7 @@ body { background:#080c0e; color:#b0bec5; font-family:'Courier New',monospace; }
 const PASSO_MM  = 400;
 const HOOK_LEN  = 120;
 const GAP_MM    = 30;
-const Z_MAX_MM  = 2200;
+let Z_MAX_MM  = 2000;  // aggiornato da risposta API
 
 const canvas    = document.getElementById('c');
 const ctx       = canvas.getContext('2d');
@@ -272,7 +272,7 @@ function setView(v) {
 
 function resetView() {
     if (!NDATA) return;
-    const totalX = NDATA.total_slots * PASSO_MM;
+    const totalX = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots || 1) * PASSO_MM;
     const p = projFn(totalX/2, Z_MAX_MM/2, 0);
     scale = viewMode==='iso' ? 0.28 : 0.38;
     offX  = canvas.width/2  - p.sx * scale;
@@ -423,7 +423,7 @@ function draw() {
     // ── Griglia a terra ──
     ctx.strokeStyle = gridColor();
     ctx.lineWidth = 0.5;
-    const totalX = NDATA.total_slots * PASSO_MM;
+    const totalX = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots || 1) * PASSO_MM;
     for (let gx = 0; gx <= totalX + PASSO_MM; gx += PASSO_MM) {
         const a = px(gx, -Z_MAX_MM-100, -200);
         const b = px(gx, -Z_MAX_MM-100,  200);
@@ -480,7 +480,7 @@ function draw() {
 // CATENA
 // ═══════════════════════════════════════════════
 function drawChain() {
-    const totalX = NDATA.total_slots * PASSO_MM;
+    const totalX = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots || 1) * PASSO_MM;
     const fullX  = totalX + PASSO_MM * 3;
     drawBeam(0, 0, fullX, 0, 0, 40, chainColor(), darkMode?'#263545':'#b0bec5', darkMode?'#4a6070':'#90a4ae');
 
@@ -796,6 +796,7 @@ function handleFileSelect(f) {
             document.getElementById('loading').style.display = 'none';
             if (d.error) { alert('Errore: '+d.error); showUpload(); return; }
             NDATA = d;
+            Z_MAX_MM = d.z_max_mm || 2000;
             document.getElementById('toolbar').style.display = 'flex';
             document.getElementById('ruler').style.display = 'block';
             updateKPI();
@@ -813,11 +814,11 @@ function handleFileSelect(f) {
 function updateKPI() {
     if (!NDATA) return;
     const pesoEl = document.getElementById('kpi-peso');
-    const peso = NDATA.peso_totale_kg || 0;
+    const peso = NDATA.peso_totale || 0;
     pesoEl.textContent = peso.toFixed(1)+' kg';
     pesoEl.className = 'kv' + (peso > 500 ? ' danger' : peso > 300 ? ' warn' : '');
-    document.getElementById('kpi-ganci').textContent = NDATA.total_slots || '—';
-    const m = ((NDATA.total_slots||0) * (NDATA.passo_mm||400) / 1000).toFixed(1);
+    document.getElementById('kpi-ganci').textContent = (NDATA.columns ? NDATA.columns.length : NDATA.total_slots) || '—';
+    const m = (((NDATA.columns ? NDATA.columns.length : NDATA.total_slots)||0) * (NDATA.passo_mm||400) / 1000).toFixed(1);
     document.getElementById('kpi-catena').textContent = m+' m';
     const maxKg = Math.max(...(NDATA.columns||[]).map(c=>c.peso||0));
     document.getElementById('kpi-maxkg').textContent = maxKg.toFixed(1)+' kg';
