@@ -2573,6 +2573,25 @@ def _analizza_step_per_nesting(filepath):
             # Genera SVG profilo (proiezione frontale)
             svg_uri = _genera_svg_profilo_trimesh(mesh, largh_mm, alt_mm)
 
+            # Estrai silhouette 2D per nesting viewer
+            try:
+                from shapely.geometry import MultiPoint as _MP
+                _verts = mesh.vertices * (1000.0 if max_dim < 10 else 1.0)
+                _bb = [L, H, D]
+                _thin = _bb.index(min(_bb))
+                _keep = [i for i in range(3) if i != _thin]
+                _pts2d = _verts[:, _keep]
+                _hull = _MP(_pts2d).convex_hull
+                if hasattr(_hull, 'exterior'):
+                    _coords = list(_hull.exterior.coords)
+                    _cx = sum(p[0] for p in _coords) / len(_coords)
+                    _cy = sum(p[1] for p in _coords) / len(_coords)
+                    _poly_pts = [[round(p[0]-_cx,1), round(p[1]-_cy,1)] for p in _coords]
+                else:
+                    _poly_pts = []
+            except Exception:
+                _poly_pts = []
+
             parts.append({
                 'nome': name,
                 'largh_mm': round(largh_mm, 1),
@@ -2581,6 +2600,7 @@ def _analizza_step_per_nesting(filepath):
                 'peso_kg': peso_kg,
                 'orientamento': 'standard',
                 'svg_uri': svg_uri,
+                'poly_pts': _poly_pts,
             })
         except Exception as ex:
             # Pezzo non leggibile → skip
