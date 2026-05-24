@@ -1211,14 +1211,22 @@ function renderCoda(){
   list.innerHTML='';
   CODA.forEach((item,idx)=>{
     const div=document.createElement('div');div.className='coda-item';
-    const statoColor=item.stato==='pronto'?'#00e676':item.stato==='errore'?'#f44336':'#ff9800';
+    const statoColor=item.stato.startsWith('✅')?'#00e676':item.stato.includes('errore')?'#f44336':'#ff9800';
+    const canApply = item.stato==='pronto' || item.stato.startsWith('✅');
+    const btnLabel = item.stato.startsWith('✅') ? '🔄 Ri-applica' : '▶ Applica';
     div.innerHTML=`
       <div class="coda-nm">${item.nome}</div>
-      <div class="coda-src">${item.sorgente} · ${item.qty}× · 
-        <span style="color:${statoColor}">${item.stato}</span></div>
+      <div class="coda-src" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span>${item.sorgente}</span>
+        <label style="font-size:9px;color:#4a6070;white-space:nowrap">Copie:</label>
+        <input type="number" class="qty-inp coda-qty-inp" value="${item.qty}" min="1" max="9999"
+               style="width:48px;font-size:11px;font-weight:700;padding:1px 3px"
+               onchange="CODA[${idx}].qty=Math.max(1,parseInt(this.value)||1);this.value=CODA[${idx}].qty"
+               onclick="event.stopPropagation()">
+        <span style="color:${statoColor}">${item.stato}</span>
+      </div>
       <div class="coda-btns">
-        ${item.stato==='pronto'?
-          '<button class="cb cb-apply" onclick="applyCodaItem('+idx+')">▶ Applica</button>':''}
+        ${canApply?'<button class="cb cb-apply" onclick="applyCodaItem('+idx+')">'+btnLabel+'</button>':''}
         <button class="cb cb-del" onclick="removeCodaItem('+idx+')">✕</button>
       </div>`;
     list.appendChild(div);
@@ -1322,7 +1330,16 @@ function addCodaFromFile(f){
 
 function applyCodaItem(idx){
   const item=CODA[idx];
-  if(!item||item.stato!=='pronto') return;
+  if(!item) return;
+  // Aggiorna qty dall'input nel DOM (se l'utente l'ha cambiato manualmente)
+  const qtyInputs = document.querySelectorAll('.coda-qty-inp');
+  if(qtyInputs[idx]) item.qty = Math.max(1, parseInt(qtyInputs[idx].value)||1);
+  if(item.stato.startsWith('✅')){
+    // Ri-applica: prima rimuovi i pezzi precedenti di questo item
+    manualParts = manualParts.filter(m=>m._fromCoda!==item.id);
+    item.stato = 'pronto'; // reset temporaneo per procedere
+  }
+  if(item.stato!=='pronto') return;
   if(!NDATA){ showToastErr('Carica prima un assembly principale!'); return; }
   let piazzati=0;
   const GAP_LAT = NDATA.gap_lat_mm||60;
