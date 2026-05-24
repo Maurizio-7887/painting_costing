@@ -1325,3 +1325,92 @@ if __name__ == "__main__":
     print("\nAvvisi:")
     for av in result.avvisi:
         print(f"  {av}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# MULTI-BARRA WRAPPER
+# ═══════════════════════════════════════════════════════════════
+
+def ottimizza_multi_barra(
+    parti: List[PartSuspension],
+    cfg: LoadBarConfig,
+    strategia: str = 'ffd_peso',
+    apply_physics: bool = True,
+    max_barre: int = 300,
+) -> 'NestingResult':
+    """
+    Multi-bar wrapper: chiama ottimizza_nesting_overhead iterativamente
+    finché tutti i pezzi sono allocati o fino a max_barre barre da 3m.
+
+    Ogni barra occupa 1 slot catena (3m). I ganci vengono concatenati
+    in sequenza con idx globale crescente, pronti per la visualizzazione
+    a blocchi nel nesting viewer.
+
+    Ritorna un NestingResult con:
+      - ganci = tutti i ganci di tutte le barre in sequenza
+      - parti_allocate = tutti i pezzi allocati
+      - parti_non_allocate = solo pezzi che non entrano in nessuna barra
+    """
+    all_ganci: List[GancioState] = []
+    all_allocate: List[PartSuspension] = []
+    avvisi_globali: List[str] = []
+    last_cfg = cfg
+
+    remaining = parti
+
+    for bar_idx in range(max_barre):
+        if not remaining:
+            break
+
+        result = ottimizza_nesting_overhead(
+            remaining, cfg, strategia=strategia, apply_physics=apply_physics
+        )
+        last_cfg = result.bar_config
+
+        # Offset idx globale nella catena
+        offset = bar_idx * cfg.n_ganci
+        for g in result.ganci:
+            g.idx = offset + (g.idx % cfg.n_ganci)
+
+        all_ganci.extend(result.ganci)
+        all_allocate.extend(result.parti_allocate)
+
+        for av in result.avvisi:
+            if av not in avvisi_globali:
+                avvisi_globali.append(av)
+
+        # Se niente è stato allocato → loop infinito: esci
+        if not result.parti_allocate:
+            remaining = result.parti_non_allocate
+            break
+
+        remaining = result.parti_non_allocate
+        if not remaining:
+            break
+
+    # KPI aggregati
+    n_ganci_tot = len(all_ganci) or 1
+    ganci_usati = sum(1 for g in all_ganci if not g.libero)
+    peso_tot    = sum(g.peso_tot_kg for g in all_ganci)
+    sat_pct     = ganci_usati / n_ganci_tot * 100.0
+    x_centro    = cfg.L_max_mm / 2.0
+    momento_max = max(
+        (g.momento_flettente_Nm(x_centro) for g in all_ganci), default=0.0
+    )
+
+    if remaining:
+        avvisi_globali.append(
+            f"⚠️ {len(remaining)} parti non allocate nemmeno dopo {max_barre} barre"
+        )
+
+    return NestingResult(
+        bar_config       = last_cfg,
+        ganci            = all_ganci,
+        parti_allocate   = all_allocate,
+        parti_non_allocate = remaining or [],
+        peso_totale_kg   = round(peso_tot, 2),
+        saturazione_pct  = round(sat_pct, 1),
+        ganci_usati      = ganci_usati,
+        momento_max_Nm   = round(momento_max, 2),
+        avvisi           = avvisi_globali,
+    )

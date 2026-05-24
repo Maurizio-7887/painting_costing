@@ -3043,7 +3043,8 @@ def cad_ordine_nesting(ordine_id):
         try:
             from overhead_nesting import (
                 LoadBarConfig, esplodi_ordine_produzione,
-                ottimizza_nesting_overhead, analizza_load_balance
+                ottimizza_nesting_overhead, ottimizza_multi_barra,
+                analizza_load_balance
             )
             bar_cfg = LoadBarConfig(
                 L_max_mm           = float(request.form.get('L_max_mm', 3000)),
@@ -3052,6 +3053,10 @@ def cad_ordine_nesting(ordine_id):
                 peso_max_bar_kg    = float(request.form.get('peso_max_kg', 420)),
                 peso_max_gancio_kg = float(request.form.get('peso_max_gancio', 60)),
             )
+            # Aggiorna n_unita dal form (permette di cambiare copie senza uscire)
+            n_unita_form = int(request.form.get('n_unita', ordine.n_unita) or ordine.n_unita)
+            if n_unita_form != ordine.n_unita:
+                ordine.n_unita = n_unita_form
             records = BOMRecordCAD.query.filter_by(assembly_id=asm.id).all()
             item_map = {
                 i.codice_art: i
@@ -3077,8 +3082,9 @@ def cad_ordine_nesting(ordine_id):
                 })
             parti = esplodi_ordine_produzione(bom_per_nesting, ordine.n_unita)
             strategia = request.form.get('strategia', 'ffd_peso')
-            result = ottimizza_nesting_overhead(parti, bar_cfg, strategia=strategia)
-            lb = analizza_load_balance(result.ganci, bar_cfg)
+            # MULTI-BARRA: loop su più barre finché tutti i pezzi sono allocati
+            result = ottimizza_multi_barra(parti, bar_cfg, strategia=strategia)
+            lb = analizza_load_balance(result.ganci[:bar_cfg.n_ganci], bar_cfg)
             nesting_data = result.to_dict()
             nesting_data['load_balance'] = lb
             nesting_data['strategia'] = strategia
@@ -3914,3 +3920,155 @@ def api_carico_salva():
         'costo_oggi': round(costo_oggi, 2),
     })
 
+
+
+# ══════════════════════════════════════════════════════════════════
+# ROUTE: PANNELLO CONFIGURAZIONE INTERMEDIO (post-upload, pre-nesting)
+# ══════════════════════════════════════════════════════════════════
+
+@app.route('/cad/bom/<int:asm_id>/configura')
+def cad_configura(asm_id):
+    """
+    Pannello di configurazione intermedio tra upload STP e lancio nesting.
+    Mostra: info assembly, input copie, coda macchine aggiuntive, config barra.
+    """
+    asm = BOMAssembly.query.get_or_404(asm_id)
+    altri = BOMAssembly.query.filter(BOMAssembly.id != asm_id).order_by(BOMAssembly.id.desc()).all()
+    ordini_esistenti = OrdineCAD.query.filter_by(assembly_id=asm_id).order_by(OrdineCAD.id.desc()).limit(5).all()
+    cfg = get_config()
+    return render_template(
+        'cad_config.html',
+        asm=asm,
+        altri=altri,
+        ordini_esistenti=ordini_esistenti,
+        cfg=cfg,
+    )
+
+
+@app.route('/cad/configura/lancia', methods=['POST'])
+def cad_lancia_nesting():
+    """
+    Riceve la form di configurazione intermedia, crea OrdineCAD,
+    fonde BOM di assembly extra, esegue nesting overhead multi-barra,
+    salva e redirige alla pagina risultati.
+    """
+    asm_id  = int(request.form.get('assembly_id', 0))
+    n_unita = int(request.form.get('n_unita', 1))
+
+    asm = BOMAssembly.query.get_or_404(asm_id)
+
+    ordine = OrdineCAD(
+        assembly_id = asm_id,
+        n_unita     = n_unita,
+        stato       = 'aperto',
+        note        = request.form.get('note', ''),
+    )
+    db.session.add(ordine)
+    db.session.flush()
+
+    try:
+        from overhead_nesting import (
+            LoadBarConfig, esplodi_ordine_produzione,
+            ottimizza_multi_barra, analizza_load_balance
+        )
+
+        cfg_imp = get_config()
+        bar_cfg = LoadBarConfig(
+            L_max_mm           = float(request.form.get('L_max_mm', 3000)),
+            Z_max_mm           = float(request.form.get('Z_max_mm', 2000)),
+            passo_gancio_mm    = float(cfg_imp.passo_gancio_mm or 400),
+            peso_max_bar_kg    = float(request.form.get('peso_max_kg', 420)),
+            peso_max_gancio_kg = float(request.form.get('peso_max_gancio', 60)),
+        )
+
+        records = BOMRecordCAD.query.filter_by(assembly_id=asm_id).all()
+        item_map = {
+            i.codice_art: i
+            for i in ItemMasterCAD.query.filter(
+                ItemMasterCAD.codice_art.in_([r.codice_art for r in records])
+            ).all()
+        }
+
+        def records_to_bom(recs, imap):
+            bom = []
+            for rec in recs:
+                item = imap.get(rec.codice_art)
+                if not item:
+                    continue
+                bom.append({
+                    'codice_art':     rec.codice_art,
+                    'nome':           rec.nome_part,
+                    'lunghezza_mm':   item.lunghezza_mm,
+                    'larghezza_mm':   item.larghezza_mm,
+                    'altezza_mm':     item.altezza_mm,
+                    'peso_kg':        item.peso_kg,
+                    'superficie_m2':  item.superficie_m2,
+                    'passo_gancio_m': item.passo_gancio_m,
+                    'qty':            rec.qty,
+                })
+            return bom
+
+        bom_totale = records_to_bom(records, item_map)
+        parti = esplodi_ordine_produzione(bom_totale, n_unita)
+
+        # Assembly extra dalla coda macchine
+        extra_json = request.form.get('extra_assemblies', '[]')
+        try:
+            extra_list = json.loads(extra_json)
+        except Exception:
+            extra_list = []
+
+        extra_info = []
+        for extra in extra_list:
+            extra_asm_id  = int(extra.get('id', 0))
+            extra_n_unita = int(extra.get('n_unita', 1))
+            if extra_asm_id == asm_id or extra_asm_id == 0:
+                continue
+            extra_recs = BOMRecordCAD.query.filter_by(assembly_id=extra_asm_id).all()
+            extra_imap = {
+                i.codice_art: i
+                for i in ItemMasterCAD.query.filter(
+                    ItemMasterCAD.codice_art.in_([r.codice_art for r in extra_recs])
+                ).all()
+            }
+            extra_bom   = records_to_bom(extra_recs, extra_imap)
+            parti_extra = esplodi_ordine_produzione(extra_bom, extra_n_unita)
+            parti.extend(parti_extra)
+            extra_asm_obj = BOMAssembly.query.get(extra_asm_id)
+            if extra_asm_obj:
+                extra_info.append({'nome': extra_asm_obj.nome, 'n_unita': extra_n_unita})
+
+        strategia = request.form.get('strategia', 'ffd_peso')
+        result    = ottimizza_multi_barra(parti, bar_cfg, strategia=strategia)
+        lb        = analizza_load_balance(result.ganci[:bar_cfg.n_ganci], bar_cfg)
+
+        nesting_data = result.to_dict()
+        nesting_data['load_balance'] = lb
+        nesting_data['strategia']    = strategia
+        nesting_data['n_unita']      = n_unita
+        if extra_info:
+            nesting_data['extra_assemblies'] = extra_info
+
+        ordine.nesting_json = json.dumps(nesting_data)
+        ordine.stato        = 'in_nesting'
+        db.session.commit()
+
+        flash(
+            f"✅ Nesting calcolato: "
+            f"{nesting_data['kpi']['allocate']} pezzi allocati · "
+            f"Saturazione {nesting_data['kpi']['saturazione_pct']:.0f}% · "
+            f"Peso {nesting_data['kpi']['peso_totale_kg']:.1f} kg"
+            + (f" · {len(extra_info)} assembly extra" if extra_info else ""),
+            'success'
+        )
+        if nesting_data.get('avvisi'):
+            for av in nesting_data['avvisi'][:2]:
+                flash(av, 'warning')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore nesting: {e}", 'danger')
+        import traceback; traceback.print_exc()
+        return redirect(url_for('cad_configura', asm_id=asm_id))
+
+    return redirect(url_for('cad_ordine_nesting', ordine_id=ordine.id))
