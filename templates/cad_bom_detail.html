@@ -122,41 +122,28 @@
     <!-- SIDE: Ordine + Ordini esistenti -->
     <div style="display:flex;flex-direction:column;gap:14px">
 
-      <!-- CREA ORDINE PRODUZIONE -->
+      <!-- AVVIA CONFIGURAZIONE NESTING -->
       <div class="card" style="border-color:rgba(200,16,46,.2)">
-        <div class="card-hdr" style="color:var(--red)"><i class="bi bi-play-circle me-2"></i>Nuovo Ordine di Produzione</div>
+        <div class="card-hdr" style="color:var(--red)"><i class="bi bi-rocket-takeoff me-2"></i>Lancia Nesting Overhead</div>
         <div class="card-body">
-          <form method="POST" action="{{ url_for('cad_ordine_nuovo') }}">
-            <input type="hidden" name="assembly_id" value="{{ asm.id }}">
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px">
+            Imposta copie, aggiungi assembly extra e configura i parametri barra nel pannello dedicato.
+          </div>
 
-            <div style="margin-bottom:12px">
-              <label class="form-label">N° unità da produrre</label>
-              <input type="number" name="n_unita" class="form-control" value="1" min="1" max="500"
-                     style="font-size:1.3rem;font-weight:700;text-align:center">
-              <div style="font-size:.7rem;color:var(--muted);margin-top:4px;text-align:center">
-                × {{ asm.n_parti_totali }} parti = <span id="tot_pezzi">{{ asm.n_parti_totali }}</span> pezzi totali
-              </div>
-            </div>
+          <div style="background:rgba(255,255,255,.03);border:1px solid var(--bdr);border-radius:7px;padding:10px;margin-bottom:16px;font-size:.75rem;color:var(--muted)">
+            <div style="color:var(--txt);font-weight:600;margin-bottom:4px">BOM (per 1 unità)</div>
+            {% for item in items[:5] %}
+            <div>• {{ item.nome }} × {{ item.qty }}</div>
+            {% endfor %}
+            {% if items|length > 5 %}
+            <div style="color:var(--muted)">+ altri {{ items|length - 5 }} componenti...</div>
+            {% endif %}
+          </div>
 
-            <div style="margin-bottom:14px">
-              <label class="form-label">Note</label>
-              <input type="text" name="note" class="form-control" placeholder="es. commessa cliente, priorità...">
-            </div>
-
-            <div style="background:rgba(255,255,255,.03);border:1px solid var(--bdr);border-radius:7px;padding:10px;margin-bottom:14px;font-size:.75rem;color:var(--muted)">
-              <div style="color:var(--txt);font-weight:600;margin-bottom:4px">BOM esplosa (per 1 unità)</div>
-              {% for item in items[:5] %}
-              <div>• {{ item.nome }} × {{ item.qty }}</div>
-              {% endfor %}
-              {% if items|length > 5 %}
-              <div style="color:var(--muted)">+ altri {{ items|length - 5 }} componenti...</div>
-              {% endif %}
-            </div>
-
-            <button type="submit" class="btn-red" style="width:100%;justify-content:center">
-              <i class="bi bi-arrow-right-circle me-2"></i>Crea Ordine → Nesting 3D
-            </button>
-          </form>
+          <a href="{{ url_for('cad_configura', asm_id=asm.id) }}" class="btn-red"
+             style="width:100%;justify-content:center;text-decoration:none;display:flex;align-items:center;gap:8px;padding:.6rem 1rem">
+            <i class="bi bi-sliders me-1"></i>Configura &amp; Lancia Nesting
+          </a>
         </div>
       </div>
 

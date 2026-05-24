@@ -150,9 +150,12 @@
             <td style="color:var(--muted);font-size:.73rem">
               {{ a.creato_il.strftime('%d/%m/%Y %H:%M') if a.creato_il else '—' }}
             </td>
-            <td>
+            <td style="display:flex;gap:6px">
+              <a href="{{ url_for('cad_configura', asm_id=a.id) }}" class="btn-red" style="padding:.3rem .7rem;font-size:.75rem">
+                <i class="bi bi-rocket-takeoff"></i> Nesting
+              </a>
               <a href="{{ url_for('cad_bom_detail', asm_id=a.id) }}" class="btn-out" style="padding:.3rem .7rem;font-size:.75rem">
-                <i class="bi bi-eye"></i> BOM
+                <i class="bi bi-list-nested"></i> BOM
               </a>
             </td>
           </tr>
