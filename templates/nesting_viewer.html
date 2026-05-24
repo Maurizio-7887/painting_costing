@@ -191,7 +191,16 @@ select.cm-input option{background:#0d1117}
       <div class="coda-add-btns">
         <button class="cab" onclick="openCodaModal('db')">🗄 Da DB (senza ordine)</button>
         <button class="cab" onclick="openCodaModal('commessa')">📋 Da Commessa SAP/NetPro</button>
-        <button class="cab" onclick="openCodaFilePicker()">📁 Da file STP</button>
+        <!-- ── Widget: quante copie STP ── -->
+        <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
+          <label style="font-size:8px;color:#4a6070;white-space:nowrap">N° copie:</label>
+          <input type="number" id="stp-qty" value="1" min="1" max="9999"
+                 title="Quante macchine da verniciare"
+                 style="width:56px;background:#0a1a12;border:1px solid #00e676;color:#00e676;
+                        font-size:14px;font-weight:800;text-align:center;border-radius:4px;padding:2px 0;outline:none">
+          <button class="cab" style="flex:1;margin:0;background:#0a1a12;border-color:#00e676;color:#00e676;font-weight:bold"
+                  onclick="openCodaFilePicker()">📁 Da file STP</button>
+        </div>
       </div>
     </div>
 
@@ -341,9 +350,16 @@ function setView(v){
 }
 function resetView(){
   if(!NDATA) return;
-  const tX = NDATA.columns.length * PASSO_MM;
+  const maxManSlot = manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0;
+  const tX = Math.max(NDATA.columns.length, maxManSlot) * PASSO_MM;
+  // Scala automatica: se la catena è molto lunga, rimpicciolisce
+  const targetW = canvas.width * 0.85;
+  const testP_a = projFn(0,          Z_MAX_MM/2, 0);
+  const testP_b = projFn(tX,         Z_MAX_MM/2, 0);
+  const rawW    = Math.abs(testP_b.sx - testP_a.sx) || 1;
+  const autoScale = Math.min(targetW / rawW, viewMode==='iso' ? 0.28 : 0.40);
+  scale = autoScale;
   const p  = projFn(tX/2, Z_MAX_MM/2, 0);
-  scale = viewMode==='iso' ? 0.28 : 0.40;
   offX  = canvas.width/2  - p.sx*scale;
   offY  = canvas.height/2 - p.sy*scale;
   draw();
@@ -392,7 +408,9 @@ function draw(){
   hitBoxes=[];
 
   const nCols = NDATA.columns.length;
-  const tX    = nCols * PASSO_MM;
+  // Estende tX ai ganci manuali (es. 100 copie → molti ganci aperti)
+  const maxManSlot = manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0;
+  const tX    = Math.max(nCols, maxManSlot) * PASSO_MM;
 
   // ── Griglia ──
   ctx.strokeStyle=GRID(); ctx.lineWidth=0.5;
@@ -476,10 +494,39 @@ function drawChain(tX){
   const la=px(-PASSO_MM*.3,44,0);
   ctx.fillStyle=TXTCOL(); ctx.textAlign='left';
   ctx.font=`bold ${Math.max(7,8*scale)}px 'Courier New'`;
-  ctx.fillText(`CATENA ${NDATA.passo_mm}mm — ${NDATA.total_slots} GANCI`,la.x,la.y);
+  // Etichetta catena: mostra ganci totali inclusi manuali
+  const totSlots = Math.max(NDATA.total_slots,
+    manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0);
+  ctx.fillText(`CATENA ${NDATA.passo_mm}mm — ${totSlots} GANCI`,la.x,la.y);
   const lb=px(tX+PASSO_MM*.05,44,0);
   ctx.fillStyle=DIM();
-  ctx.fillText(`${(NDATA.total_slots*NDATA.passo_mm/1000).toFixed(1)} m`,lb.x,lb.y);
+  ctx.fillText(`${(totSlots*NDATA.passo_mm/1000).toFixed(1)} m`,lb.x,lb.y);
+
+  // ── Separatori blocchi 3m ──────────────────────────────
+  const nGB = Math.round(3000 / PASSO_MM);  // = 7 ganci per blocco 3m (a 400mm passo)
+  ctx.lineWidth = 1.4;
+  for(let g = nGB; g <= totSlots + nGB; g += nGB){
+    const x   = g * PASSO_MM;
+    const pA  = px(x,  38, 0);
+    const pB  = px(x, -68, 0);
+    const blockNum = Math.round(g / nGB);
+    // Colore alternato blocchi
+    const alpha = (blockNum % 2 === 0) ? 0.55 : 0.40;
+    ctx.strokeStyle = `rgba(255,152,0,${alpha})`;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Numero blocco
+    ctx.fillStyle = `rgba(255,152,0,0.75)`;
+    ctx.font = `bold ${Math.max(6, 7*scale)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`▌${blockNum}`, pA.x, pA.y - 7*scale);
+    // Etichetta metri
+    const mLabel = (g * PASSO_MM / 1000).toFixed(1) + 'm';
+    ctx.fillStyle = `rgba(255,152,0,0.50)`;
+    ctx.font = `${Math.max(5, 6*scale)}px 'Courier New'`;
+    ctx.fillText(mLabel, pA.x, pA.y + 8*scale);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1254,7 +1301,8 @@ function openCodaFilePicker(){
 
 function addCodaFromFile(f){
   if(!f) return;
-  const item={id:Date.now(),nome:f.name,sorgente:'STP',qty:1,pezzi:[],stato:'⏳ analisi'};
+  const qty = Math.max(1, parseInt(document.getElementById('stp-qty')?.value) || 1);
+  const item={id:Date.now(),nome:f.name,sorgente:'STP',qty,pezzi:[],stato:'⏳ analisi'};
   CODA.push(item); renderCoda();
   const fd=new FormData(); fd.append('file',f);
   fetch('/api/nesting/analizza',{method:'POST',body:fd})
@@ -1277,6 +1325,15 @@ function applyCodaItem(idx){
   if(!item||item.stato!=='pronto') return;
   if(!NDATA){ showToastErr('Carica prima un assembly principale!'); return; }
   let piazzati=0;
+  const GAP_LAT = NDATA.gap_lat_mm||60;
+
+  // Helper: calcola il prossimo slot libero (dopo tutti i ganci usati)
+  function nextFreeSlot(){
+    let max = (NDATA.columns||[]).length - 1;
+    manualParts.forEach(m=>{ if(m.slotIdx>max) max=m.slotIdx; });
+    return max + 1;
+  }
+
   for(let q=0;q<item.qty;q++){
     (item.pezzi||[]).forEach(part=>{
       const orientations=[
@@ -1284,11 +1341,16 @@ function applyCodaItem(idx){
         {L:part.alt_mm||part.H||100,   H:part.largh_mm||part.L||100, rot:true}
       ];
       let placed=false;
+
+      // 1. Prova tutti i ganci esistenti + quelli manuali aperti
       for(const or of orientations){
         const tp={...part,largh_mm:or.L,alt_mm:or.H};
-        const existSlots=Math.max((NDATA.columns||[]).length,
-          ...manualParts.map(m=>m.slotIdx+1), 0);
-        for(let si=0;si<existSlots+1;si++){
+        const existSlots=Math.max(
+          (NDATA.columns||[]).length,
+          manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0,
+          0
+        );
+        for(let si=0;si<existSlots;si++){
           const yTop=tryFitInSlot(si,tp);
           if(yTop!==null){
             manualParts.push({slotIdx:si,
@@ -1301,12 +1363,27 @@ function applyCodaItem(idx){
         }
         if(placed) break;
       }
+
+      // 2. Nessuno spazio esistente → apri nuovo gancio
+      if(!placed){
+        for(const or of orientations){
+          if(or.L > PASSO_MM - GAP_LAT) continue;
+          const ns = nextFreeSlot();
+          manualParts.push({slotIdx:ns,
+            part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:-HOOK_LEN,
+                  orientamento:or.rot?'ruotato_90':'standard',
+                  nome:part.nome||part.name||'pezzo'},
+            color:'#ff9800',_fromCoda:item.id});
+          piazzati++; placed=true; break;
+        }
+      }
     });
   }
   draw(); updateKPIManual();
   item.stato='✅ applicato ('+piazzati+' pz)';
   renderCoda();
-  showToastOk(item.nome+' · '+piazzati+' pezzi aggiunti in coda!');
+  showToastOk(item.nome+' · '+piazzati+' pz su '+(nextFreeSlot())+' ganci · '+
+    (nextFreeSlot()*PASSO_MM/1000).toFixed(1)+'m catena');
 }
 
 function removeCodaItem(idx){
