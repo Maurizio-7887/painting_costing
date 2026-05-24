@@ -246,6 +246,48 @@
           </div>
         </div>
 
+        <!-- CATENA 170m — BLOCCHI 3m -->
+        <div class="card" style="margin-bottom:14px;border-color:rgba(63,185,80,.2)">
+          <div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between">
+            <span style="color:#3FB950"><i class="bi bi-link-45deg me-2"></i>Catena programmata — 170m · blocchi 3m</span>
+            <div style="display:flex;gap:10px;align-items:center;font-size:.72rem;color:var(--muted)">
+              <span id="catena-info-barre" style="color:#3FB950;font-weight:600"></span>
+              <span>|</span>
+              <span id="catena-info-pct" style="color:var(--yel);font-weight:600"></span>
+              <button onclick="toggleCatenaDetail()" id="btn-catena-detail"
+                style="padding:2px 8px;font-size:.68rem;background:rgba(255,255,255,.06);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);cursor:pointer">
+                <i class="bi bi-arrows-expand"></i> Dettaglio
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <!-- VISTA COMPATTA (sempre visibile): barra colorata 56 slot -->
+            <div style="margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);margin-bottom:4px">
+                <span>0m</span><span>85m</span><span>170m</span>
+              </div>
+              <div id="catena-compact" style="height:28px;display:flex;gap:2px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.03);padding:3px;border:1px solid var(--bdr)"></div>
+              <div style="margin-top:6px;display:flex;gap:14px;font-size:.65rem;color:var(--muted)">
+                <span><span style="display:inline-block;width:10px;height:10px;background:#3FB950;border-radius:2px;margin-right:3px"></span>Barra occupata</span>
+                <span><span style="display:inline-block;width:10px;height:10px;background:rgba(255,255,255,.08);border:1px solid var(--bdr);border-radius:2px;margin-right:3px"></span>Slot libero</span>
+                <span><span style="display:inline-block;width:10px;height:10px;background:rgba(232,160,32,.4);border-radius:2px;margin-right:3px"></span>Parzialmente carico</span>
+              </div>
+            </div>
+
+            <!-- VISTA DETTAGLIO (toggle): blocchi espansi con parti e peso -->
+            <div id="catena-detail" style="display:none;margin-top:12px">
+              <div style="overflow-x:auto;padding-bottom:8px">
+                <div id="catena-blocks" style="display:flex;gap:4px;align-items:flex-start;min-width:max-content"></div>
+              </div>
+              <div style="margin-top:8px;font-size:.68rem;color:var(--muted);text-align:right">
+                <i class="bi bi-info-circle me-1"></i>Ogni blocco = 1 barra da 3m · passo gancio 400mm · max {{ cfg.capacita_termica_max_kg|int if cfg else 420 }}kg
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         <!-- GANCI DETAIL TABLE -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
 
@@ -356,4 +398,149 @@
   </div>
 
 </div>
+
+{% if nesting %}
+<script>
+// ══════════════════════════════════════════════════════════════
+// CATENA 170m — blocchi 3m
+// ══════════════════════════════════════════════════════════════
+(function() {
+  const CATENA_LEN_MM  = 170000;
+  const SLOT_MM        = 3000;
+  const PASSO_GANCIO   = 400;
+  const N_SLOTS        = Math.floor(CATENA_LEN_MM / SLOT_MM); // 56
+  const GANCI_PER_BAR  = Math.floor(SLOT_MM / PASSO_GANCIO);  // 7
+
+  // Dati ganci dal backend
+  const ganciAll = {{ nesting.ganci | tojson }};
+
+  // Raggruppa ganci in barre (blocchi da 3m)
+  const barre = [];
+  for (let i = 0; i < ganciAll.length; i += GANCI_PER_BAR) {
+    barre.push(ganciAll.slice(i, i + GANCI_PER_BAR));
+  }
+
+  const nBarre        = barre.length;
+  const metriOccupati = nBarre * 3;
+  const pctOccupata   = Math.min(100, (nBarre / N_SLOTS * 100)).toFixed(1);
+
+  // Aggiorna header info
+  document.getElementById('catena-info-barre').textContent =
+    nBarre + ' / ' + N_SLOTS + ' barre usate · ' + metriOccupati + 'm';
+  document.getElementById('catena-info-pct').textContent =
+    pctOccupata + '% catena occupata';
+
+  // ── VISTA COMPATTA ─────────────────────────────────────────
+  const compact = document.getElementById('catena-compact');
+  for (let s = 0; s < N_SLOTS; s++) {
+    const div = document.createElement('div');
+    div.style.cssText = 'flex:1;height:100%;border-radius:2px;cursor:pointer;transition:opacity .15s';
+
+    if (s < nBarre) {
+      const bar = barre[s];
+      const pesoTot  = bar.reduce((a,g) => a + (g.peso_kg || 0), 0);
+      const partiTot = bar.reduce((a,g) => a + (g.n_parti || 0), 0);
+      const pct      = Math.min(100, pesoTot / 420 * 100);
+      div.style.background = pct > 80 ? '#F85149' : pct > 50 ? '#F0883E' : '#3FB950';
+      div.title = 'Barra ' + (s+1) + ' · ' + partiTot + ' pz · ' + pesoTot.toFixed(1) + 'kg';
+    } else {
+      div.style.background = 'rgba(255,255,255,.06)';
+      div.title = 'Slot ' + (s+1) + ' — libero';
+    }
+    div.addEventListener('click', () => {
+      const detailEl = document.getElementById('catena-detail');
+      if (detailEl.style.display === 'none') { detailEl.style.display = 'block'; }
+      const blockEl = document.getElementById('catena-block-' + s);
+      if (blockEl) blockEl.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+    });
+    compact.appendChild(div);
+  }
+
+  // ── VISTA DETTAGLIO ────────────────────────────────────────
+  const blocksContainer = document.getElementById('catena-blocks');
+
+  for (let s = 0; s < N_SLOTS; s++) {
+    const div = document.createElement('div');
+    div.id = 'catena-block-' + s;
+    div.style.cssText = 'width:90px;flex-shrink:0;border:1px solid var(--bdr);border-radius:6px;background:rgba(255,255,255,.02);overflow:hidden';
+
+    const isOcc = s < nBarre;
+
+    // Header slot
+    const hdr = document.createElement('div');
+    hdr.style.cssText = [
+      'padding:4px 6px;font-size:.6rem;font-weight:700;',
+      'background:' + (isOcc ? 'rgba(63,185,80,.12)' : 'rgba(255,255,255,.03)') + ';',
+      'color:' + (isOcc ? '#3FB950' : 'var(--muted)') + ';',
+      'border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center'
+    ].join('');
+    hdr.innerHTML = '<span>B' + (s+1) + '</span><span style="font-weight:400;opacity:.7">' + (s*3) + 'm</span>';
+    div.appendChild(hdr);
+
+    if (isOcc) {
+      const bar      = barre[s];
+      const pesoTot  = bar.reduce((a,g) => a + (g.peso_kg || 0), 0);
+      const partiTot = bar.reduce((a,g) => a + (g.n_parti || 0), 0);
+      const pctPeso  = Math.min(100, pesoTot / 420 * 100);
+
+      const body = document.createElement('div');
+      body.style.cssText = 'padding:4px;min-height:80px;max-height:200px;overflow-y:auto';
+
+      bar.forEach(g => {
+        if (!g || g.libero) return;
+        (g.parti || []).forEach(p => {
+          const row = document.createElement('div');
+          row.style.cssText = [
+            'margin-bottom:2px;padding:2px 4px;border-radius:3px;',
+            'background:' + (p.colore || '#444') + '33;',
+            'border-left:2px solid ' + (p.colore || '#444') + ';',
+            'font-size:.52rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'
+          ].join('');
+          row.textContent = (p.codice || '?').substring(0, 10) + ' ' + (p.peso_kg || 0).toFixed(1) + 'kg';
+          row.title = (p.nome || p.codice || '') + ' · ' + (p.peso_kg||0).toFixed(1) + 'kg';
+          body.appendChild(row);
+        });
+      });
+      div.appendChild(body);
+
+      // Footer peso
+      const foot = document.createElement('div');
+      foot.style.cssText = 'padding:3px 6px;border-top:1px solid var(--bdr);font-size:.58rem;color:var(--muted);text-align:center';
+      foot.innerHTML = '<b style="color:' + (pctPeso>80?'#F85149':'#3FB950') + '">' +
+        pesoTot.toFixed(0) + 'kg</b> · ' + partiTot + 'pz';
+      div.appendChild(foot);
+
+      // Barra peso
+      const barEl = document.createElement('div');
+      barEl.style.cssText = 'height:3px;background:rgba(255,255,255,.05)';
+      const fill = document.createElement('div');
+      fill.style.cssText = 'height:100%;width:' + pctPeso.toFixed(0) + '%;background:' +
+        (pctPeso>80?'#F85149':pctPeso>50?'#F0883E':'#3FB950');
+      barEl.appendChild(fill);
+      div.appendChild(barEl);
+
+    } else {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'height:60px;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:rgba(255,255,255,.12)';
+      empty.textContent = '—';
+      div.appendChild(empty);
+    }
+
+    blocksContainer.appendChild(div);
+  }
+
+  window.toggleCatenaDetail = function() {
+    const el  = document.getElementById('catena-detail');
+    const btn = document.getElementById('btn-catena-detail');
+    const show = el.style.display === 'none';
+    el.style.display = show ? 'block' : 'none';
+    btn.innerHTML = show
+      ? '<i class="bi bi-arrows-collapse"></i> Comprimi'
+      : '<i class="bi bi-arrows-expand"></i> Dettaglio';
+  };
+
+})();
+</script>
+{% endif %}
+
 {% endblock %}

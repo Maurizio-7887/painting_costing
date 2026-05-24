@@ -114,6 +114,52 @@
           </div>
         </div>
 
+        <!-- STIMA BARRE OVERHEAD -->
+        <div class="card" style="border-color:rgba(63,185,80,.25);background:rgba(63,185,80,.03)">
+          <div class="card-hdr" style="color:#3FB950">
+            <i class="bi bi-link-45deg me-2"></i>Stima barre overhead sulla catena
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+              <!-- Barre stimate -->
+              <div style="background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;padding:10px;text-align:center">
+                <div id="stima-barre" style="font-size:1.5rem;font-weight:700;color:#3FB950">—</div>
+                <div style="font-size:.65rem;color:var(--muted);margin-top:2px">Barre stimate</div>
+              </div>
+              <!-- Ganci usati -->
+              <div style="background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;padding:10px;text-align:center">
+                <div id="stima-ganci" style="font-size:1.5rem;font-weight:700;color:#58A6FF">—</div>
+                <div style="font-size:.65rem;color:var(--muted);margin-top:2px">Ganci totali</div>
+              </div>
+              <!-- Metri catena -->
+              <div style="background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;padding:10px;text-align:center">
+                <div id="stima-metri" style="font-size:1.5rem;font-weight:700;color:var(--yel)">—</div>
+                <div style="font-size:.65rem;color:var(--muted);margin-top:2px">Metri catena</div>
+              </div>
+              <!-- % occupazione -->
+              <div style="background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;padding:10px;text-align:center">
+                <div id="stima-pct" style="font-size:1.5rem;font-weight:700;color:var(--red)">—</div>
+                <div style="font-size:.65rem;color:var(--muted);margin-top:2px">% catena 170m</div>
+              </div>
+            </div>
+            <!-- Barra occupazione catena -->
+            <div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted)">
+              <span>0m</span>
+              <span id="catena-label" style="color:#fff;font-weight:600"></span>
+              <span>170m</span>
+            </div>
+            <div style="height:18px;background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:4px;overflow:hidden;position:relative">
+              <!-- Blocchi da 3m -->
+              <div id="catena-bar-slots" style="display:flex;height:100%;gap:1px;padding:1px"></div>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:14px;font-size:.68rem;color:var(--muted)">
+              <span><span style="display:inline-block;width:10px;height:10px;background:#3FB950;border-radius:2px;margin-right:4px"></span>Occupato</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:rgba(255,255,255,.08);border:1px solid var(--bdr);border-radius:2px;margin-right:4px"></span>Libero</span>
+              <span style="margin-left:auto;color:var(--yel)">Catena: 170m · 56 slot × 3m · passo gancio 400mm</span>
+            </div>
+          </div>
+        </div>
+
         <!-- CODA MACCHINE AGGIUNTIVE -->
         <div class="card">
           <div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between">
@@ -261,6 +307,71 @@ const asmPartiTotali = {{ asm.n_parti_totali }};
 const asmPesoKg = {{ asm.peso_totale_kg }};
 let codaExtra = []; // [{id, nome, n_unita, parti_totali, peso_kg}]
 
+// ─── Costanti catena ────────────────────────────────────────────
+const CATENA_LEN_MM  = 170000;   // 170m
+const SLOT_LEN_MM    = 3000;     // 1 barra = 3m
+const CATENA_SLOTS   = Math.floor(CATENA_LEN_MM / SLOT_LEN_MM); // 56 slot
+
+// ─── Legge i parametri barra dalla form ────────────────────────
+function getBarraParams() {
+  const L_max     = parseFloat(document.querySelector('[name=L_max_mm]')?.value)   || 3000;
+  const passo     = 400; // mm fisso passo gancio
+  const pesoGancio= parseFloat(document.querySelector('[name=peso_max_gancio]')?.value) || 60;
+  const pesoTrolley= parseFloat(document.querySelector('[name=peso_max_kg]')?.value)    || 420;
+  const ganciBar  = Math.floor(L_max / passo); // ganci per barra
+  return { L_max, passo, pesoGancio, pesoTrolley, ganciBar };
+}
+
+// ─── Aggiorna stima barre overhead ────────────────────────────
+function aggiornaStimaBarreOverhead(nUnita, pesoKgExtra, partiExtra) {
+  const p = getBarraParams();
+  const totParti = (nUnita * asmPartiTotali) + partiExtra;
+  const totPeso  = (nUnita * asmPesoKg) + pesoKgExtra;
+
+  // Stima barre per parti e per peso (prendi il max)
+  const barreByParti = Math.ceil(totParti / Math.max(1, p.ganciBar));
+  const barreByPeso  = Math.ceil(totPeso  / Math.max(1, p.pesoTrolley));
+  const barreStimate = Math.max(barreByParti, barreByPeso);
+
+  const metriOccupati = barreStimate * (SLOT_LEN_MM / 1000);
+  const pctCatena     = Math.min(100, (barreStimate / CATENA_SLOTS * 100)).toFixed(1);
+
+  document.getElementById('stima-barre').textContent = barreStimate;
+  document.getElementById('stima-ganci').textContent = totParti;
+  document.getElementById('stima-metri').textContent = metriOccupati.toFixed(0) + 'm';
+  document.getElementById('stima-pct').textContent   = pctCatena + '%';
+
+  // Colore % in base all'occupazione
+  const pctEl = document.getElementById('stima-pct');
+  pctEl.style.color = barreStimate > CATENA_SLOTS ? '#F85149'
+                    : pctCatena > 80 ? '#F0883E'
+                    : '#3FB950';
+
+  // Label centrale
+  document.getElementById('catena-label').textContent =
+    barreStimate + ' / ' + CATENA_SLOTS + ' slot occupati';
+
+  // Render mini-catena
+  const container = document.getElementById('catena-bar-slots');
+  container.innerHTML = '';
+  for (let i = 0; i < CATENA_SLOTS; i++) {
+    const div = document.createElement('div');
+    div.style.cssText = 'flex:1;height:100%;border-radius:1px;min-width:1px;';
+    div.style.background = i < barreStimate ? '#3FB950' : 'rgba(255,255,255,.06)';
+    div.title = 'Slot ' + (i+1) + ' — ' + (i < barreStimate ? 'OCCUPATO' : 'libero');
+    container.appendChild(div);
+  }
+
+  // Overflow warning
+  if (barreStimate > CATENA_SLOTS) {
+    document.getElementById('catena-label').textContent =
+      '⚠ ' + barreStimate + ' barre — SUPERA i 56 slot disponibili! Dividi in più passate.';
+    document.getElementById('catena-label').style.color = '#F85149';
+  } else {
+    document.getElementById('catena-label').style.color = '#fff';
+  }
+}
+
 // ─── Aggiorna contatore pezzi primario ───────────────────────────
 function aggiornaRiepilogo() {
   const nUnita = parseInt(document.getElementById('n-unita').value) || 1;
@@ -280,6 +391,11 @@ function aggiornaRiepilogo() {
     ? `— ${totPezzi} pezzi · ${totPeso.toFixed(1)} kg · ${1 + nExtra} assembly`
     : `— ${totPezzi} pezzi · ${totPeso.toFixed(1)} kg`;
   document.getElementById('lancia-riepilogo').textContent = label;
+
+  // Aggiorna stima barre overhead
+  let extraParti = 0, extraPeso = 0;
+  codaExtra.forEach(e => { extraParti += e.n_unita * e.parti_totali; extraPeso += e.n_unita * e.peso_kg; });
+  aggiornaStimaBarreOverhead(nUnita, extraPeso, extraParti);
 
   // Aggiorna riepilogo coda
   if (nExtra > 0) {
@@ -401,6 +517,10 @@ document.getElementById('config-form').addEventListener('submit', function() {
   btn.style.opacity = '0.8';
   aggiornaCodaJson();
 });
+
+// ─── Listener parametri barra (ricalcola stima al cambio) ────────
+document.querySelectorAll('[name=L_max_mm],[name=peso_max_kg],[name=peso_max_gancio]')
+  .forEach(el => el.addEventListener('input', aggiornaRiepilogo));
 
 // ─── Init ─────────────────────────────────────────────────────────
 aggiornaRiepilogo();
