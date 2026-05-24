@@ -95,6 +95,63 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
 #drag-ghost{position:fixed;pointer-events:none;display:none;z-index:300;
   opacity:.75;border:2px dashed #ff9800;border-radius:4px;background:rgba(255,152,0,.1);
   font-size:9px;color:#ff9800;padding:2px 5px;font-family:'Courier New',monospace}
+
+/* COPIE INPUT nel lib-panel */
+.qty-row{display:flex;align-items:center;gap:4px;margin:3px 0;justify-content:center}
+.qty-lbl{font-size:7px;color:#4a6070}
+.qty-inp{width:38px;background:#0d1117;border:1px solid #1a2633;color:#00e676;
+  font-size:10px;text-align:center;border-radius:4px;padding:1px 3px;
+  font-family:'Courier New',monospace}
+.qty-inp:focus{outline:none;border-color:#00e676}
+
+/* CODA MACCHINE sidebar */
+#coda-section{margin-top:10px;border-top:1px solid #1a2633;padding-top:8px}
+#coda-section h3{color:#ff9800;font-size:10px;margin:0 0 6px;
+  text-transform:uppercase;letter-spacing:1px}
+.coda-item{background:#111b27;border:1px solid #1a2633;border-radius:4px;
+  padding:5px 7px;margin-bottom:4px;font-size:9px}
+.coda-nm{color:#80cbc4;font-weight:bold;margin-bottom:2px;word-break:break-all}
+.coda-src{color:#4a6070;font-size:8px;margin-bottom:3px}
+.coda-btns{display:flex;gap:3px}
+.cb{font-size:8px;padding:2px 6px;border-radius:3px;border:none;
+  cursor:pointer;font-family:'Courier New',monospace}
+.cb-apply{background:#00e676;color:#080c0e}
+.cb-apply:hover{background:#00c853}
+.cb-del{background:#1a2633;color:#f44336}
+.cb-del:hover{background:#c62828;color:#fff}
+.coda-add-btns{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+.cab{font-size:9px;padding:4px 8px;border-radius:12px;border:1px solid #1a2633;
+  cursor:pointer;font-family:'Courier New',monospace;background:#0d1117;
+  color:#b0bec5;text-align:left;transition:all .2s}
+.cab:hover{border-color:#ff9800;color:#ff9800}
+
+/* MODALE DB / COMMESSA */
+#coda-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:none;z-index:500;align-items:center;justify-content:center}
+#coda-modal-box{background:#0d1117;border:1px solid #1a2633;border-radius:10px;
+  padding:20px;width:340px;max-width:90vw;font-family:'Courier New',monospace}
+#coda-modal-box h3{color:#ff9800;font-size:13px;margin:0 0 12px}
+.cm-label{font-size:9px;color:#4a6070;margin-bottom:3px}
+.cm-input{width:100%;background:#111b27;border:1px solid #1a2633;
+  color:#b0bec5;font-size:11px;padding:5px 8px;border-radius:5px;
+  font-family:'Courier New',monospace;box-sizing:border-box}
+.cm-input:focus{outline:none;border-color:#ff9800}
+.cm-row{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
+.cm-btn{font-size:10px;padding:5px 14px;border-radius:12px;border:none;
+  cursor:pointer;font-family:'Courier New',monospace}
+.cm-ok{background:#ff9800;color:#080c0e}
+.cm-ok:hover{background:#e65100}
+.cm-cancel{background:#1a2633;color:#b0bec5}
+.cm-cancel:hover{background:#263545}
+select.cm-input option{background:#0d1117}
+
+/* KPI copie assembly */
+.kpi-copie-row{display:flex;align-items:center;gap:5px;margin-top:2px}
+.copie-inp{width:42px;background:#0d1117;border:1px solid #1a2633;
+  color:#00e676;font-size:14px;font-weight:bold;text-align:center;
+  border-radius:4px;padding:1px 2px;font-family:'Courier New',monospace}
+.copie-inp:focus{outline:none;border-color:#00e676}
+
 </style>
 
 <div id="app">
@@ -116,6 +173,28 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
       <button class="tb" id="btn-manual" style="width:100%;font-size:10px" onclick="toggleManual()">✋ Nesting Manuale</button>
     </div>
     <div id="clist" style="margin-top:8px"></div>
+
+    <!-- KPI copie assembly -->
+    <div class="kpi" id="kpi-copie-box" style="display:none">
+      <div class="kl">Copie assembly</div>
+      <div class="kpi-copie-row">
+        <input type="number" class="copie-inp" id="copie-assembly" value="1" min="1" max="99"
+               onchange="applyCopieAssembly(this.value)">
+        <span style="font-size:9px;color:#4a6070">× tutto l'assembly</span>
+      </div>
+    </div>
+
+    <!-- CODA MACCHINE -->
+    <div id="coda-section">
+      <h3>📋 Coda Macchine</h3>
+      <div id="coda-list"></div>
+      <div class="coda-add-btns">
+        <button class="cab" onclick="openCodaModal('db')">🗄 Da DB (senza ordine)</button>
+        <button class="cab" onclick="openCodaModal('commessa')">📋 Da Commessa SAP/NetPro</button>
+        <button class="cab" onclick="openCodaFilePicker()">📁 Da file STP</button>
+      </div>
+    </div>
+
   </div>
 
   <div id="canvaswrap" class="dark-mode">
@@ -161,6 +240,38 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
     </div>
   </div>
 </div>
+
+
+<!-- MODALE CODA -->
+<div id="coda-modal">
+  <div id="coda-modal-box">
+    <h3 id="coda-modal-title">Aggiungi in coda</h3>
+    <!-- DB -->
+    <div id="cm-db-section">
+      <div class="cm-label">Macchina dal DB</div>
+      <select class="cm-input" id="cm-db-select">
+        <option value="">Caricamento...</option>
+      </select>
+      <div class="cm-label" style="margin-top:8px">Quante copie?</div>
+      <input type="number" class="cm-input" id="cm-db-qty" value="1" min="1" max="99">
+    </div>
+    <!-- COMMESSA -->
+    <div id="cm-commessa-section" style="display:none">
+      <div class="cm-label">ID / Numero Commessa (SAP o NetPro)</div>
+      <input type="text" class="cm-input" id="cm-commessa-id" placeholder="es. ORD-2026-0042">
+      <div class="cm-label" style="margin-top:8px">Quante copie?</div>
+      <input type="number" class="cm-input" id="cm-commessa-qty" value="1" min="1" max="99">
+    </div>
+    <div class="cm-row">
+      <button class="cm-btn cm-cancel" onclick="closeCodaModal()">✕ Annulla</button>
+      <button class="cm-btn cm-ok" id="cm-ok-btn" onclick="confirmCodaModal()">✔ Aggiungi</button>
+    </div>
+  </div>
+</div>
+
+<!-- file picker nascosto per coda STP -->
+<input type="file" id="coda-file-input" accept=".stp,.step,.STP,.STEP"
+       style="display:none" onchange="addCodaFromFile(this.files[0])">
 
 <div id="tooltip">
   <div class="tn" id="tip-name"></div>
@@ -585,10 +696,19 @@ function buildLibPanel(){
     dm.textContent=`${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm·${part.peso_kg.toFixed(1)}kg`;
     div.appendChild(dm);
     // Bottoni Auto e Manuale
+    // Quante copie
+    const qr=document.createElement('div');qr.className='qty-row';
+    qr.innerHTML='<span class="qty-lbl">Copie:</span><input type="number" class="qty-inp" value="1" min="1" max="99" onclick="e=>e.stopPropagation()">';
+    div.appendChild(qr);
     const btns=document.createElement('div');btns.className='lib-btns';
     const bAuto=document.createElement('button');bAuto.className='lib-btn lb-auto';
     bAuto.textContent='⚡ Auto';bAuto.title='Piazza nel primo spazio libero';
-    bAuto.onclick=e=>{e.stopPropagation();autoPlace(part);};
+    bAuto.onclick=e=>{
+      e.stopPropagation();
+      const qtyEl=div.querySelector('.qty-inp');
+      const qty=qtyEl?Math.max(1,parseInt(qtyEl.value)||1):1;
+      for(let _q=0;_q<qty;_q++) autoPlace(part);
+    };
     const bMan=document.createElement('button');bMan.className='lib-btn lb-manual';
     bMan.textContent='✋ Manual';bMan.title='Trascina sul gancio scelto';
     bMan.onmousedown=e=>{e.stopPropagation();startDrag(e,part,'manual');};
@@ -866,6 +986,8 @@ function handleFileSelect(f){
       document.getElementById('toolbar').style.display='flex';
       document.getElementById('ruler').style.display='block';
       updateKPI(); buildColumnList();
+      document.getElementById('kpi-copie-box').style.display='block';
+      document.getElementById('copie-assembly').value=1;
       if(manualMode) buildLibPanel();
       resetView();
     })
@@ -978,6 +1100,223 @@ function setAct(btn){
   });
   btn.classList.add(darkMode?'act':'act-light');
 }
+
+// ═══════════════════════════════════════════════════════
+// COPIE ASSEMBLY
+// ═══════════════════════════════════════════════════════
+function applyCopieAssembly(qty){
+  qty=Math.max(1,parseInt(qty)||1);
+  if(!NDATA||!NDATA.library) return;
+  // Svuota pezzi manuali aggiunti da copie precedenti assembly
+  manualParts = manualParts.filter(m=>!m._fromAssembly);
+  if(qty<=1){ draw(); updateKPIManual(); return; }
+  // Copie 2..N: aggiungi tutti i pezzi dell'assembly altre (qty-1) volte
+  for(let q=1;q<qty;q++){
+    (NDATA.library||[]).forEach(part=>{
+      // tenta auto-place silenziosa
+      const orientations=[
+        {L:part.largh_mm,H:part.alt_mm,rot:false},
+        {L:part.alt_mm,H:part.largh_mm,rot:true}
+      ];
+      let placed=false;
+      for(const or of orientations){
+        const tp={...part,largh_mm:or.L,alt_mm:or.H};
+        for(let si=0;si<(NDATA.columns||[]).length+manualParts.length+1;si++){
+          const yTop=tryFitInSlot(si,tp);
+          if(yTop!==null){
+            manualParts.push({slotIdx:si,
+              part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
+                    orientamento:or.rot?'ruotato_90':'standard'},
+              color:'#ff9800',_fromAssembly:true});
+            placed=true; break;
+          }
+        }
+        if(placed) break;
+      }
+      if(!placed){
+        // nuovo gancio
+        const GAP_LAT=NDATA.gap_lat_mm||60;
+        for(const or of orientations){
+          if(or.L>PASSO_MM-GAP_LAT) continue;
+          const ns=(NDATA.columns||[]).length+
+            [...new Set(manualParts.filter(m=>m.slotIdx>=(NDATA.columns||[]).length).map(m=>m.slotIdx))].length;
+          manualParts.push({slotIdx:ns,
+            part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:-HOOK_LEN,
+                  orientamento:or.rot?'ruotato_90':'standard'},
+            color:'#ff9800',_fromAssembly:true});
+          break;
+        }
+      }
+    });
+  }
+  draw(); updateKPIManual();
+  showToastOk('Assembly × '+qty+' applicato!');
+}
+
+// ═══════════════════════════════════════════════════════
+// CODA MACCHINE
+// ═══════════════════════════════════════════════════════
+let CODA = [];           // [{id, nome, sorgente, qty, pezzi, stato}]
+let _codaMode = '';      // 'db' | 'commessa'
+
+function renderCoda(){
+  const list=document.getElementById('coda-list');
+  list.innerHTML='';
+  CODA.forEach((item,idx)=>{
+    const div=document.createElement('div');div.className='coda-item';
+    const statoColor=item.stato==='pronto'?'#00e676':item.stato==='errore'?'#f44336':'#ff9800';
+    div.innerHTML=\`
+      <div class="coda-nm">\${item.nome}</div>
+      <div class="coda-src">\${item.sorgente} · \${item.qty}× · 
+        <span style="color:\${statoColor}">\${item.stato}</span></div>
+      <div class="coda-btns">
+        \${item.stato==='pronto'?
+          '<button class="cb cb-apply" onclick="applyCodaItem('+idx+')">▶ Applica</button>':''}
+        <button class="cb cb-del" onclick="removeCodaItem('+idx+')">✕</button>
+      </div>\`;
+    list.appendChild(div);
+  });
+}
+
+function openCodaModal(mode){
+  _codaMode=mode;
+  document.getElementById('coda-modal').style.display='flex';
+  document.getElementById('cm-db-section').style.display=mode==='db'?'block':'none';
+  document.getElementById('cm-commessa-section').style.display=mode==='commessa'?'block':'none';
+  document.getElementById('coda-modal-title').textContent=
+    mode==='db'?'🗄 Aggiungi da DB':'📋 Aggiungi da Commessa';
+  if(mode==='db') loadDbMachines();
+}
+
+function closeCodaModal(){
+  document.getElementById('coda-modal').style.display='none';
+}
+
+function loadDbMachines(){
+  const sel=document.getElementById('cm-db-select');
+  sel.innerHTML='<option value="">⏳ Caricamento...</option>';
+  fetch('/api/nesting/lista_macchine')
+    .then(r=>r.json())
+    .then(data=>{
+      sel.innerHTML='<option value="">-- Scegli macchina --</option>';
+      (data.macchine||data||[]).forEach(m=>{
+        const op=document.createElement('option');
+        op.value=m.id||m.mac_id||m.codice||m.nome;
+        op.textContent=(m.nome||m.descrizione||'—')+' ('+op.value+')';
+        sel.appendChild(op);
+      });
+    })
+    .catch(()=>{
+      sel.innerHTML='<option value="">⚠ API non disponibile</option>';
+    });
+}
+
+function confirmCodaModal(){
+  if(_codaMode==='db'){
+    const sel=document.getElementById('cm-db-select');
+    const qty=parseInt(document.getElementById('cm-db-qty').value)||1;
+    const val=sel.value;
+    const nm=sel.options[sel.selectedIndex]?.text||val;
+    if(!val){ showToastErr('Scegli una macchina!'); return; }
+    const item={id:Date.now(),nome:nm,sorgente:'DB',qty,pezzi:[],stato:'⏳ caricamento'};
+    CODA.push(item); renderCoda();
+    closeCodaModal();
+    // Carica pezzi via API
+    fetch('/api/nesting/da_db?mac_ids='+val)
+      .then(r=>r.json())
+      .then(d=>{
+        item.pezzi=d.pezzi||[];
+        item.stato=item.pezzi.length>0?'pronto':'errore: nessun pezzo';
+        renderCoda();
+      })
+      .catch(()=>{ item.stato='errore API'; renderCoda(); });
+  } else {
+    const commId=document.getElementById('cm-commessa-id').value.trim();
+    const qty=parseInt(document.getElementById('cm-commessa-qty').value)||1;
+    if(!commId){ showToastErr('Inserisci il numero commessa!'); return; }
+    const item={id:Date.now(),nome:'Commessa '+commId,sorgente:'SAP/NetPro',qty,pezzi:[],stato:'⏳ caricamento'};
+    CODA.push(item); renderCoda();
+    closeCodaModal();
+    fetch('/api/nesting/da_commessa/'+encodeURIComponent(commId))
+      .then(r=>r.json())
+      .then(d=>{
+        item.pezzi=d.pezzi||[];
+        item.stato=item.pezzi.length>0?'pronto':'errore: commessa non trovata';
+        renderCoda();
+      })
+      .catch(()=>{ item.stato='errore API'; renderCoda(); });
+  }
+}
+
+function openCodaFilePicker(){
+  document.getElementById('coda-file-input').click();
+}
+
+function addCodaFromFile(f){
+  if(!f) return;
+  const item={id:Date.now(),nome:f.name,sorgente:'STP',qty:1,pezzi:[],stato:'⏳ analisi'};
+  CODA.push(item); renderCoda();
+  const fd=new FormData(); fd.append('file',f);
+  fetch('/api/nesting/analizza',{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.error){ item.stato='errore: '+d.error; renderCoda(); return; }
+      // Estrai libreria come pezzi
+      item.pezzi=d.library||[];
+      item.stato=item.pezzi.length>0?'pronto':'errore: nessun pezzo';
+      item._ndataFull=d;
+      renderCoda();
+    })
+    .catch(()=>{ item.stato='errore analisi'; renderCoda(); });
+  // reset input per poter ricaricare stesso file
+  document.getElementById('coda-file-input').value='';
+}
+
+function applyCodaItem(idx){
+  const item=CODA[idx];
+  if(!item||item.stato!=='pronto') return;
+  if(!NDATA){ showToastErr('Carica prima un assembly principale!'); return; }
+  let piazzati=0;
+  for(let q=0;q<item.qty;q++){
+    (item.pezzi||[]).forEach(part=>{
+      const orientations=[
+        {L:part.largh_mm||part.L||100, H:part.alt_mm||part.H||100, rot:false},
+        {L:part.alt_mm||part.H||100,   H:part.largh_mm||part.L||100, rot:true}
+      ];
+      let placed=false;
+      for(const or of orientations){
+        const tp={...part,largh_mm:or.L,alt_mm:or.H};
+        const existSlots=Math.max((NDATA.columns||[]).length,
+          ...manualParts.map(m=>m.slotIdx+1), 0);
+        for(let si=0;si<existSlots+1;si++){
+          const yTop=tryFitInSlot(si,tp);
+          if(yTop!==null){
+            manualParts.push({slotIdx:si,
+              part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
+                    orientamento:or.rot?'ruotato_90':'standard',
+                    nome:part.nome||part.name||'pezzo'},
+              color:'#ff9800',_fromCoda:item.id});
+            piazzati++; placed=true; break;
+          }
+        }
+        if(placed) break;
+      }
+    });
+  }
+  draw(); updateKPIManual();
+  item.stato='✅ applicato ('+piazzati+' pz)';
+  renderCoda();
+  showToastOk(item.nome+' · '+piazzati+' pezzi aggiunti in coda!');
+}
+
+function removeCodaItem(idx){
+  const item=CODA[idx];
+  // Rimuovi pezzi manuali associati
+  manualParts=manualParts.filter(m=>m._fromCoda!==item.id);
+  CODA.splice(idx,1);
+  renderCoda(); draw(); updateKPIManual();
+}
+
 resize();
 </script>
 {% endblock %}
