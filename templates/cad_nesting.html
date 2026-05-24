@@ -101,6 +101,19 @@
                 <div>• <b>Load balance</b>: momento flettente max + verifica trolley</div>
               </div>
 
+              <!-- ── QUANTE COPIE ── -->
+              <div style="background:rgba(63,185,80,.08);border:2px solid rgba(63,185,80,.35);border-radius:8px;padding:10px">
+                <label class="form-label" style="color:#3FB950;font-weight:700;font-size:.82rem;margin-bottom:4px">
+                  <i class="bi bi-layers me-1"></i>Copie da verniciare
+                </label>
+                <input type="number" name="n_unita" class="form-control"
+                       value="{{ ordine.n_unita }}" min="1" max="9999" step="1"
+                       style="font-size:1.4rem;font-weight:800;color:#3FB950;text-align:center;background:rgba(63,185,80,.06);border-color:rgba(63,185,80,.4)">
+                <div style="font-size:.68rem;color:var(--muted);margin-top:4px;text-align:center">
+                  Quante macchine da questo STP · attuale: <b style="color:#3FB950">× {{ ordine.n_unita }}</b>
+                </div>
+              </div>
+
               <button type="submit" class="btn-red" style="width:100%;justify-content:center">
                 <i class="bi bi-play-fill me-2"></i>Calcola Nesting Overhead
               </button>
