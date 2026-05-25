@@ -454,11 +454,28 @@ function draw(){
   );
   sorted.forEach(col=>drawColumn(col, false));
 
-  // ── Pezzi manuali ──
+  // ── Pezzi manuali (copie) — gancio + pezzo colorato ──
   manualParts.forEach(m=>{
-    const colX = m.slotIdx*PASSO_MM + PASSO_MM/2;
-    const col  = NDATA.columns[m.slotIdx]||{start_slot:m.slotIdx,color:'#ff9800',pezzi:[],peso:0,sat_pct:0};
-    drawPartShape(colX, m.part, '#ff9800', col, true);
+    const colX     = m.slotIdx*PASSO_MM + PASSO_MM/2;
+    const partColor = m.color || '#ff9800';
+    // — Disegna il gancio per questa copia —
+    const ga=px(colX,0,0), gb=px(colX,-HOOK_LEN,0);
+    ctx.strokeStyle=darkMode?'#b0bec5':'#607d8b';
+    ctx.lineWidth=Math.max(2,3*scale); ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(ga.x,ga.y);ctx.lineTo(gb.x,gb.y);ctx.stroke();
+    const hc=px(colX+55,-HOOK_LEN-50,0);
+    ctx.strokeStyle=darkMode?'#90a4ae':'#78909c'; ctx.lineWidth=Math.max(2,2.5*scale);
+    ctx.beginPath();ctx.arc(hc.x,hc.y,35*scale*C30,Math.PI*.5,Math.PI*1.5);ctx.stroke();
+    ctx.fillStyle=darkMode?'#b0bec5':'#607d8b';
+    ctx.beginPath();ctx.arc(ga.x,ga.y,Math.max(3,4*scale),0,Math.PI*2);ctx.fill();
+    // — Label gancio copia —
+    const lp=px(colX,65,0);
+    ctx.fillStyle=partColor; ctx.font=`bold ${Math.max(7,9*scale)}px 'Courier New'`;
+    ctx.textAlign='center';
+    ctx.fillText(`G${m.slotIdx+1}·c${m._copyIdx||'?'}`,lp.x,lp.y);
+    // — Disegna il pezzo col colore corretto —
+    const col={start_slot:m.slotIdx,color:partColor,pezzi:[],peso:0,sat_pct:0};
+    drawPartShape(colX, m.part, partColor, col, true);
   });
 
   // ── Evidenziazione gancio durante drag manual ──
@@ -1197,7 +1214,7 @@ function applyCopieAssembly(qty){
     });
   }
 
-  draw(); updateKPIManual(); updateBlockNav();
+  resetView(); updateKPIManual(); updateBlockNav();
   const totBlocks = qty * blocksPerCopy;
   showToastOk('Assembly × '+qty+' · '+totBlocks+' blocchi · '+(totBlocks*3)+' m catena');
 }
