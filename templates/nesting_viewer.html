@@ -1354,52 +1354,65 @@ function applyCodaItem(idx){
     return max + 1;
   }
 
+  // Espandi tutti i pezzi di tutte le copie in una lista piatta
+  // (part.qty = occorrenze per macchina, item.qty = numero macchine)
+  const allPieces=[];
   for(let q=0;q<item.qty;q++){
     (item.pezzi||[]).forEach(part=>{
-      const orientations=[
-        {L:part.largh_mm||part.L||100, H:part.alt_mm||part.H||100, rot:false},
-        {L:part.alt_mm||part.H||100,   H:part.largh_mm||part.L||100, rot:true}
-      ];
-      let placed=false;
-
-      // 1. Prova tutti i ganci esistenti + quelli manuali aperti
-      for(const or of orientations){
-        const tp={...part,largh_mm:or.L,alt_mm:or.H};
-        const existSlots=Math.max(
-          (NDATA.columns||[]).length,
-          manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0,
-          0
-        );
-        for(let si=0;si<existSlots;si++){
-          const yTop=tryFitInSlot(si,tp);
-          if(yTop!==null){
-            manualParts.push({slotIdx:si,
-              part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
-                    orientamento:or.rot?'ruotato_90':'standard',
-                    nome:part.nome||part.name||'pezzo'},
-              color:'#ff9800',_fromCoda:item.id});
-            piazzati++; placed=true; break;
-          }
-        }
-        if(placed) break;
+      const pQty = part.qty||part.qta||1;
+      for(let pq=0;pq<pQty;pq++){
+        allPieces.push(part);
       }
+    });
+  }
+  // Ordina per area decrescente (bin-packing: i pezzi più grandi prima)
+  allPieces.sort((a,b)=>(b.largh_mm*b.alt_mm)-(a.largh_mm*a.alt_mm));
 
-      // 2. Nessuno spazio esistente → apri nuovo gancio
-      if(!placed){
-        for(const or of orientations){
-          if(or.L > PASSO_MM - GAP_LAT) continue;
-          const ns = nextFreeSlot();
-          manualParts.push({slotIdx:ns,
-            part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:-HOOK_LEN,
+  for(const part of allPieces){
+    const orientations=[
+      {L:part.largh_mm||part.L||100, H:part.alt_mm||part.H||100, rot:false},
+      {L:part.alt_mm||part.H||100,   H:part.largh_mm||part.L||100, rot:true}
+    ];
+    let placed=false;
+
+    // 1. Prova tutti i ganci esistenti + quelli manuali aperti
+    for(const or of orientations){
+      const tp={...part,largh_mm:or.L,alt_mm:or.H};
+      const existSlots=Math.max(
+        (NDATA.columns||[]).length,
+        manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0,
+        0
+      );
+      for(let si=0;si<existSlots;si++){
+        const yTop=tryFitInSlot(si,tp);
+        if(yTop!==null){
+          manualParts.push({slotIdx:si,
+            part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
                   orientamento:or.rot?'ruotato_90':'standard',
                   nome:part.nome||part.name||'pezzo'},
             color:'#ff9800',_fromCoda:item.id});
           piazzati++; placed=true; break;
         }
       }
-    });
+      if(placed) break;
+    }
+
+    // 2. Nessuno spazio esistente → apri nuovo gancio
+    if(!placed){
+      for(const or of orientations){
+        if(or.L > PASSO_MM - GAP_LAT) continue;
+        const ns = nextFreeSlot();
+        const yTop = -HOOK_LEN - (NDATA.gap_v_mm||60);
+        manualParts.push({slotIdx:ns,
+          part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
+                orientamento:or.rot?'ruotato_90':'standard',
+                nome:part.nome||part.name||'pezzo'},
+          color:'#ff9800',_fromCoda:item.id});
+        piazzati++; placed=true; break;
+      }
+    }
   }
-  draw(); updateKPIManual();
+  resetView(); updateKPIManual();
   item.stato='✅ applicato ('+piazzati+' pz)';
   renderCoda();
   showToastOk(item.nome+' · '+piazzati+' pz su '+(nextFreeSlot())+' ganci · '+
