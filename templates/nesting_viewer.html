@@ -89,6 +89,15 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
 .lb-auto:hover{background:#00c853}
 .lb-manual:hover{background:#263545;color:#fff}
 
+/* ── Block navigation bar ── */
+#block-nav-bar{display:none;align-items:center;padding:4px 8px;
+  background:#0a1117;border-bottom:1px solid #1a2633;flex-wrap:wrap;gap:4px;
+  position:relative;z-index:10}
+.block-btn{background:#0d1117;border:1px solid #263545;color:#80cbc4;
+  font-size:10px;font-family:'Courier New',monospace;padding:2px 9px;
+  cursor:pointer;border-radius:3px;transition:all .15s}
+.block-btn:hover{background:#1a2633;border-color:#00e676;color:#00e676}
+.block-btn.active{background:#00e676;color:#000;border-color:#00e676;font-weight:bold}
 #ruler{position:absolute;bottom:14px;left:14px;font-size:9px;color:#4a6070;display:none}
 
 /* GHOST drag */
@@ -160,6 +169,7 @@ select.cm-input option{background:#0d1117}
     <div class="kpi"><div class="kl">Peso totale</div><div class="kv" id="kpi-peso">—</div></div>
     <div class="kpi"><div class="kl">N° ganci</div><div class="kv" id="kpi-ganci">—</div></div>
     <div class="kpi"><div class="kl">Catena usata</div><div class="kv" id="kpi-catena">—</div></div>
+    <div class="kpi" id="kpi-blocchi-box" style="display:none"><div class="kl">Blocchi catena</div><div class="kv" id="kpi-blocchi">—</div></div>
     <div class="kpi"><div class="kl">Max kg/gancio</div><div class="kv" id="kpi-maxkg">—</div></div>
     <div class="kpi">
       <div class="kl">Saturazione</div>
@@ -242,6 +252,7 @@ select.cm-input option{background:#0d1117}
               title="Carica file STP da aggiungere alla coda (usa N° copie dalla sidebar)">📁 + STP in Coda</button>
     </div>
 
+    <div id="block-nav-bar" style="display:none;align-items:center;padding:4px 8px;flex-wrap:wrap;gap:4px;background:#0a1117;border-bottom:1px solid #1a2633"></div>
     <canvas id="c"></canvas>
     <div id="ruler">scala: 1 gancio = <span id="ruler-val">400</span>mm</div>
 
@@ -1155,52 +1166,89 @@ function setAct(btn){
 // COPIE ASSEMBLY
 // ═══════════════════════════════════════════════════════
 function applyCopieAssembly(qty){
-  qty=Math.max(1,parseInt(qty)||1);
-  if(!NDATA||!NDATA.library) return;
-  // Svuota pezzi manuali aggiunti da copie precedenti assembly
-  manualParts = manualParts.filter(m=>!m._fromAssembly);
-  if(qty<=1){ draw(); updateKPIManual(); return; }
-  // Copie 2..N: aggiungi tutti i pezzi dell'assembly altre (qty-1) volte
-  for(let q=1;q<qty;q++){
-    (NDATA.library||[]).forEach(part=>{
-      // tenta auto-place silenziosa
-      const orientations=[
-        {L:part.largh_mm,H:part.alt_mm,rot:false},
-        {L:part.alt_mm,H:part.largh_mm,rot:true}
-      ];
-      let placed=false;
-      for(const or of orientations){
-        const tp={...part,largh_mm:or.L,alt_mm:or.H};
-        for(let si=0;si<(NDATA.columns||[]).length+manualParts.length+1;si++){
-          const yTop=tryFitInSlot(si,tp);
-          if(yTop!==null){
-            manualParts.push({slotIdx:si,
-              part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
-                    orientamento:or.rot?'ruotato_90':'standard'},
-              color:'#ff9800',_fromAssembly:true});
-            placed=true; break;
-          }
-        }
-        if(placed) break;
-      }
-      if(!placed){
-        // nuovo gancio
-        const GAP_LAT=NDATA.gap_lat_mm||60;
-        for(const or of orientations){
-          if(or.L>PASSO_MM-GAP_LAT) continue;
-          const ns=(NDATA.columns||[]).length+
-            [...new Set(manualParts.filter(m=>m.slotIdx>=(NDATA.columns||[]).length).map(m=>m.slotIdx))].length;
-          manualParts.push({slotIdx:ns,
-            part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:-HOOK_LEN,
-                  orientamento:or.rot?'ruotato_90':'standard'},
-            color:'#ff9800',_fromAssembly:true});
-          break;
-        }
-      }
+  qty = Math.max(1, parseInt(qty)||1);
+  if(!NDATA) return;
+
+  // Reset copie precedenti
+  manualParts = manualParts.filter(m => !m._fromAssembly);
+
+  if(qty <= 1){ draw(); updateKPIManual(); updateBlockNav(); return; }
+
+  const nCols  = (NDATA.columns||[]).length;
+  const nGB    = Math.max(1, Math.round(3000 / PASSO_MM)); // ganci per 3 m
+  // Ogni copia occupa un numero di slot arrotondato al multiplo di nGB
+  const blocksPerCopy  = Math.max(1, Math.ceil(nCols / nGB));
+  const slotsPerCopy   = blocksPerCopy * nGB;
+
+  // Ogni copia (q=1..qty-1) specchia NDATA.columns con offset di slot
+  for(let q = 1; q < qty; q++){
+    const offset = q * slotsPerCopy;
+    (NDATA.columns||[]).forEach((col, ci) => {
+      (col.pezzi||[]).forEach(piece => {
+        manualParts.push({
+          slotIdx : ci + offset,
+          part    : { ...piece },   // copia identica del pezzo
+          color   : q === 1 ? '#ff9800' : q === 2 ? '#29b6f6' :
+                    q === 3 ? '#ab47bc' : '#ef5350',
+          _fromAssembly : true,
+          _copyIdx      : q
+        });
+      });
     });
   }
-  draw(); updateKPIManual();
-  showToastOk('Assembly × '+qty+' applicato!');
+
+  draw(); updateKPIManual(); updateBlockNav();
+  const totBlocks = qty * blocksPerCopy;
+  showToastOk('Assembly × '+qty+' · '+totBlocks+' blocchi · '+(totBlocks*3)+' m catena');
+}
+
+
+// ═══════════════════════════════════════════════════════
+// NAVIGAZIONE BLOCCHI CATENA
+// ═══════════════════════════════════════════════════════
+let _activeBlock = 0;
+
+function updateBlockNav(){
+  if(!NDATA) return;
+  const nGB = Math.max(1, Math.round(3000 / PASSO_MM));
+  const maxManSlot = manualParts.length > 0
+    ? Math.max(...manualParts.map(m=>m.slotIdx)) + 1 : 0;
+  const totalSlots  = Math.max((NDATA.columns||[]).length, maxManSlot);
+  const totalBlocks = Math.max(1, Math.ceil(totalSlots / nGB));
+
+  // KPI blocchi
+  const kpiBox = document.getElementById('kpi-blocchi-box');
+  const kpiVal = document.getElementById('kpi-blocchi');
+  if(kpiBox && kpiVal){
+    kpiBox.style.display = 'block';
+    kpiVal.textContent = totalBlocks + ' (' + (totalSlots * PASSO_MM / 1000).toFixed(1) + ' m)';
+  }
+
+  const bar = document.getElementById('block-nav-bar');
+  if(!bar) return;
+  if(totalBlocks <= 1){ bar.style.display='none'; return; }
+
+  bar.style.display = 'flex';
+  let html = '<span style="color:#4a6070;font-size:10px;margin-right:4px">⛓ Blocchi:</span>';
+  for(let i = 0; i < totalBlocks; i++){
+    const mS = (i * nGB * PASSO_MM / 1000).toFixed(0);
+    const mE = ((i+1) * nGB * PASSO_MM / 1000).toFixed(0);
+    const isActive = i === _activeBlock;
+    html += `<button class="block-btn${isActive?' active':''}"
+      onclick="goToBlock(${i})" title="${mS}–${mE} m">B${i+1}</button>`;
+  }
+  bar.innerHTML = html;
+}
+
+function goToBlock(n){
+  _activeBlock = n;
+  const nGB = Math.max(1, Math.round(3000 / PASSO_MM));
+  const blockCenterX = (n * nGB + nGB / 2) * PASSO_MM;
+  const p = projFn(blockCenterX, Z_MAX_MM / 2, 0);
+  offX = canvas.width / 2  - p.sx * scale;
+  offY = canvas.height / 2 - p.sy * scale;
+  draw();
+  updateBlockNav(); // aggiorna active button
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1348,6 +1396,7 @@ function applyCodaItem(idx){
   const GAP_LAT = NDATA.gap_lat_mm||60;
 
   // Helper: calcola il prossimo slot libero (dopo tutti i ganci usati)
+  // Arrotonda al multiplo di nGB per partire da un blocco pulito
   function nextFreeSlot(){
     let max = (NDATA.columns||[]).length - 1;
     manualParts.forEach(m=>{ if(m.slotIdx>max) max=m.slotIdx; });
@@ -1412,7 +1461,7 @@ function applyCodaItem(idx){
       }
     }
   }
-  resetView(); updateKPIManual();
+  resetView(); updateKPIManual(); updateBlockNav();
   item.stato='✅ applicato ('+piazzati+' pz)';
   renderCoda();
   showToastOk(item.nome+' · '+piazzati+' pz su '+(nextFreeSlot())+' ganci · '+
