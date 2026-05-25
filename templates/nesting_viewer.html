@@ -95,7 +95,7 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
   position:relative;z-index:10}
 .block-btn{background:#0d1117;border:1px solid #263545;color:#80cbc4;
   font-size:10px;font-family:'Courier New',monospace;padding:2px 9px;
-  cursor:pointer;border-radius:3px;transition:all .15s}
+  cursor:pointer;border-radius:3px;transition:all .15s;line-height:1.3;text-align:center}
 .block-btn:hover{background:#1a2633;border-color:#00e676;color:#00e676}
 .block-btn.active{background:#00e676;color:#000;border-color:#00e676;font-weight:bold}
 #ruler{position:absolute;bottom:14px;left:14px;font-size:9px;color:#4a6070;display:none}
@@ -112,6 +112,12 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
   font-size:10px;text-align:center;border-radius:4px;padding:1px 3px;
   font-family:'Courier New',monospace}
 .qty-inp:focus{outline:none;border-color:#00e676}
+
+/* LEGENDA MACCHINE */
+#mac-legend{margin-top:8px;border-top:1px solid #1a2633;padding-top:6px}
+#mac-legend h3{color:#00e676;font-size:10px;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px}
+.mac-row{display:flex;align-items:center;gap:5px;font-size:8px;color:#80cbc4;margin-bottom:3px;word-break:break-all}
+.mac-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
 /* CODA MACCHINE sidebar */
 #coda-section{margin-top:10px;border-top:1px solid #1a2633;padding-top:8px}
@@ -182,6 +188,12 @@ select.cm-input option{background:#0d1117}
     <div style="margin-top:5px">
       <button class="tb" id="btn-manual" style="width:100%;font-size:10px" onclick="toggleManual()">✋ Nesting Manuale</button>
     </div>
+    <div style="margin-top:5px">
+      <button class="tb act" id="btn-ottimizza" style="width:100%;font-size:10px;background:#00e676;color:#000;border-color:#00e676;font-weight:bold"
+        onclick="ottimizzaTutto()" title="Bin-packing globale cross-macchina: riempie ogni blocco da 3m mescolando pezzi di tutte le macchine">
+        ⚡ Ottimizza Catena
+      </button>
+    </div>
     <div id="clist" style="margin-top:8px"></div>
 
     <!-- KPI copie assembly -->
@@ -192,6 +204,12 @@ select.cm-input option{background:#0d1117}
                onchange="applyCopieAssembly(this.value)">
         <span style="font-size:9px;color:#4a6070">× tutto l'assembly</span>
       </div>
+    </div>
+
+    <!-- LEGENDA MACCHINE -->
+    <div id="mac-legend" style="display:none">
+      <h3>🎨 Macchine</h3>
+      <div id="mac-legend-list"></div>
     </div>
 
     <!-- CODA MACCHINE -->
@@ -423,9 +441,15 @@ function draw(){
   hitBoxes=[];
 
   const nCols = NDATA.columns.length;
-  // Estende tX ai ganci manuali (es. 100 copie → molti ganci aperti)
-  const maxManSlot = manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0;
-  const tX    = Math.max(nCols, maxManSlot) * PASSO_MM;
+  // In block-view: mostra solo il blocco attivo
+  const nGB_tx = Math.max(1, Math.round(3000 / PASSO_MM));
+  let tX;
+  if(_blockView){
+    tX = (_activeBlock + 1) * nGB_tx * PASSO_MM;
+  } else {
+    const maxManSlot = manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0;
+    tX = Math.max(nCols, maxManSlot) * PASSO_MM;
+  }
 
   // ── Griglia ──
   ctx.strokeStyle=GRID(); ctx.lineWidth=0.5;
@@ -449,16 +473,32 @@ function draw(){
   drawChain(tX);
 
   // ── Colonne ──
-  const sorted=[...NDATA.columns].sort((a,b)=>
+  // In block-view mode mostra solo i ganci del blocco attivo
+  const nGB_draw = Math.max(1, Math.round(3000 / PASSO_MM));
+  const blockSlotStart = _blockView ? _activeBlock * nGB_draw : 0;
+  const blockSlotEnd   = _blockView ? blockSlotStart + nGB_draw - 1 : Infinity;
+
+  const sorted=[...NDATA.columns].filter(c=>
+    c.start_slot >= blockSlotStart && c.start_slot <= blockSlotEnd
+  ).sort((a,b)=>
     viewMode==='iso' ? b.start_slot-a.start_slot : a.start_slot-b.start_slot
   );
   sorted.forEach(col=>drawColumn(col, false));
 
   // ── Pezzi manuali (copie) — gancio + pezzo colorato ──
-  manualParts.forEach(m=>{
-    const colX     = m.slotIdx*PASSO_MM + PASSO_MM/2;
-    const partColor = m.color || '#ff9800';
-    // — Disegna il gancio per questa copia —
+  // Filtra per blocco attivo in block-view mode
+  const visManualParts = _blockView
+    ? manualParts.filter(m => m.slotIdx >= blockSlotStart && m.slotIdx <= blockSlotEnd)
+    : manualParts;
+  // Raggruppa per slot per disegnare gancio una sola volta per slot
+  const slotMap = new Map();
+  visManualParts.forEach(m=>{
+    if(!slotMap.has(m.slotIdx)) slotMap.set(m.slotIdx,[]);
+    slotMap.get(m.slotIdx).push(m);
+  });
+  slotMap.forEach((pieces, slotIdx)=>{
+    const colX = slotIdx*PASSO_MM + PASSO_MM/2;
+    // — Disegna gancio una volta per slot —
     const ga=px(colX,0,0), gb=px(colX,-HOOK_LEN,0);
     ctx.strokeStyle=darkMode?'#b0bec5':'#607d8b';
     ctx.lineWidth=Math.max(2,3*scale); ctx.lineCap='round';
@@ -468,14 +508,21 @@ function draw(){
     ctx.beginPath();ctx.arc(hc.x,hc.y,35*scale*C30,Math.PI*.5,Math.PI*1.5);ctx.stroke();
     ctx.fillStyle=darkMode?'#b0bec5':'#607d8b';
     ctx.beginPath();ctx.arc(ga.x,ga.y,Math.max(3,4*scale),0,Math.PI*2);ctx.fill();
-    // — Label gancio copia —
+    // — Label slot —
     const lp=px(colX,65,0);
-    ctx.fillStyle=partColor; ctx.font=`bold ${Math.max(7,9*scale)}px 'Courier New'`;
+    const totPeso = pieces.reduce((s,m)=>s+(m.part.peso_kg||m.part.peso||0),0);
+    ctx.fillStyle=pieces[0].color||'#00e676';
+    ctx.font=`bold ${Math.max(7,9*scale)}px 'Courier New'`;
     ctx.textAlign='center';
-    ctx.fillText(`G${m.slotIdx+1}·c${m._copyIdx||'?'}`,lp.x,lp.y);
-    // — Disegna il pezzo col colore corretto —
-    const col={start_slot:m.slotIdx,color:partColor,pezzi:[],peso:0,sat_pct:0};
-    drawPartShape(colX, m.part, partColor, col, true);
+    ctx.fillText(`G${slotIdx+1}·${totPeso.toFixed(1)}kg`,lp.x,lp.y);
+    // — Disegna ogni pezzo —
+    pieces.forEach(m=>{
+      const partColor = m.color || '#ff9800';
+      const col={start_slot:slotIdx,color:partColor,pezzi:[],peso:0,sat_pct:0};
+      // Passa _macName al part per il tooltip
+      const partWithMac = {...m.part, _macName: m._macName||null};
+      drawPartShape(colX, partWithMac, partColor, col, !m._fromOpt);
+    });
   });
 
   // ── Evidenziazione gancio durante drag manual ──
@@ -493,7 +540,10 @@ function draw(){
   }
 
   // ── Misure frontali ──
-  if(viewMode==='front') NDATA.columns.forEach(col=>drawMeasures(col));
+  if(viewMode==='front'){
+    const visCols = NDATA.columns.filter(c => c.start_slot >= blockSlotStart && c.start_slot <= blockSlotEnd);
+    visCols.forEach(col=>drawMeasures(col));
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -526,13 +576,41 @@ function drawChain(tX){
   const la=px(-PASSO_MM*.3,44,0);
   ctx.fillStyle=TXTCOL(); ctx.textAlign='left';
   ctx.font=`bold ${Math.max(7,8*scale)}px 'Courier New'`;
-  // Etichetta catena: mostra ganci totali inclusi manuali
-  const totSlots = Math.max(NDATA.total_slots,
+  const totSlots = Math.max(NDATA.total_slots||0,
     manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0);
-  ctx.fillText(`CATENA ${NDATA.passo_mm}mm — ${totSlots} GANCI`,la.x,la.y);
+  const nGB_cl = Math.max(1, Math.round(3000/PASSO_MM));
+  const chainLabel = _blockView
+    ? `BLOCCO ${_activeBlock+1} · ${PASSO_MM}mm passo · ${nGB_cl} ganci · ${(nGB_cl*PASSO_MM/1000).toFixed(1)}m`
+    : `CATENA ${NDATA.passo_mm}mm — ${totSlots} GANCI`;
+  ctx.fillText(chainLabel, la.x, la.y);
   const lb=px(tX+PASSO_MM*.05,44,0);
   ctx.fillStyle=DIM();
-  ctx.fillText(`${(totSlots*NDATA.passo_mm/1000).toFixed(1)} m`,lb.x,lb.y);
+  const mLabel = _blockView
+    ? `${(_activeBlock*nGB_cl*PASSO_MM/1000).toFixed(0)}–${((_activeBlock+1)*nGB_cl*PASSO_MM/1000).toFixed(0)} m`
+    : `${(totSlots*NDATA.passo_mm/1000).toFixed(1)} m`;
+  ctx.fillText(mLabel, lb.x, lb.y);
+
+  // Saturazione blocco attivo nel canvas
+  if(_blockView && BLOCKS[_activeBlock]){
+    const blk = BLOCKS[_activeBlock];
+    const satC = blk.satPct>85?'#00e676':blk.satPct>50?'#ff9800':'#f44336';
+    ctx.fillStyle = satC;
+    ctx.font = `bold ${Math.max(9,12*scale)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    const midP = px((_activeBlock*nGB_cl + nGB_cl/2)*PASSO_MM, 80, 0);
+    ctx.fillText(`SAT ${blk.satPct.toFixed(1)}%  ·  ${blk.pesoTot.toFixed(1)}kg`, midP.x, midP.y-18);
+    // Legenda macchine nel blocco
+    const macSet = [...new Set(blk.pieces.map(p=>p.color))];
+    const macNames = [...new Set(blk.pieces.map(p=>p.macName||''))].filter(Boolean);
+    macNames.slice(0,5).forEach((nm,i)=>{
+      const col = blk.pieces.find(p=>p.macName===nm)?.color||'#fff';
+      ctx.fillStyle = col;
+      ctx.font = `${Math.max(7,9*scale)}px 'Courier New'`;
+      ctx.textAlign = 'left';
+      ctx.fillText('● '+nm.substring(0,22), midP.x - 80, midP.y + i*14);
+    });
+    ctx.textAlign = 'center';
+  }
 
   // ── Separatori blocchi 3m ──────────────────────────────
   const nGB = Math.round(3000 / PASSO_MM);  // = 7 ganci per blocco 3m (a 400mm passo)
@@ -687,7 +765,10 @@ function drawPartShape(x, part, color, col, isManual){
   hitBoxes.push({
     minX:Math.min(...allP.map(p=>p.x)), maxX:Math.max(...allP.map(p=>p.x)),
     minY:Math.min(...allP.map(p=>p.y)), maxY:Math.max(...allP.map(p=>p.y)),
-    part, col, isManual
+    part, col, isManual,
+    slotIdx: col ? col.start_slot : -1,
+    color: strokeCol,
+    _macName: part._macName||null
   });
 }
 
@@ -1066,13 +1147,12 @@ function handleFileSelect(f){
       document.getElementById('ruler').style.display='block';
       updateKPI(); buildColumnList();
       document.getElementById('kpi-copie-box').style.display='block';
-      // FIX: leggi N° copie STP e applica automaticamente
       const autoQty = Math.max(1, parseInt(document.getElementById('stp-qty')?.value)||1);
       document.getElementById('copie-assembly').value=autoQty;
       if(manualMode) buildLibPanel();
       resetView();
-      // Applica copie automaticamente se > 1
-      if(autoQty > 1) setTimeout(()=>applyCopieAssembly(autoQty), 200);
+      // Auto-ottimizza sempre dopo il caricamento
+      setTimeout(()=>runAndShow(), 200);
     })
     .catch(err=>{
       document.getElementById('loading').style.display='none';
@@ -1152,16 +1232,19 @@ function handleHover(e){
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   for(const hb of [...hitBoxes].reverse()){
     if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY){
-      canvas.style.cursor=hb.isManual?'pointer':'default';
+      canvas.style.cursor=(hb.isManual&&!hb.part._fromOpt)?'pointer':'default';
       const sat=hb.col.sat_pct||0;
       document.getElementById('tip-name').textContent=hb.part.nome;
-      document.getElementById('tip-col').textContent='Gancio G'+(hb.col.start_slot+1);
-      document.getElementById('tip-col').style.color=hb.col.color;
+      const gancioN = hb.col ? 'G'+(hb.col.start_slot+1) : 'G'+(hb.slotIdx+1);
+      const macInfo  = hb._macName ? ` · ${hb._macName}` : '';
+      document.getElementById('tip-col').textContent = gancioN + macInfo;
+      document.getElementById('tip-col').style.color = hb.col ? hb.col.color : (hb.color||'#00e676');
       document.getElementById('tip-h').textContent=hb.part.alt_mm.toFixed(0)+' mm';
       document.getElementById('tip-w').textContent=hb.part.largh_mm.toFixed(0)+' mm';
-      document.getElementById('tip-p').textContent=hb.part.peso_kg.toFixed(2)+' kg';
-      document.getElementById('tip-sat').textContent=sat.toFixed(1)+'%';
-      document.getElementById('tip-hint').textContent=hb.isManual?'🖱 Click per rimuovere':'';
+      document.getElementById('tip-p').textContent=((hb.part.peso_kg||hb.part.peso||0)).toFixed(2)+' kg';
+      const blkSat = BLOCKS[_activeBlock] ? BLOCKS[_activeBlock].satPct.toFixed(1)+'%' : sat.toFixed(1)+'%';
+      document.getElementById('tip-sat').textContent=blkSat;
+      document.getElementById('tip-hint').textContent=(hb.isManual&&!hb.part._fromOpt)?'🖱 Click per rimuovere':'';
       tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-16)+'px';
       tip.style.display='block'; return;
     }
@@ -1184,65 +1267,336 @@ function setAct(btn){
   btn.classList.add(darkMode?'act':'act-light');
 }
 
-// ═══════════════════════════════════════════════════════
-// COPIE ASSEMBLY
-// ═══════════════════════════════════════════════════════
-function applyCopieAssembly(qty){
-  qty = Math.max(1, parseInt(qty)||1);
+
+// ═══════════════════════════════════════════════════════════════════════
+// OTTIMIZZATORE GLOBALE — BIN-PACKING CROSS-MACCHINA
+// Logica: tutti i pezzi di tutte le macchine in coda globale.
+// Si riempie blocco per blocco (3m = nGB ganci).
+// Un blocco si chiude solo quando è pieno o non entra più niente.
+// Il pezzo successivo in coda (di qualsiasi macchina) riempie il gap.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Palette colori per macchina (stabile per indice macchina)
+const MAC_COLORS = [
+  '#00e676','#29b6f6','#ff9800','#ab47bc','#ef5350',
+  '#66bb6a','#ffa726','#26c6da','#ec407a','#ffee58',
+  '#80cbc4','#ce93d8','#ffab40','#4fc3f7','#a5d6a7'
+];
+
+// Stato ottimizzatore globale
+let GLOBAL_PIECES = [];   // [{part, macIdx, macName, color, macCopyIdx}]  — lista piatta ordinata
+let BLOCKS        = [];   // [{blockIdx, slots:[{slotIdx, pieces:[{part,macIdx,color}]}], satPct, pesoTot}]
+let _viewBlock    = 0;    // blocco attualmente visualizzato
+let _blockView    = false;// true = modalità blocco-singolo
+
+// ── Costruisce GLOBAL_PIECES da NDATA + copie + CODA ──────────────────
+function buildGlobalPieces(qty){
+  GLOBAL_PIECES = [];
   if(!NDATA) return;
+  const macColor0 = MAC_COLORS[0];
 
-  // Reset copie precedenti
-  manualParts = manualParts.filter(m => !m._fromAssembly);
-
-  if(qty <= 1){ draw(); updateKPIManual(); updateBlockNav(); return; }
-
-  const nCols  = (NDATA.columns||[]).length;
-  const nGB    = Math.max(1, Math.round(3000 / PASSO_MM)); // ganci per 3 m
-  // Ogni copia occupa un numero di slot arrotondato al multiplo di nGB
-  const blocksPerCopy  = Math.max(1, Math.ceil(nCols / nGB));
-  const slotsPerCopy   = blocksPerCopy * nGB;
-
-  // Ogni copia (q=1..qty-1) specchia NDATA.columns con offset di slot
-  for(let q = 1; q < qty; q++){
-    const offset = q * slotsPerCopy;
-    (NDATA.columns||[]).forEach((col, ci) => {
+  // Assembly principale × qty copie
+  for(let q = 0; q < qty; q++){
+    (NDATA.columns||[]).forEach(col => {
       (col.pezzi||[]).forEach(piece => {
-        manualParts.push({
-          slotIdx : ci + offset,
-          part    : { ...piece },   // copia identica del pezzo
-          color   : ['#ff9800','#29b6f6','#ab47bc','#ef5350','#66bb6a','#ffa726','#26c6da','#ec407a'][q % 8],
-          _fromAssembly : true,
-          _copyIdx      : q
+        GLOBAL_PIECES.push({
+          part       : {...piece},
+          macIdx     : 0,
+          macCopyIdx : q,
+          macName    : (NDATA.nome||'Assembly') + (qty>1 ? ` #${q+1}` : ''),
+          color      : macColor0
         });
       });
     });
   }
 
-  resetView(); updateKPIManual(); updateBlockNav();
-  const totBlocks = qty * blocksPerCopy;
-  showToastOk('Assembly × '+qty+' · '+totBlocks+' blocchi · '+(totBlocks*3)+' m catena');
+  // Pezzi da CODA
+  CODA.forEach((item, ci) => {
+    if(!item.pezzi || !item.pezzi.length) return;
+    const macIdx = ci + 1;
+    const color  = item._color || MAC_COLORS[macIdx % MAC_COLORS.length];
+    for(let q = 0; q < (item.qty||1); q++){
+      (item.pezzi||[]).forEach(part => {
+        const pQty = part.qty||part.qta||1;
+        for(let pq = 0; pq < pQty; pq++){
+          GLOBAL_PIECES.push({
+            part       : {...part, nome: part.nome||part.name||'pezzo'},
+            macIdx,
+            macCopyIdx : q,
+            macName    : item.nome + (item.qty>1 ? ` #${q+1}` : ''),
+            color
+          });
+        }
+      });
+    }
+  });
+
+  // Ordina: prima per altezza decrescente (bin-packing First Fit Decreasing)
+  GLOBAL_PIECES.sort((a,b) => (b.part.alt_mm||0) - (a.part.alt_mm||0));
 }
 
+// ── Motore bin-packing: riempie BLOCKS ───────────────────────────────
+function runOptimizer(qty){
+  qty = Math.max(1, parseInt(qty)||1);
+  if(!NDATA) return;
+
+  buildGlobalPieces(qty);
+
+  const nGB     = Math.max(1, Math.round(3000 / PASSO_MM)); // ganci per blocco
+  const GAP_LAT = NDATA.gap_lat_mm || 60;
+  const gapV    = NDATA.gap_v_mm || GAP_V || 60;
+
+  // Struttura blocchi: ogni blocco ha nGB slot
+  // slot[i] = {slotIdx(globale), pieces:[], lastY, wMax, peso}
+  BLOCKS = [];
+
+  // Stato runtime degli slot aperti
+  // slotState[globalSlotIdx] = {lastY, wMax, peso}
+  const slotState = {};
+
+  function getSlotState(gsi){
+    if(!slotState[gsi]) slotState[gsi] = {lastY:-HOOK_LEN, wMax:0, peso:0};
+    return slotState[gsi];
+  }
+
+  function slotWMax(gsi){
+    const s = slotState[gsi];
+    return s ? s.wMax : 0;
+  }
+
+  // Tenta di inserire part nello slot gsi. Ritorna yTop oppure null.
+  function trySlot(gsi, part){
+    const s   = getSlotState(gsi);
+    const partW = part.largh_mm || 100;
+    const partH = part.alt_mm   || 100;
+    const partP = part.peso_kg || part.peso || 0;
+
+    // Peso
+    if(s.peso + partP > (NDATA.max_kg||60)) return null;
+
+    // Vincolo laterale
+    const newWMax = Math.max(s.wMax, partW);
+    const blockStart = Math.floor(gsi / nGB) * nGB;
+    for(let adj = blockStart; adj < blockStart + nGB; adj++){
+      if(adj === gsi) continue;
+      const adjW = slotWMax(adj);
+      if(adjW === 0) continue;
+      const dist = Math.abs(adj - gsi);
+      if(dist === 1){
+        if(adjW/2 + newWMax/2 + GAP_LAT > PASSO_MM) return null;
+      }
+    }
+
+    // Altezza
+    const yTop = s.lastY - gapV;
+    const yBot = yTop - partH;
+    if(Math.abs(yBot) > Z_MAX_MM) return null;
+
+    return yTop;
+  }
+
+  // Commit slot
+  function commitSlot(gsi, part, yTop){
+    const s = getSlotState(gsi);
+    const partH = part.alt_mm || 100;
+    const partP = part.peso_kg || part.peso || 0;
+    s.lastY  = yTop - partH;
+    s.wMax   = Math.max(s.wMax, part.largh_mm||100);
+    s.peso  += partP;
+  }
+
+  // Assegna un pezzo a un blocco
+  function placePiece(blockIdx, gsi, piece, yTop){
+    while(BLOCKS.length <= blockIdx) BLOCKS.push({blockIdx:BLOCKS.length, slots:[], satPct:0, pesoTot:0, pieces:[]});
+    const blk = BLOCKS[blockIdx];
+    // Trova o crea slot nel blocco
+    let slot = blk.slots.find(s => s.gsi === gsi);
+    if(!slot){ slot = {gsi, localIdx: gsi - blockIdx*nGB, pieces:[]}; blk.slots.push(slot); }
+    slot.pieces.push({...piece, part:{...piece.part, y_top:yTop}});
+    blk.pieces.push({...piece, part:{...piece.part, y_top:yTop}, gsi});
+    commitSlot(gsi, piece.part, yTop);
+  }
+
+  // ── Algoritmo principale: First Fit Decreasing cross-blocco ──────────
+  // Tiene aperto il blocco corrente finché non è saturo, poi avanza.
+  // "Saturo" = nessun pezzo rimasto entra in nessuno slot del blocco.
+
+  let currentBlock = 0;
+  const remaining  = [...GLOBAL_PIECES]; // copia modificabile
+
+  while(remaining.length > 0){
+    const blockStart = currentBlock * nGB;
+    let placed = false;
+
+    // Prova ogni pezzo rimanente nel blocco corrente
+    for(let pi = 0; pi < remaining.length; pi++){
+      const piece = remaining[pi];
+      const orientations = [
+        {L: piece.part.largh_mm||100, H: piece.part.alt_mm||100, rot: false},
+        {L: piece.part.alt_mm||100,   H: piece.part.largh_mm||100, rot: true}
+      ];
+      let bestGsi=-1, bestOr=null, bestY=null, bestResiduo=-Infinity;
+
+      for(const or of orientations){
+        const tp = {...piece.part, largh_mm:or.L, alt_mm:or.H};
+        for(let li = 0; li < nGB; li++){
+          const gsi = blockStart + li;
+          const yTop = trySlot(gsi, tp);
+          if(yTop === null) continue;
+          const residuo = Z_MAX_MM - Math.abs(yTop - or.H);
+          if(residuo > bestResiduo){ bestResiduo=residuo; bestGsi=gsi; bestOr=or; bestY=yTop; }
+        }
+        if(bestGsi >= 0) break; // standard orientation fits, no need to rotate
+      }
+
+      if(bestGsi >= 0){
+        const tp = {...piece.part, largh_mm:bestOr.L, alt_mm:bestOr.H,
+                    orientamento: bestOr.rot?'ruotato_90':'standard'};
+        placePiece(currentBlock, bestGsi, {...piece, part:tp}, bestY);
+        remaining.splice(pi, 1);
+        placed = true;
+        break; // restart scan from the top (largest pieces first)
+      }
+    }
+
+    if(!placed){
+      // Nessun pezzo rimanente entra nel blocco corrente → chiudi e avanza
+      if(remaining.length > 0) currentBlock++;
+      else break;
+      // Safety: evita loop infinito se un pezzo non entra MAI
+      if(currentBlock > 9999) { console.warn('Optimizer: troppi blocchi, stop.'); break; }
+    }
+  }
+
+  // Calcola saturation per blocco
+  BLOCKS.forEach(blk => {
+    let usedH = 0;
+    const seen = new Set();
+    blk.pieces.forEach(p => {
+      const gsi = p.gsi;
+      if(!seen.has(gsi)){
+        seen.add(gsi);
+        const s = slotState[gsi];
+        if(s) usedH += Math.abs(s.lastY) - HOOK_LEN;
+      }
+    });
+    const totalH = nGB * Z_MAX_MM;
+    blk.satPct   = totalH > 0 ? Math.min(100, usedH / totalH * 100) : 0;
+    blk.pesoTot  = blk.pieces.reduce((s,p) => s+(p.part.peso_kg||p.part.peso||0), 0);
+  });
+}
+
+// ── Interfaccia: "Ottimizza" unico pulsante ───────────────────────────
+function runAndShow(){
+  const qty = Math.max(1, parseInt(document.getElementById('copie-assembly')?.value)||1);
+  // Reset
+  manualParts = manualParts.filter(m => false); // svuota tutto
+
+  runOptimizer(qty);
+
+  // Popola manualParts dai BLOCKS per il rendering esistente
+  BLOCKS.forEach(blk => {
+    blk.pieces.forEach(p => {
+      manualParts.push({
+        slotIdx  : p.gsi,
+        part     : {...p.part},
+        color    : p.color,
+        _macIdx  : p.macIdx,
+        _macName : p.macName,
+        isManual : false,
+        _fromOpt : true
+      });
+    });
+  });
+
+  _blockView = BLOCKS.length > 0;
+  _viewBlock = 0;
+  updateBlockNav();
+  if(_blockView) goToBlock(0);
+  else { resetView(); draw(); }
+  updateKPIOptimizer();
+
+  const totM = (BLOCKS.length * Math.round(3000/PASSO_MM) * PASSO_MM / 1000).toFixed(1);
+  showToastOk('⚡ '+BLOCKS.length+' blocchi · '+totM+'m · '+manualParts.length+' pz piazzati');
+  updateMacLegend();
+}
+
+function updateMacLegend(){
+  const legendDiv = document.getElementById('mac-legend');
+  const listDiv   = document.getElementById('mac-legend-list');
+  if(!legendDiv || !listDiv) return;
+
+  // Raccoglie macchine uniche da BLOCKS
+  const macs = new Map(); // macName → color
+  BLOCKS.forEach(blk => blk.pieces.forEach(p => {
+    if(p.macName && !macs.has(p.macName)) macs.set(p.macName, p.color||'#fff');
+  }));
+  // Aggiungi assembly principale
+  if(NDATA) macs.set(NDATA.nome||'Assembly', MAC_COLORS[0]);
+
+  if(macs.size === 0){ legendDiv.style.display='none'; return; }
+  legendDiv.style.display = 'block';
+  listDiv.innerHTML = '';
+  macs.forEach((color, name) => {
+    const row = document.createElement('div');
+    row.className = 'mac-row';
+    row.innerHTML = `<span class="mac-dot" style="background:${color}"></span>${name.substring(0,24)}`;
+    listDiv.appendChild(row);
+  });
+}
+
+function updateKPIOptimizer(){
+  if(!NDATA) return;
+  const totPeso = manualParts.reduce((s,m)=>s+(m.part.peso_kg||m.part.peso||0),0)
+                + (NDATA.peso_totale||0);
+  const el = document.getElementById('kpi-peso');
+  if(el) el.textContent = totPeso.toFixed(1)+' kg';
+
+  const totSlots = manualParts.length>0
+    ? Math.max(...manualParts.map(m=>m.slotIdx))+1
+    : (NDATA.columns||[]).length;
+  document.getElementById('kpi-ganci').textContent = totSlots;
+  const m = (totSlots * PASSO_MM / 1000).toFixed(1);
+  document.getElementById('kpi-catena').textContent = m+' m';
+
+  // Saturazione globale
+  const totH = manualParts.reduce((s,m)=>s+(m.part.alt_mm||0),0)
+             + (NDATA.columns||[]).reduce((s,c)=>s+(c.h_usata_mm||0),0);
+  const totA = totSlots * Z_MAX_MM;
+  const sat = totA>0 ? Math.min(100, totH/totA*100) : 0;
+  const satEl = document.getElementById('kpi-sat');
+  if(satEl) satEl.textContent = sat.toFixed(1)+'%';
+  const sb = document.getElementById('sat-bar');
+  if(sb){ sb.style.width=sat+'%'; sb.style.background=sat>85?'#f44336':sat>65?'#ff9800':'#00e676'; }
+}
 
 // ═══════════════════════════════════════════════════════
-// NAVIGAZIONE BLOCCHI CATENA
+// NAVIGAZIONE BLOCCHI — mostra UN blocco alla volta
 // ═══════════════════════════════════════════════════════
 let _activeBlock = 0;
 
 function updateBlockNav(){
   if(!NDATA) return;
   const nGB = Math.max(1, Math.round(3000 / PASSO_MM));
-  const maxManSlot = manualParts.length > 0
-    ? Math.max(...manualParts.map(m=>m.slotIdx)) + 1 : 0;
-  const totalSlots  = Math.max((NDATA.columns||[]).length, maxManSlot);
-  const totalBlocks = Math.max(1, Math.ceil(totalSlots / nGB));
+
+  // Calcola totale blocchi
+  let totalBlocks;
+  if(BLOCKS.length > 0){
+    totalBlocks = BLOCKS.length;
+  } else {
+    const maxManSlot = manualParts.length > 0
+      ? Math.max(...manualParts.map(m=>m.slotIdx)) + 1 : 0;
+    const totalSlots = Math.max((NDATA.columns||[]).length, maxManSlot);
+    totalBlocks = Math.max(1, Math.ceil(totalSlots / nGB));
+  }
 
   // KPI blocchi
   const kpiBox = document.getElementById('kpi-blocchi-box');
   const kpiVal = document.getElementById('kpi-blocchi');
   if(kpiBox && kpiVal){
     kpiBox.style.display = 'block';
-    kpiVal.textContent = totalBlocks + ' (' + (totalSlots * PASSO_MM / 1000).toFixed(1) + ' m)';
+    const totM = (totalBlocks * nGB * PASSO_MM / 1000).toFixed(1);
+    kpiVal.textContent = totalBlocks + ' (' + totM + ' m)';
   }
 
   const bar = document.getElementById('block-nav-bar');
@@ -1250,33 +1604,88 @@ function updateBlockNav(){
   if(totalBlocks <= 1){ bar.style.display='none'; return; }
 
   bar.style.display = 'flex';
-  let html = '<span style="color:#4a6070;font-size:10px;margin-right:4px">⛓ Blocchi:</span>';
-  for(let i = 0; i < totalBlocks; i++){
-    const mS = (i * nGB * PASSO_MM / 1000).toFixed(0);
-    const mE = ((i+1) * nGB * PASSO_MM / 1000).toFixed(0);
+  let html = '<span style="color:#4a6070;font-size:10px;margin-right:4px">⛓ Blocco:</span>';
+
+  // Pulsanti prev/next
+  html += `<button class="block-btn" onclick="goToBlock(Math.max(0,_activeBlock-1))" title="Precedente">◀</button>`;
+
+  // Finestra scorrevole di max 7 bottoni
+  const win = 7;
+  let lo = Math.max(0, _activeBlock - Math.floor(win/2));
+  let hi = Math.min(totalBlocks-1, lo + win - 1);
+  lo = Math.max(0, hi - win + 1);
+
+  if(lo > 0) html += `<span style="color:#4a6070;font-size:10px;padding:0 3px">…</span>`;
+  for(let i = lo; i <= hi; i++){
+    const blk = BLOCKS[i];
+    const sat = blk ? blk.satPct.toFixed(0)+'%' : '?';
+    const mS  = (i * nGB * PASSO_MM / 1000).toFixed(0);
+    const mE  = ((i+1) * nGB * PASSO_MM / 1000).toFixed(0);
     const isActive = i === _activeBlock;
+    const satColor = blk && blk.satPct > 85 ? '#00e676' : blk && blk.satPct > 50 ? '#ff9800' : '#f44336';
     html += `<button class="block-btn${isActive?' active':''}"
-      onclick="goToBlock(${i})" title="${mS}–${mE} m">B${i+1}</button>`;
+      onclick="goToBlock(${i})"
+      title="${mS}–${mE}m · sat ${sat}"
+      style="${isActive?'':''}border-bottom: 3px solid ${satColor}">
+      B${i+1}<br><span style="font-size:8px;font-weight:normal">${sat}</span></button>`;
   }
+  if(hi < totalBlocks-1) html += `<span style="color:#4a6070;font-size:10px;padding:0 3px">…</span>`;
+
+  html += `<button class="block-btn" onclick="goToBlock(Math.min(${totalBlocks-1},_activeBlock+1))" title="Successivo">▶</button>`;
+
+  // KPI blocco attivo
+  const ab = BLOCKS[_activeBlock];
+  if(ab){
+    const macSet = new Set(ab.pieces.map(p=>p.macName||''));
+    const macList = [...macSet].slice(0,3).join(', ') + (macSet.size>3?' …':'');
+    html += `<span style="margin-left:8px;font-size:9px;color:#80cbc4">
+      ${ab.pieces.length}pz · ${ab.pesoTot.toFixed(1)}kg · ${ab.satPct.toFixed(1)}% sat
+      <span style="color:#4a6070"> [${macList}]</span></span>`;
+  }
+
   bar.innerHTML = html;
 }
 
 function goToBlock(n){
-  _activeBlock = n;
   const nGB = Math.max(1, Math.round(3000 / PASSO_MM));
-  const blockCenterX = (n * nGB + nGB / 2) * PASSO_MM;
+  let totalBlocks = BLOCKS.length > 0 ? BLOCKS.length
+    : Math.max(1, Math.ceil(Math.max((NDATA?.columns||[]).length,
+        manualParts.length>0?Math.max(...manualParts.map(m=>m.slotIdx))+1:0) / nGB));
+  _activeBlock = Math.max(0, Math.min(n, totalBlocks-1));
+
+  // Centra la vista sul blocco selezionato
+  const blockCenterX = (_activeBlock * nGB + nGB / 2) * PASSO_MM;
   const p = projFn(blockCenterX, Z_MAX_MM / 2, 0);
-  offX = canvas.width / 2  - p.sx * scale;
-  offY = canvas.height / 2 - p.sy * scale;
+
+  // Scala automatica per mostrare SOLO il blocco da 3m
+  const pL = projFn(_activeBlock * nGB * PASSO_MM, 0, 0);
+  const pR = projFn((_activeBlock + 1) * nGB * PASSO_MM, 0, 0);
+  const blockW = Math.abs(pR.sx - pL.sx) || 1;
+  const targetW = canvas.width * 0.80;
+  scale = targetW / blockW;
+  // Ricalcola centro con nuova scala
+  const pp = projFn(blockCenterX, Z_MAX_MM / 2, 0);
+  offX = canvas.width  / 2 - pp.sx * scale;
+  offY = canvas.height / 2 - pp.sy * scale;
+
   draw();
-  updateBlockNav(); // aggiorna active button
+  updateBlockNav();
+}
+
+// ═══════════════════════════════════════════════════════
+// COPIE ASSEMBLY (legacy — ora usa runAndShow)
+// ═══════════════════════════════════════════════════════
+function applyCopieAssembly(qty){
+  qty = Math.max(1, parseInt(qty)||1);
+  document.getElementById('copie-assembly').value = qty;
+  runAndShow();
 }
 
 // ═══════════════════════════════════════════════════════
 // CODA MACCHINE
 // ═══════════════════════════════════════════════════════
-let CODA = [];           // [{id, nome, sorgente, qty, pezzi, stato}]
-let _codaMode = '';      // 'db' | 'commessa'
+let CODA = [];
+let _codaMode = '';
 
 function renderCoda(){
   const list=document.getElementById('coda-list');
@@ -1284,10 +1693,13 @@ function renderCoda(){
   CODA.forEach((item,idx)=>{
     const div=document.createElement('div');div.className='coda-item';
     const statoColor=item.stato.startsWith('✅')?'#00e676':item.stato.includes('errore')?'#f44336':'#ff9800';
-    const canApply = item.stato==='pronto' || item.stato.startsWith('✅');
-    const btnLabel = item.stato.startsWith('✅') ? '🔄 Ri-applica' : '▶ Applica';
+    const dotCol = item._color||'#ff9800';
+    const canApply = item.stato==='pronto'||item.stato.startsWith('✅');
     div.innerHTML=`
-      <div class="coda-nm">${item.nome}</div>
+      <div class="coda-nm" style="display:flex;align-items:center;gap:5px">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotCol};flex-shrink:0"></span>
+        ${item.nome}
+      </div>
       <div class="coda-src" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span>${item.sorgente}</span>
         <label style="font-size:9px;color:#4a6070;white-space:nowrap">Copie:</label>
@@ -1298,11 +1710,22 @@ function renderCoda(){
         <span style="color:${statoColor}">${item.stato}</span>
       </div>
       <div class="coda-btns">
-        ${canApply?'<button class="cb cb-apply" onclick="applyCodaItem('+idx+')">'+btnLabel+'</button>':''}
+        ${canApply?'<button class="cb cb-apply" onclick="ottimizzaTutto()">⚡ Ottimizza</button>':''}
         <button class="cb cb-del" onclick="removeCodaItem('+idx+')">✕</button>
       </div>`;
+    // Fix onclick string interpolation
+    div.querySelectorAll('.cb-del').forEach(b => { b.onclick = ()=>removeCodaItem(idx); });
     list.appendChild(div);
   });
+}
+
+// Pulsante principale: ottimizza tutto (assembly + tutta la coda)
+function ottimizzaTutto(){
+  const qty = Math.max(1, parseInt(document.getElementById('copie-assembly')?.value)||1);
+  // Segna tutti i pronti come da applicare
+  runAndShow();
+  CODA.forEach(item => { if(item.pezzi&&item.pezzi.length) item.stato='✅ in ottimizzatore'; });
+  renderCoda();
 }
 
 function openCodaModal(mode){
@@ -1333,44 +1756,34 @@ function loadDbMachines(){
         sel.appendChild(op);
       });
     })
-    .catch(()=>{
-      sel.innerHTML='<option value="">⚠ API non disponibile</option>';
-    });
+    .catch(()=>{ sel.innerHTML='<option value="">⚠ API non disponibile</option>'; });
 }
 
 function confirmCodaModal(){
+  const _CODA_COLORS=['#ff9800','#29b6f6','#ab47bc','#ef5350','#66bb6a','#ffa726','#26c6da','#ec407a'];
   if(_codaMode==='db'){
     const sel=document.getElementById('cm-db-select');
     const qty=parseInt(document.getElementById('cm-db-qty').value)||1;
     const val=sel.value;
     const nm=sel.options[sel.selectedIndex]?.text||val;
     if(!val){ showToastErr('Scegli una macchina!'); return; }
-    const item={id:Date.now(),nome:nm,sorgente:'DB',qty,pezzi:[],stato:'⏳ caricamento'};
-    CODA.push(item); renderCoda();
-    closeCodaModal();
-    // Carica pezzi via API
+    const item={id:Date.now(),nome:nm,sorgente:'DB',qty,pezzi:[],stato:'⏳ caricamento',
+                _color:_CODA_COLORS[CODA.length%_CODA_COLORS.length]};
+    CODA.push(item); renderCoda(); closeCodaModal();
     fetch('/api/nesting/da_db?mac_ids='+val)
       .then(r=>r.json())
-      .then(d=>{
-        item.pezzi=d.pezzi||[];
-        item.stato=item.pezzi.length>0?'pronto':'errore: nessun pezzo';
-        renderCoda();
-      })
+      .then(d=>{ item.pezzi=d.pezzi||[]; item.stato=item.pezzi.length>0?'pronto':'errore: nessun pezzo'; renderCoda(); })
       .catch(()=>{ item.stato='errore API'; renderCoda(); });
   } else {
     const commId=document.getElementById('cm-commessa-id').value.trim();
     const qty=parseInt(document.getElementById('cm-commessa-qty').value)||1;
     if(!commId){ showToastErr('Inserisci il numero commessa!'); return; }
-    const item={id:Date.now(),nome:'Commessa '+commId,sorgente:'SAP/NetPro',qty,pezzi:[],stato:'⏳ caricamento'};
-    CODA.push(item); renderCoda();
-    closeCodaModal();
+    const item={id:Date.now(),nome:'Commessa '+commId,sorgente:'SAP/NetPro',qty,pezzi:[],stato:'⏳ caricamento',
+                _color:_CODA_COLORS[CODA.length%_CODA_COLORS.length]};
+    CODA.push(item); renderCoda(); closeCodaModal();
     fetch('/api/nesting/da_commessa/'+encodeURIComponent(commId))
       .then(r=>r.json())
-      .then(d=>{
-        item.pezzi=d.pezzi||[];
-        item.stato=item.pezzi.length>0?'pronto':'errore: commessa non trovata';
-        renderCoda();
-      })
+      .then(d=>{ item.pezzi=d.pezzi||[]; item.stato=item.pezzi.length>0?'pronto':'errore: commessa non trovata'; renderCoda(); })
       .catch(()=>{ item.stato='errore API'; renderCoda(); });
   }
 }
@@ -1381,125 +1794,39 @@ function openCodaFilePicker(){
 
 function addCodaFromFile(f){
   if(!f) return;
-  const qty = Math.max(1, parseInt(document.getElementById('stp-qty')?.value) || 1);
+  const qty = Math.max(1, parseInt(document.getElementById('stp-qty')?.value)||1);
   const _CODA_COLORS=['#ff9800','#29b6f6','#ab47bc','#ef5350','#66bb6a','#ffa726','#26c6da','#ec407a'];
   const item={id:Date.now(),nome:f.name,sorgente:'STP',qty,pezzi:[],stato:'⏳ analisi',
-              _color:_CODA_COLORS[CODA.length % _CODA_COLORS.length]};
+              _color:_CODA_COLORS[CODA.length%_CODA_COLORS.length]};
   CODA.push(item); renderCoda();
   const fd=new FormData(); fd.append('file',f);
   fetch('/api/nesting/analizza',{method:'POST',body:fd})
     .then(r=>r.json())
     .then(d=>{
       if(d.error){ item.stato='errore: '+d.error; renderCoda(); return; }
-      // Estrai libreria come pezzi
       item.pezzi=d.library||[];
-      item.stato=item.pezzi.length>0?'pronto':'errore: nessun pezzo';
+      item.stato=item.pezzi.length>0?'pronto (⚡ clicca Ottimizza)':'errore: nessun pezzo';
       item._ndataFull=d;
       renderCoda();
+      showToastOk(f.name+' caricato · '+item.pezzi.length+' tipi pezzo');
     })
     .catch(()=>{ item.stato='errore analisi'; renderCoda(); });
-  // reset input per poter ricaricare stesso file
   document.getElementById('coda-file-input').value='';
 }
 
-function applyCodaItem(idx){
-  const item=CODA[idx];
-  if(!item) return;
-  // Aggiorna qty dall'input nel DOM (se l'utente l'ha cambiato manualmente)
-  const qtyInputs = document.querySelectorAll('.coda-qty-inp');
-  if(qtyInputs[idx]) item.qty = Math.max(1, parseInt(qtyInputs[idx].value)||1);
-  if(item.stato.startsWith('✅')){
-    // Ri-applica: prima rimuovi i pezzi precedenti di questo item
-    manualParts = manualParts.filter(m=>m._fromCoda!==item.id);
-    item.stato = 'pronto'; // reset temporaneo per procedere
-  }
-  if(item.stato!=='pronto') return;
-  if(!NDATA){ showToastErr('Carica prima un assembly principale!'); return; }
-  let piazzati=0;
-  const GAP_LAT = NDATA.gap_lat_mm||60;
-
-  // Helper: calcola il prossimo slot libero (dopo tutti i ganci usati)
-  // Arrotonda al multiplo di nGB per partire da un blocco pulito
-  function nextFreeSlot(){
-    let max = (NDATA.columns||[]).length - 1;
-    manualParts.forEach(m=>{ if(m.slotIdx>max) max=m.slotIdx; });
-    return max + 1;
-  }
-
-  // Espandi tutti i pezzi di tutte le copie in una lista piatta
-  // (part.qty = occorrenze per macchina, item.qty = numero macchine)
-  const allPieces=[];
-  for(let q=0;q<item.qty;q++){
-    (item.pezzi||[]).forEach(part=>{
-      const pQty = part.qty||part.qta||1;
-      for(let pq=0;pq<pQty;pq++){
-        allPieces.push(part);
-      }
-    });
-  }
-  // Ordina per area decrescente (bin-packing: i pezzi più grandi prima)
-  allPieces.sort((a,b)=>(b.largh_mm*b.alt_mm)-(a.largh_mm*a.alt_mm));
-
-  for(const part of allPieces){
-    const orientations=[
-      {L:part.largh_mm||part.L||100, H:part.alt_mm||part.H||100, rot:false},
-      {L:part.alt_mm||part.H||100,   H:part.largh_mm||part.L||100, rot:true}
-    ];
-    let placed=false;
-
-    // 1. Prova tutti i ganci esistenti + quelli manuali aperti
-    for(const or of orientations){
-      const tp={...part,largh_mm:or.L,alt_mm:or.H};
-      const existSlots=Math.max(
-        (NDATA.columns||[]).length,
-        manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0,
-        0
-      );
-      for(let si=0;si<existSlots;si++){
-        const yTop=tryFitInSlot(si,tp);
-        if(yTop!==null){
-          manualParts.push({slotIdx:si,
-            part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
-                  orientamento:or.rot?'ruotato_90':'standard',
-                  nome:part.nome||part.name||'pezzo'},
-            color:item._color||'#ff9800',_fromCoda:item.id});
-          piazzati++; placed=true; break;
-        }
-      }
-      if(placed) break;
-    }
-
-    // 2. Nessuno spazio esistente → apri nuovo gancio
-    if(!placed){
-      for(const or of orientations){
-        if(or.L > PASSO_MM - GAP_LAT) continue;
-        const ns = nextFreeSlot();
-        const gapV = NDATA.gap_v_mm || GAP_V || 60;
-        const yTop = -HOOK_LEN - gapV;
-        // Verifica altezza
-        if(Math.abs(yTop - or.H) > Z_MAX_MM) continue;
-        manualParts.push({slotIdx:ns,
-          part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
-                orientamento:or.rot?'ruotato_90':'standard',
-                nome:part.nome||part.name||'pezzo'},
-          color:item._color||'#ff9800',_fromCoda:item.id});
-        piazzati++; placed=true; break;
-      }
-    }
-  }
-  resetView(); updateKPIManual(); updateBlockNav();
-  item.stato='✅ applicato ('+piazzati+' pz)';
-  renderCoda();
-  showToastOk(item.nome+' · '+piazzati+' pz su '+(nextFreeSlot())+' ganci · '+
-    (nextFreeSlot()*PASSO_MM/1000).toFixed(1)+'m catena');
-}
+// Legacy applyCodaItem — non più usato, rimpiazzato da ottimizzaTutto
+function applyCodaItem(idx){ ottimizzaTutto(); }
 
 function removeCodaItem(idx){
   const item=CODA[idx];
-  // Rimuovi pezzi manuali associati
-  manualParts=manualParts.filter(m=>m._fromCoda!==item.id);
+  if(!item) return;
   CODA.splice(idx,1);
-  renderCoda(); draw(); updateKPIManual();
+  // Re-ottimizza senza questo item
+  manualParts = manualParts.filter(m=>false);
+  BLOCKS = [];
+  renderCoda();
+  draw();
+  updateKPIManual();
 }
 
 resize();
