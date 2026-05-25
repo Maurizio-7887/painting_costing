@@ -192,14 +192,14 @@ select.cm-input option{background:#0d1117}
         <button class="cab" onclick="openCodaModal('db')">🗄 Da DB (senza ordine)</button>
         <button class="cab" onclick="openCodaModal('commessa')">📋 Da Commessa SAP/NetPro</button>
         <!-- ── Widget: quante copie STP ── -->
-        <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
-          <label style="font-size:8px;color:#4a6070;white-space:nowrap">N° copie:</label>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:6px 4px;
+                    background:#0a1a12;border:1px solid #00e676;border-radius:6px">
+          <label style="font-size:9px;color:#4a6070;white-space:nowrap;flex:1">N° copie STP:</label>
           <input type="number" id="stp-qty" value="1" min="1" max="9999"
-                 title="Quante macchine da verniciare"
-                 style="width:56px;background:#0a1a12;border:1px solid #00e676;color:#00e676;
-                        font-size:14px;font-weight:800;text-align:center;border-radius:4px;padding:2px 0;outline:none">
-          <button class="cab" style="flex:1;margin:0;background:#0a1a12;border-color:#00e676;color:#00e676;font-weight:bold"
-                  onclick="openCodaFilePicker()">📁 Da file STP</button>
+                 title="Quante macchine da verniciare (poi usa 📁 + STP nella toolbar)"
+                 style="width:70px;background:#000;border:1px solid #00e676;color:#00e676;
+                        font-size:18px;font-weight:900;text-align:center;border-radius:4px;
+                        padding:2px 0;outline:none">
         </div>
       </div>
     </div>
@@ -236,6 +236,10 @@ select.cm-input option{background:#0d1117}
       <button class="tb" onclick="zoom(1.2)">+</button>
       <button class="tb" onclick="zoom(0.83)">−</button>
       <button class="tb danger" onclick="showUpload()">↺ Reset</button>
+      <button class="tb" id="btn-add-stp"
+              style="background:#0a1a12;border:1px solid #00e676;color:#00e676;font-weight:bold;margin-left:8px"
+              onclick="openCodaFilePicker()"
+              title="Carica file STP da aggiungere alla coda (usa N° copie dalla sidebar)">📁 + STP in Coda</button>
     </div>
 
     <canvas id="c"></canvas>
@@ -852,20 +856,25 @@ function autoPlace(part){
 
 // Controlla se il pezzo entra nello slot, ritorna y_top o null
 function tryFitInSlot(slotIdx, part){
-  const col = NDATA.columns[slotIdx];
-  if(!col) return null;
+  const col = NDATA.columns[slotIdx]; // null per ganci virtuali oltre NDATA
 
-  // 1. Peso max gancio
-  const extraPeso = manualParts.filter(m=>m.slotIdx===slotIdx).reduce((s,m)=>s+m.part.peso_kg,0);
-  if(col.peso + extraPeso + part.peso_kg > (NDATA.max_kg||60)) return null;
+  // Helper: W_max di un qualsiasi slot (NDATA + manualParts)
+  function slotWMax(si){
+    const c = NDATA.columns[si];
+    let w = c ? (c.W_max||0) : 0;
+    manualParts.filter(m=>m.slotIdx===si).forEach(m=>{ w=Math.max(w,m.part.largh_mm); });
+    return w;
+  }
 
-  // 2. Vincolo laterale: il pezzo non deve invadere i ganci vicini
-  //    Formula: W_pezzo/2 + W_vicino/2 + GAP_LAT <= PASSO_MM
   const GAP_LAT = NDATA.gap_lat_mm || 60;
-  const halfNew = part.largh_mm / 2;
 
-  // Calcola W_max effettivo di questo slot (inclusi pezzi manuali)
-  let wMaxThis = col.W_max || 0;
+  // 1. Peso max gancio (per ganci virtuali peso base = 0)
+  const basePeso  = col ? (col.peso||0) : 0;
+  const extraPeso = manualParts.filter(m=>m.slotIdx===slotIdx).reduce((s,m)=>s+m.part.peso_kg,0);
+  if(basePeso + extraPeso + part.peso_kg > (NDATA.max_kg||60)) return null;
+
+  // 2. Vincolo laterale
+  let wMaxThis = col ? (col.W_max||0) : 0;
   manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
     wMaxThis = Math.max(wMaxThis, m.part.largh_mm);
   });
@@ -873,22 +882,16 @@ function tryFitInSlot(slotIdx, part){
 
   // Controlla gancio a sinistra
   if(slotIdx > 0){
-    const leftCol = NDATA.columns[slotIdx-1];
-    let wLeft = leftCol ? (leftCol.W_max||0) : 0;
-    manualParts.filter(m=>m.slotIdx===slotIdx-1).forEach(m=>{ wLeft=Math.max(wLeft,m.part.largh_mm); });
+    const wLeft = slotWMax(slotIdx-1);
     if(wLeft/2 + newWMax/2 + GAP_LAT > PASSO_MM) return null;
   }
-  // Controlla gancio a destra
-  if(slotIdx < NDATA.columns.length-1){
-    const rightCol = NDATA.columns[slotIdx+1];
-    let wRight = rightCol ? (rightCol.W_max||0) : 0;
-    manualParts.filter(m=>m.slotIdx===slotIdx+1).forEach(m=>{ wRight=Math.max(wRight,m.part.largh_mm); });
-    if(newWMax/2 + wRight/2 + GAP_LAT > PASSO_MM) return null;
-  }
+  // Controlla gancio a destra (solo se esiste qualcosa)
+  const wRight = slotWMax(slotIdx+1);
+  if(wRight > 0 && newWMax/2 + wRight/2 + GAP_LAT > PASSO_MM) return null;
 
   // 3. Altezza disponibile
   let lastY = -HOOK_LEN;
-  col.pezzi.forEach(p=>{ lastY=Math.min(lastY, p.y_top-p.alt_mm); });
+  if(col) col.pezzi.forEach(p=>{ lastY=Math.min(lastY, p.y_top-p.alt_mm); });
   manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
     lastY=Math.min(lastY, m.part.y_top-m.part.alt_mm);
   });
@@ -1143,7 +1146,7 @@ function hexRgb(hex){
 }
 function setAct(btn){
   document.querySelectorAll('#toolbar .tb').forEach(b=>{
-    if(!['btn-theme','btn-manual'].includes(b.id)) b.classList.remove('act','act-light');
+    if(!['btn-theme','btn-manual','btn-add-stp'].includes(b.id)) b.classList.remove('act','act-light');
   });
   btn.classList.add(darkMode?'act':'act-light');
 }
