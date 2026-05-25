@@ -2628,14 +2628,20 @@ def _analizza_step_per_nesting(filepath, passo_mm=400, max_kg=60.0,
             'pezzi':col['pezzi'],'peso':col['peso'],'W_max':col['W_max'],
             'h_usata_mm':round(h_usata),'h_libera_mm':round(z_max-h_usata),'sat_pct':sat})
 
-    # Libreria pezzi unici
+    # Libreria pezzi unici con conteggio occorrenze (qty)
+    counts={}
+    for p in parts:
+        key=f"{p['nome']}_{p['largh_mm']:.0f}x{p['alt_mm']:.0f}"
+        counts[key]=counts.get(key,0)+1
     library=[]
     seen=set()
     for p in parts:
         key=f"{p['nome']}_{p['largh_mm']:.0f}x{p['alt_mm']:.0f}"
         if key not in seen:
             seen.add(key)
-            library.append({k:v for k,v in p.items() if k!='_shape'})
+            entry={k:v for k,v in p.items() if k!='_shape'}
+            entry['qty']=counts[key]
+            library.append(entry)
 
     return {'passo_mm':passo_mm,'z_max_mm':z_max,'max_kg':max_kg,
             'gap_v_mm':gap_v,'gap_lat_mm':gap_lat,
