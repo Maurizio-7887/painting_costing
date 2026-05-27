@@ -1861,6 +1861,134 @@ def carico_guidato():
         ciclo_min=ciclo_min if lotto else 113)
 
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ANALISI COSTO VERNICIATURA — sostituisce Carico Guidato nel menu
+# ══════════════════════════════════════════════════════════════════════
+@app.route('/analisi_costo_verniciatura')
+def analisi_costo_verniciatura():
+    cfg  = get_config()
+    oggi = date.today()
+
+    prodotti = Prodotto.query.filter(
+        db.or_(Prodotto.costo_standard > 0, Prodotto.superficie_m2 > 0)
+    ).order_by(Prodotto.famiglia, Prodotto.codice).all()
+
+    lotti_oggi = Lotto.query.filter(
+        Lotto.data_produzione == oggi.isoformat(),
+        Lotto.stato.in_(['completato','in_corso','confermato','pianificato'])
+    ).order_by(Lotto.id.desc()).all()
+
+    sat_oggi = None
+    if lotti_oggi:
+        sat_oggi = round(sum(l.saturazione_pct or 0 for l in lotti_oggi) / len(lotti_oggi), 1)
+
+    righe = []
+    for p in prodotti:
+        sat_calc = sat_oggi if sat_oggi else 100.0
+        try:
+            costo_calc = calcola_costo_unitario(cfg, p,
+                saturazione_pct=sat_calc, n_pezzi_blocco=20)
+        except Exception:
+            costo_calc = {}
+
+        c_reale   = costo_calc.get('costo_totale', 0)
+        c_std     = p.costo_standard or 0
+        delta     = round(c_reale - c_std, 4) if c_std > 0 else None
+        delta_pct = round((delta / c_std) * 100, 1) if c_std and delta is not None else None
+
+        storico = StoricoCosto.query.filter_by(prodotto_id=p.id)            .order_by(StoricoCosto.data.desc()).limit(30).all()
+        c_storico_medio   = round(sum(s.costo_totale for s in storico) / len(storico), 4) if storico else None
+        sat_storica_media = round(sum(s.saturazione_pct or 0 for s in storico) / len(storico), 1) if storico else None
+
+        righe.append({
+            'id': p.id, 'codice': p.codice, 'nome': p.nome,
+            'famiglia': p.famiglia or '—',
+            'sup_m2':   round(p.superficie_m2 or 0, 4),
+            'peso_kg':  round(p.peso_kg or 0, 2),
+            'passo_m':  round(p.passo_gancio_m or 0.4, 3),
+            'complessita': p.complessita_aggancio or 1,
+            'c_standard_sap': round(c_std, 4),
+            'c_reale_calc':   round(c_reale, 4),
+            'c_storico_medio':  c_storico_medio,
+            'sat_storica_media': sat_storica_media,
+            'c_energia':    round(costo_calc.get('costo_energia', 0), 4),
+            'c_fisso':      round(costo_calc.get('costo_fisso', 0), 4),
+            'c_vernice':    round(costo_calc.get('costo_vernice', 0), 4),
+            'c_manodopera': round(costo_calc.get('costo_manodopera', 0), 4),
+            'c_termico':    round(costo_calc.get('costo_termico', 0), 4),
+            't_min':        round(costo_calc.get('t_occ_min', 0), 3),
+            'delta_eur': delta, 'delta_pct': delta_pct,
+            'sat_usata': sat_calc,
+            'n_lotti_storico': len(storico),
+        })
+
+    with_std = [r for r in righe if r['c_standard_sap'] > 0]
+    kpi = {
+        'n_prodotti':        len(righe),
+        'n_con_standard':    len(with_std),
+        'sat_oggi':          sat_oggi or '—',
+        'n_lotti_oggi':      len(lotti_oggi),
+        'costo_medio_reale': round(sum(r['c_reale_calc'] for r in righe) / max(len(righe), 1), 4),
+        'delta_medio_pct':   round(sum(r['delta_pct'] for r in with_std if r['delta_pct'] is not None) / max(len(with_std), 1), 1) if with_std else None,
+        'vel_default':   cfg.velocita_default,
+        'costo_orario':  cfg.costo_orario_esercizio,
+        'centro_orario': cfg.costo_centro_orario,
+    }
+    famiglie = sorted(set(r['famiglia'] for r in righe if r['famiglia'] != '—'))
+
+    return render_template('analisi_costo_verniciatura.html',
+        righe=righe, kpi=kpi, famiglie=famiglie,
+        oggi=oggi.isoformat(), cfg=cfg,
+        lotti_oggi=lotti_oggi, sat_oggi=sat_oggi,
+        righe_json=json.dumps(righe))
+
+
+@app.route('/api/analisi_costo/calcola', methods=['POST'])
+def api_analisi_costo_calcola():
+    data = request.get_json() or {}
+    p    = Prodotto.query.get(data.get('prodotto_id'))
+    if not p:
+        return jsonify({'error': 'Prodotto non trovato'}), 404
+    cfg = get_config()
+    try:
+        result = calcola_costo_unitario(cfg, p,
+            velocita_override=float(data.get('velocita', 0)) or None,
+            saturazione_pct=float(data.get('saturazione', 100)),
+            n_pezzi_blocco=int(data.get('n_pezzi', 1)))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    result['costo_standard_sap'] = round(p.costo_standard or 0, 4)
+    result['delta_eur'] = round(result['costo_totale'] - (p.costo_standard or 0), 4)
+    result['delta_pct'] = round(result['delta_eur'] / p.costo_standard * 100, 1) if p.costo_standard else None
+    return jsonify(result)
+
+
+@app.route('/api/analisi_costo/import_sap_std', methods=['POST'])
+def api_import_sap_std():
+    f = request.files.get('file_csv')
+    if not f:
+        return jsonify({'error': 'Nessun file'}), 400
+    content_csv = f.read().decode('utf-8', errors='replace')
+    reader  = csv.DictReader(io.StringIO(content_csv), delimiter=';')
+    updated, not_found = 0, []
+    for row in reader:
+        cod  = (row.get('MATNR') or row.get('Materiale') or '').strip().upper()
+        cstd = row.get('COSTO_STD') or row.get('Costo Standard') or row.get('STPRS') or '0'
+        try:
+            c_val = float(str(cstd).replace(',', '.'))
+        except ValueError:
+            continue
+        p = Prodotto.query.filter_by(codice=cod).first()
+        if p:
+            p.costo_standard = round(c_val, 4)
+            updated += 1
+        else:
+            not_found.append(cod)
+    db.session.commit()
+    return jsonify({'updated': updated, 'not_found': not_found[:20]})
+
+
 @app.route('/fix_storico_lotti')
 def fix_storico_lotti():
     """Recupera StoricoCosto per lotti completati che non ce l'hanno ancora."""
