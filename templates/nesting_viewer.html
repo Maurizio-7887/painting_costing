@@ -403,17 +403,27 @@ function setView(v){
 function resetView(){
   if(!NDATA) return;
   const maxManSlot = manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0;
-  const tX = Math.max(NDATA.columns.length, maxManSlot) * PASSO_MM;
-  // Scala automatica: se la catena è molto lunga, rimpicciolisce
+  const nCols = _blockView
+    ? Math.max(1, Math.round(3000/PASSO_MM))          // in block-view: un blocco da 3m
+    : Math.max(NDATA.columns.length, maxManSlot);
+  const tX = nCols * PASSO_MM;
+
+  // Centro verticale: i pezzi vanno da y=0 (gancio) a y=-Z_MAX_MM (fondo)
+  // → centro geometrico a y = -Z_MAX_MM/2
+  const centerY = -Z_MAX_MM / 2;
+
+  // Scala: adatta la larghezza al canvas
   const targetW = canvas.width * 0.85;
-  const testP_a = projFn(0,          Z_MAX_MM/2, 0);
-  const testP_b = projFn(tX,         Z_MAX_MM/2, 0);
+  const testP_a = projFn(0,  centerY, 0);
+  const testP_b = projFn(tX, centerY, 0);
   const rawW    = Math.abs(testP_b.sx - testP_a.sx) || 1;
   const autoScale = Math.min(targetW / rawW, viewMode==='iso' ? 0.28 : 0.40);
   scale = autoScale;
-  const p  = projFn(tX/2, Z_MAX_MM/2, 0);
-  offX  = canvas.width/2  - p.sx*scale;
-  offY  = canvas.height/2 - p.sy*scale;
+
+  // Centro orizzontale a metà catena, verticale al centro geometrico
+  const p = projFn(tX/2, centerY, 0);
+  offX = canvas.width/2  - p.sx*scale;
+  offY = canvas.height/2 - p.sy*scale;
   draw();
 }
 function px(x,y,z){
@@ -497,7 +507,9 @@ function draw(){
   const blockSlotStart = _blockView ? _activeBlock * nGB_draw : 0;
   const blockSlotEnd   = _blockView ? blockSlotStart + nGB_draw - 1 : Infinity;
 
-  const sorted=[...NDATA.columns].filter(c=>
+  // Quando l'ottimizzatore è attivo, i pezzi NDATA sono già in manualParts →
+  // non disegnare le colonne originali per evitare sovrapposizioni
+  const sorted = _blockView ? [] : [...NDATA.columns].filter(c=>
     c.start_slot >= blockSlotStart && c.start_slot <= blockSlotEnd
   ).sort((a,b)=>
     viewMode==='iso' ? b.start_slot-a.start_slot : a.start_slot-b.start_slot
@@ -536,11 +548,26 @@ function draw(){
     ctx.fillText(`G${slotIdx+1}·${totPeso.toFixed(1)}kg`,lp.x,lp.y);
     // — Disegna ogni pezzo —
     pieces.forEach(m=>{
+      // Per pezzi multi-slot: renderizza solo l'anchor (s=0); gli altri ganci mostrano solo il gancio
+      if(m.part._multiSlotIndex > 0) return;
       const partColor = m.color || '#ff9800';
       const col={start_slot:slotIdx,color:partColor,pezzi:[],peso:0,sat_pct:0};
-      // Passa _macName al part per il tooltip
+      // Per pezzi multi-slot: centra la shape tra i ganci che occupa
+      const nS   = m.part._multiSlotCount || 1;
+      const drawX = nS > 1
+        ? (m.slotIdx + (nS-1)/2) * PASSO_MM + PASSO_MM/2   // centro tra i ganci
+        : colX;
       const partWithMac = {...m.part, _macName: m._macName||null};
-      drawPartShape(colX, partWithMac, partColor, col, !m._fromOpt);
+      drawPartShape(drawX, partWithMac, partColor, col, !m._fromOpt);
+      // Per multi-slot: disegna linea di connessione tra i ganci di supporto
+      if(nS > 1){
+        const yMid = m.part.y_top - m.part.alt_mm/2;
+        const pStart = px(m.slotIdx*PASSO_MM+PASSO_MM/2, yMid, 0);
+        const pEnd   = px((m.slotIdx+nS-1)*PASSO_MM+PASSO_MM/2, yMid, 0);
+        ctx.strokeStyle='rgba(255,152,0,0.5)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(pStart.x,pStart.y); ctx.lineTo(pEnd.x,pEnd.y); ctx.stroke();
+        ctx.setLineDash([]);
+      }
     });
   });
 
@@ -560,8 +587,11 @@ function draw(){
 
   // ── Misure frontali ──
   if(viewMode==='front'){
-    const visCols = NDATA.columns.filter(c => c.start_slot >= blockSlotStart && c.start_slot <= blockSlotEnd);
-    visCols.forEach(col=>drawMeasures(col));
+    // Solo se non in modalità ottimizzatore (altrimenti le misure vengono dalle manualParts)
+    if(!_blockView){
+      const visCols = NDATA.columns.filter(c => c.start_slot >= blockSlotStart && c.start_slot <= blockSlotEnd);
+      visCols.forEach(col=>drawMeasures(col));
+    }
   }
 }
 
@@ -781,10 +811,15 @@ function drawPartShape(x, part, color, col, isManual){
 
   // Hitbox
   const allP=[TLF,TRF,BLF,BRF,TLB,TRB,BRB];
+  // mpIdx: indice in manualParts se è un pezzo manuale/ottimizzatore
+  const mpIdx = isManual
+    ? manualParts.findIndex(m=>m.part===part||
+        (m.part.nome===part.nome&&m.part.y_top===part.y_top&&m.part.alt_mm===part.alt_mm))
+    : -1;
   hitBoxes.push({
     minX:Math.min(...allP.map(p=>p.x)), maxX:Math.max(...allP.map(p=>p.x)),
     minY:Math.min(...allP.map(p=>p.y)), maxY:Math.max(...allP.map(p=>p.y)),
-    part, col, isManual,
+    part, col, isManual, mpIdx,
     slotIdx: col ? col.start_slot : -1,
     color: strokeCol,
     _macName: part._macName||null
@@ -889,9 +924,21 @@ function buildLibPanel(){
       for(let _q=0;_q<qty;_q++) autoPlace(part);
     };
     const bMan=document.createElement('button');bMan.className='lib-btn lb-manual';
-    bMan.textContent='✋ Manual';bMan.title='Trascina sul gancio scelto';
-    bMan.onmousedown=e=>{e.stopPropagation();startDrag(e,part,'manual');};
-    btns.appendChild(bAuto);btns.appendChild(bMan);
+    bMan.textContent='✋ Manual';bMan.title='Trascina sul gancio — premi R per ruotare';
+    bMan.onmousedown=e=>{e.stopPropagation();startDrag(e,{...part},'manual');};
+    // Bottone Ruota: aggiorna dimensioni miniatura e label nel pannello
+    const bRot=document.createElement('button');bRot.className='lib-btn';
+    bRot.style.cssText='background:#263545;color:#ff9800;font-size:8px;padding:2px 5px;border-radius:3px;border:none;cursor:pointer';
+    bRot.textContent='🔄';bRot.title='Ruota 90° nella libreria';
+    bRot.onclick=e=>{
+      e.stopPropagation();
+      const tmp=part.largh_mm; part.largh_mm=part.alt_mm; part.alt_mm=tmp;
+      if(part.poly_pts) part.poly_pts=part.poly_pts.map(([x,y])=>[-y,x]);
+      // Aggiorna miniatura
+      drawMiniature(mc, part);
+      dm.textContent=`${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm·${part.peso_kg.toFixed(1)}kg`;
+    };
+    btns.appendChild(bAuto);btns.appendChild(bMan);btns.appendChild(bRot);
     div.appendChild(btns);
     list.appendChild(div);
   });
@@ -983,64 +1030,102 @@ function autoPlace(part){
 }
 
 // Controlla se il pezzo entra nello slot, ritorna y_top o null
+// Calcola quanti ganci occupa un pezzo in base alla larghezza
+function slotsNeeded(partLargh){
+  return Math.max(1, Math.ceil(partLargh / PASSO_MM));
+}
+
+// Helper: trova il punto più basso occupato su un singolo slot (tra NDATA, manualParts, ottimizzatore)
+function slotLowestY(si){
+  let ly = -HOOK_LEN;
+  const c = NDATA.columns[si];
+  if(!_blockView && c) c.pezzi.forEach(p=>{ ly=Math.min(ly,p.y_top-p.alt_mm); });
+  manualParts.filter(m=>m.slotIdx===si).forEach(m=>{ ly=Math.min(ly,m.part.y_top-m.part.alt_mm); });
+  if(_optimizerSlotState[si]) ly=Math.min(ly,_optimizerSlotState[si].lastY);
+  return ly;
+}
+
+// Helper: W_max di un qualsiasi slot (NDATA + manualParts)
+function slotWMaxManual(si){
+  const c = NDATA.columns[si];
+  let w = c ? (c.W_max||0) : 0;
+  manualParts.filter(m=>m.slotIdx===si).forEach(m=>{ w=Math.max(w,m.part.largh_mm); });
+  return w;
+}
+
 function tryFitInSlot(slotIdx, part){
-  const col = NDATA.columns[slotIdx]; // null per ganci virtuali oltre NDATA
-
-  // Helper: W_max di un qualsiasi slot (NDATA + manualParts)
-  function slotWMax(si){
-    const c = NDATA.columns[si];
-    let w = c ? (c.W_max||0) : 0;
-    manualParts.filter(m=>m.slotIdx===si).forEach(m=>{ w=Math.max(w,m.part.largh_mm); });
-    return w;
-  }
-
   const GAP_LAT = NDATA.gap_lat_mm || 60;
+  const nSlots  = slotsNeeded(part.largh_mm);   // ganci necessari
+  const partPeso = part.peso_kg||part.peso||0;
+  const pesoPerGancio = partPeso / nSlots;
 
-  // 1. Peso max gancio (per ganci virtuali peso base = 0)
-  const basePeso  = col ? (col.peso||0) : 0;
-  const extraPeso = manualParts.filter(m=>m.slotIdx===slotIdx).reduce((s,m)=>s+(m.part.peso_kg||0),0);
-  const partPeso  = part.peso_kg||part.peso||0;
-  if(basePeso + extraPeso + partPeso > (NDATA.max_kg||60)) return null;
+  // Verifica disponibilità per TUTTI i ganci che il pezzo occuperà
+  for(let s=0; s<nSlots; s++){
+    const si = slotIdx + s;
+    const col = NDATA.columns[si];
 
-  // 2. Vincolo laterale
-  let wMaxThis = col ? (col.W_max||0) : 0;
-  manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
-    wMaxThis = Math.max(wMaxThis, m.part.largh_mm);
-  });
-  const newWMax = Math.max(wMaxThis, part.largh_mm);
-
-  // Controlla gancio a sinistra
-  if(slotIdx > 0){
-    const wLeft = slotWMax(slotIdx-1);
-    if(wLeft/2 + newWMax/2 + GAP_LAT > PASSO_MM) return null;
+    // 1. Peso max per questo gancio
+    const basePeso  = col ? (col.peso||0) : 0;
+    const extraPeso = manualParts.filter(m=>m.slotIdx===si)
+                        .reduce((acc,m)=>acc+(m.part.peso_kg||0),0);
+    if(basePeso + extraPeso + pesoPerGancio > (NDATA.max_kg||60)) return null;
   }
-  // Controlla gancio a destra (solo se esiste qualcosa)
-  const wRight = slotWMax(slotIdx+1);
-  if(wRight > 0 && newWMax/2 + wRight/2 + GAP_LAT > PASSO_MM) return null;
 
-  // 3. Altezza disponibile
+  // 2. Calcola lo spazio verticale disponibile: prendi il minimo tra tutti i ganci coinvolti
+  //    (il punto più basso su ogni gancio — il pezzo parte dal più basso di tutti)
   let lastY = -HOOK_LEN;
-  if(col) col.pezzi.forEach(p=>{ lastY=Math.min(lastY, p.y_top-p.alt_mm); });
-  manualParts.filter(m=>m.slotIdx===slotIdx).forEach(m=>{
-    lastY=Math.min(lastY, m.part.y_top-m.part.alt_mm);
-  });
+  for(let s=0; s<nSlots; s++){
+    lastY = Math.min(lastY, slotLowestY(slotIdx + s));
+  }
   const yTop = lastY - GAP_V;
   const yBot = yTop - part.alt_mm;
   if(Math.abs(yBot) > Z_MAX_MM) return null;
+
+  // 3. Vincolo laterale: gancio esterno sinistro e destro al gruppo
+  if(slotIdx > 0){
+    const wLeft = slotWMaxManual(slotIdx-1);
+    if(wLeft > 0 && wLeft/2 + part.largh_mm/2 + GAP_LAT > PASSO_MM) return null;
+  }
+  const rightNeighbor = slotIdx + nSlots;
+  const wRight = slotWMaxManual(rightNeighbor);
+  if(wRight > 0 && part.largh_mm/2 + wRight/2 + GAP_LAT > PASSO_MM) return null;
 
   return yTop;
 }
 
 // ── DRAG MANUALE ──
 function startDrag(e,part,mode){
-  dragState={part,mode};
-  const ghost=document.getElementById('drag-ghost');
-  ghost.textContent=`${part.nome} ${part.largh_mm.toFixed(0)}×${part.alt_mm.toFixed(0)}mm`;
-  ghost.style.display='block';
-  ghost.style.left=e.clientX+'px';
-  ghost.style.top=(e.clientY-20)+'px';
+  // Lavora sempre su una copia del pezzo per non mutare la libreria
+  dragState={part:{...part}, mode, rotated:false};
+  updateDragGhost();
   canvas.style.cursor='copy';
 }
+
+function updateDragGhost(){
+  const ghost=document.getElementById('drag-ghost');
+  if(!dragState) return;
+  const p=dragState.part;
+  const rotLabel = dragState.rotated ? ' ↻90°' : '';
+  ghost.textContent=`${p.nome} ${p.largh_mm.toFixed(0)}×${p.alt_mm.toFixed(0)}mm${rotLabel}`;
+  ghost.style.display='block';
+}
+
+// Tasto R: ruota il pezzo durante il drag
+document.addEventListener('keydown', e=>{
+  if((e.key==='r'||e.key==='R') && dragState && dragState.mode==='manual'){
+    // Scambia largh e alt
+    const tmp = dragState.part.largh_mm;
+    dragState.part.largh_mm = dragState.part.alt_mm;
+    dragState.part.alt_mm   = tmp;
+    dragState.rotated = !dragState.rotated;
+    // Aggiorna poly_pts se presente (swap assi)
+    if(dragState.part.poly_pts){
+      dragState.part.poly_pts = dragState.part.poly_pts.map(([x,y])=>[-y,x]);
+    }
+    updateDragGhost();
+    draw(); // aggiorna highlight gancio
+  }
+});
 
 document.addEventListener('mousemove',e=>{
   if(!dragState) return;
@@ -1068,31 +1153,62 @@ document.addEventListener('mouseup',e=>{
 
 function findNearestSlot(canvasX){
   if(!NDATA) return -1;
-  let best=-1,bestD=Infinity;
-  NDATA.columns.forEach(col=>{
-    const sx=col.start_slot*PASSO_MM+PASSO_MM/2;
-    const p=px(sx,0,0);
-    const d=Math.abs(p.x-canvasX);
-    if(d<bestD){bestD=d;best=col.start_slot;}
-  });
+  // Cerca tra tutti gli slot visibili (NDATA + manualParts + ottimizzatore)
+  const maxSlot = Math.max(
+    (NDATA.columns||[]).length - 1,
+    manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx)) : 0,
+    Object.keys(_optimizerSlotState).length>0 ? Math.max(...Object.keys(_optimizerSlotState).map(Number)) : 0
+  );
+  let best=-1, bestD=Infinity;
+  for(let si=0; si<=maxSlot; si++){
+    const sx = si*PASSO_MM + PASSO_MM/2;
+    const p  = px(sx, 0, 0);
+    const d  = Math.abs(p.x - canvasX);
+    if(d<bestD){ bestD=d; best=si; }
+  }
   return best;
 }
 
-function placeManuallInSlot(slotIdx,part){
-  // Prova orientamento normale poi ruotato
-  const orientations=[
-    {L:part.largh_mm,H:part.alt_mm,rot:false},
-    {L:part.alt_mm,  H:part.largh_mm,rot:true}
-  ];
+function placeManuallInSlot(slotIdx, part){
+  // Usa orientamento già impostato dal drag (R key) — non ri-tenta la rotazione
+  // se l'utente ha esplicitamente scelto l'orientamento
+  const orientations = dragState && dragState.rotated
+    ? [{L:part.largh_mm, H:part.alt_mm, rot:dragState.rotated}]
+    : [
+        {L:part.largh_mm, H:part.alt_mm, rot:false},
+        {L:part.alt_mm,   H:part.largh_mm, rot:true}
+      ];
+
   for(const or of orientations){
-    const yTop=tryFitInSlot(slotIdx,{...part,largh_mm:or.L,alt_mm:or.H});
-    if(yTop!==null){
-      manualParts.push({slotIdx,part:{...part,largh_mm:or.L,alt_mm:or.H,y_top:yTop,
-        orientamento:or.rot?'ruotato_90':'standard'},color:'#ff9800'});
-      updateKPIManual();
-      showToastOk(`${part.nome} → G${slotIdx+1}${or.rot?' (ruotato)':''}`);
-      return;
+    const placed = {...part, largh_mm:or.L, alt_mm:or.H};
+    const yTop = tryFitInSlot(slotIdx, placed);
+    if(yTop === null) continue;
+
+    const nSlots      = slotsNeeded(or.L);
+    const pesoPerG    = (placed.peso_kg||placed.peso||0) / nSlots;
+    const gLabel      = nSlots>1 ? `G${slotIdx+1}–G${slotIdx+nSlots}` : `G${slotIdx+1}`;
+
+    // Inserisci un record per ogni gancio coinvolto
+    // Il primo slot porta il pezzo completo (per rendering), gli altri sono "anchor"
+    for(let s=0; s<nSlots; s++){
+      manualParts.push({
+        slotIdx   : slotIdx + s,
+        part      : {
+          ...placed,
+          y_top         : yTop,
+          peso_kg       : pesoPerG,        // peso ripartito per il check max_kg
+          _multiSlotAnchor : slotIdx,      // riferimento al gancio principale
+          _multiSlotCount  : nSlots,
+          _multiSlotIndex  : s,
+          orientamento  : or.rot ? 'ruotato_90' : 'standard'
+        },
+        color     : '#ff9800',
+        _isAnchor : s === 0,               // solo il primo slot renderizza il pezzo
+      });
     }
+    updateKPIManual();
+    showToastOk(`${part.nome} → ${gLabel}${or.rot?' ↻90°':''} (${nSlots} ganci)`);
+    return;
   }
   showToastErr(`G${slotIdx+1}: spazio insufficiente per ${part.nome}`);
 }
@@ -1117,6 +1233,41 @@ function showToast(msg,color){
   document.body.appendChild(t);
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),500);},2500);
 }
+
+// Click destro su pezzo manuale → ruota 90°
+canvas.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  for(let i=hitBoxes.length-1; i>=0; i--){
+    const hb = hitBoxes[i];
+    if(mx>=hb.minX&&mx<=hb.maxX&&my>=hb.minY&&my<=hb.maxY&&hb.isManual){
+      // Trova il pezzo in manualParts
+      const mp = manualParts[hb.mpIdx];
+      if(!mp) break;
+      // Prova a ruotare: scambia largh/alt
+      const newL = mp.part.alt_mm, newH = mp.part.largh_mm;
+      const rotated = {
+        ...mp.part,
+        largh_mm: newL, alt_mm: newH,
+        orientamento: mp.part.orientamento==='ruotato_90'?'standard':'ruotato_90'
+      };
+      // Verifica che ci stia ancora nello stesso slot (ricalcola Y ignorando questo pezzo)
+      const tmpParts = manualParts.filter((_,idx)=>idx!==hb.mpIdx);
+      const savedMP  = manualParts;
+      manualParts    = tmpParts;
+      const yTop     = tryFitInSlot(mp.slotIdx, rotated);
+      manualParts    = savedMP;
+      if(yTop !== null){
+        mp.part = {...rotated, y_top: yTop};
+        showToastOk(`${mp.part.nome||'pezzo'} ruotato ↻90°`);
+      } else {
+        showToastErr(`Impossibile ruotare: spazio insufficiente su G${mp.slotIdx+1}`);
+      }
+      draw(); return;
+    }
+  }
+});
 
 // Click su pezzo manuale → rimuovi
 canvas.addEventListener('click',e=>{
@@ -1263,7 +1414,9 @@ function handleHover(e){
       document.getElementById('tip-p').textContent=((hb.part.peso_kg||hb.part.peso||0)).toFixed(2)+' kg';
       const blkSat = BLOCKS[_activeBlock] ? BLOCKS[_activeBlock].satPct.toFixed(1)+'%' : sat.toFixed(1)+'%';
       document.getElementById('tip-sat').textContent=blkSat;
-      document.getElementById('tip-hint').textContent=(hb.isManual&&!hb.part._fromOpt)?'🖱 Click per rimuovere':'';
+      const isLocked = hb.isManual && !hb.part._fromOpt && !hb.part._multiSlotIndex;
+      document.getElementById('tip-hint').textContent=
+        isLocked ? '🖱 Click rimuovi · 🖰 tasto dx ruota' : '';
       tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-16)+'px';
       tip.style.display='block'; return;
     }
@@ -1354,86 +1507,149 @@ function buildGlobalPieces(qty){
   GLOBAL_PIECES.sort((a,b) => (b.part.alt_mm||0) - (a.part.alt_mm||0));
 }
 
+// ── Raccoglie i pezzi manuali "bloccati" (inseriti dall'utente, non dall'ottimizzatore) ──
+// Restituisce {gsi → [{part, color}]} con i pezzi fissi per slot
+function getLockedManualPieces(){
+  const locked = new Map();
+  manualParts.filter(m => !m._fromOpt).forEach(m => {
+    if(!locked.has(m.slotIdx)) locked.set(m.slotIdx, []);
+    locked.get(m.slotIdx).push(m);
+  });
+  return locked;
+}
+
 // ── Motore bin-packing: riempie BLOCKS ───────────────────────────────
+// slotState globale: esposto fuori da runOptimizer così tryFitInSlot
+// (nesting manuale) può vederlo ed evitare collisioni
+let _optimizerSlotState = {};
+
 function runOptimizer(qty){
   qty = Math.max(1, parseInt(qty)||1);
   if(!NDATA) return;
 
   buildGlobalPieces(qty);
 
-  const nGB     = Math.max(1, Math.round(3000 / PASSO_MM)); // ganci per blocco
+  const nGB     = Math.max(1, Math.round(3000 / PASSO_MM));
   const GAP_LAT = NDATA.gap_lat_mm || 60;
   const gapV    = NDATA.gap_v_mm || GAP_V || 60;
 
-  // Struttura blocchi: ogni blocco ha nGB slot
-  // slot[i] = {slotIdx(globale), pieces:[], lastY, wMax, peso}
   BLOCKS = [];
+  _optimizerSlotState = {};   // reset globale
 
-  // Stato runtime degli slot aperti
-  // slotState[globalSlotIdx] = {lastY, wMax, peso}
-  const slotState = {};
-
-  function getSlotState(gsi){
-    if(!slotState[gsi]) slotState[gsi] = {lastY:-HOOK_LEN, wMax:0, peso:0};
-    return slotState[gsi];
+  // ── Pre-popola slot con pezzi manuali bloccati dall'utente ───────────
+  // Vengono trattati come "spazio già occupato" dal packer automatico.
+  // Restano in manualParts con _fromOpt:false e NON vengono spostati.
+  const lockedManual = getLockedManualPieces();
+  if(lockedManual.size > 0){
+    lockedManual.forEach((pieces, gsi) => {
+      pieces.forEach(mp => {
+        const p = mp.part;
+        if(!_optimizerSlotState[gsi])
+          _optimizerSlotState[gsi] = {lastY:-HOOK_LEN, wMax:0, peso:0};
+        const fond = p.y_top - p.alt_mm;
+        if(fond < _optimizerSlotState[gsi].lastY)
+          _optimizerSlotState[gsi].lastY = fond;
+        _optimizerSlotState[gsi].wMax  = Math.max(_optimizerSlotState[gsi].wMax, p.largh_mm||0);
+        _optimizerSlotState[gsi].peso += (p.peso_kg||p.peso||0);
+        // Crea un blocco fittizio nel blocco corrispondente
+        const blkIdx = Math.floor(gsi / nGB);
+        while(BLOCKS.length <= blkIdx)
+          BLOCKS.push({blockIdx:BLOCKS.length, slots:[], satPct:0, pesoTot:0, pieces:[]});
+        const blk = BLOCKS[blkIdx];
+        let slot = blk.slots.find(s=>s.gsi===gsi);
+        if(!slot){ slot={gsi,localIdx:gsi-blkIdx*nGB,pieces:[]}; blk.slots.push(slot); }
+        const lockedPiece = {
+          ...mp,
+          part   : {...p},
+          gsi,
+          _locked: true       // marcato come bloccato — non verrà ri-renderizzato da BLOCKS
+        };
+        slot.pieces.push(lockedPiece);
+        blk.pieces.push(lockedPiece);
+      });
+    });
   }
 
-  function slotWMax(gsi){
-    const s = slotState[gsi];
-    return s ? s.wMax : 0;
+  // ── getSlotState: fonte di verità unica ──────────────────────────────
+  // Legge i pezzi REALMENTE piazzati in BLOCKS per calcolare lowestY.
+  // Non si fida di un contatore separato — somma le altezze reali.
+  function getLowestY(gsi){
+    // Cerca in tutti i blocchi già costruiti i pezzi su questo slot
+    let lowest = -HOOK_LEN;
+    for(const blk of BLOCKS){
+      for(const p of blk.pieces){
+        if(p.gsi !== gsi) continue;
+        const fond = p.part.y_top - p.part.alt_mm;
+        if(fond < lowest) lowest = fond;
+      }
+    }
+    return lowest;
   }
 
-  // Tenta di inserire part nello slot gsi. Ritorna yTop oppure null.
+  function getSlotWeight(gsi){
+    let w = 0;
+    for(const blk of BLOCKS)
+      for(const p of blk.pieces)
+        if(p.gsi === gsi) w += (p.part.peso_kg||p.part.peso||0);
+    return w;
+  }
+
+  function getSlotWMax(gsi){
+    let w = 0;
+    for(const blk of BLOCKS)
+      for(const p of blk.pieces)
+        if(p.gsi === gsi) w = Math.max(w, p.part.largh_mm||0);
+    return w;
+  }
+
+  // ── trySlot: controlla se il pezzo entra. Ritorna yTop o null. ──────
   function trySlot(gsi, part){
-    const s   = getSlotState(gsi);
     const partW = part.largh_mm || 100;
     const partH = part.alt_mm   || 100;
-    const partP = part.peso_kg || part.peso || 0;
+    const partP = part.peso_kg  || part.peso || 0;
 
-    // Peso
-    if(s.peso + partP > (NDATA.max_kg||60)) return null;
+    // 1. Peso massimo gancio
+    if(getSlotWeight(gsi) + partP > (NDATA.max_kg||60)) return null;
 
-    // Vincolo laterale
-    const newWMax = Math.max(s.wMax, partW);
+    // 2. Vincolo laterale (solo ganci immediatamente adiacenti)
+    const newWMax   = Math.max(getSlotWMax(gsi), partW);
     const blockStart = Math.floor(gsi / nGB) * nGB;
     for(let adj = blockStart; adj < blockStart + nGB; adj++){
       if(adj === gsi) continue;
-      const adjW = slotWMax(adj);
+      const adjW = getSlotWMax(adj);
       if(adjW === 0) continue;
-      const dist = Math.abs(adj - gsi);
-      if(dist === 1){
+      if(Math.abs(adj - gsi) === 1){
         if(adjW/2 + newWMax/2 + GAP_LAT > PASSO_MM) return null;
       }
     }
 
-    // Altezza
-    const yTop = s.lastY - gapV;
-    const yBot = yTop - partH;
+    // 3. Posizione verticale: SOTTO l'ultimo pezzo reale sul gancio
+    const lowestY = getLowestY(gsi);
+    const yTop    = lowestY - gapV;
+    const yBot    = yTop - partH;
+
+    // 4. Non superare Z_MAX
     if(Math.abs(yBot) > Z_MAX_MM) return null;
 
     return yTop;
   }
 
-  // Commit slot
-  function commitSlot(gsi, part, yTop){
-    const s = getSlotState(gsi);
-    const partH = part.alt_mm || 100;
-    const partP = part.peso_kg || part.peso || 0;
-    s.lastY  = yTop - partH;
-    s.wMax   = Math.max(s.wMax, part.largh_mm||100);
-    s.peso  += partP;
-  }
-
-  // Assegna un pezzo a un blocco
+  // ── placePiece: aggiunge pezzo a BLOCKS con y_top corretto ──────────
   function placePiece(blockIdx, gsi, piece, yTop){
-    while(BLOCKS.length <= blockIdx) BLOCKS.push({blockIdx:BLOCKS.length, slots:[], satPct:0, pesoTot:0, pieces:[]});
+    while(BLOCKS.length <= blockIdx)
+      BLOCKS.push({blockIdx:BLOCKS.length, slots:[], satPct:0, pesoTot:0, pieces:[]});
     const blk = BLOCKS[blockIdx];
-    // Trova o crea slot nel blocco
     let slot = blk.slots.find(s => s.gsi === gsi);
     if(!slot){ slot = {gsi, localIdx: gsi - blockIdx*nGB, pieces:[]}; blk.slots.push(slot); }
-    slot.pieces.push({...piece, part:{...piece.part, y_top:yTop}});
-    blk.pieces.push({...piece, part:{...piece.part, y_top:yTop}, gsi});
-    commitSlot(gsi, piece.part, yTop);
+    const partWithY = {...piece.part, y_top: yTop};  // y_top SEMPRE da trySlot
+    slot.pieces.push({...piece, part: partWithY});
+    blk.pieces.push({...piece, part: partWithY, gsi});
+    // Aggiorna anche _optimizerSlotState (per tryFitInSlot manuale)
+    if(!_optimizerSlotState[gsi])
+      _optimizerSlotState[gsi] = {lastY:-HOOK_LEN, wMax:0, peso:0};
+    _optimizerSlotState[gsi].lastY = yTop - partWithY.alt_mm;
+    _optimizerSlotState[gsi].wMax  = Math.max(_optimizerSlotState[gsi].wMax, partWithY.largh_mm||0);
+    _optimizerSlotState[gsi].peso += (partWithY.peso_kg||partWithY.peso||0);
   }
 
   // ── Algoritmo principale: First Fit Decreasing cross-blocco ──────────
@@ -1470,7 +1686,8 @@ function runOptimizer(qty){
 
       if(bestGsi >= 0){
         const tp = {...piece.part, largh_mm:bestOr.L, alt_mm:bestOr.H,
-                    orientamento: bestOr.rot?'ruotato_90':'standard'};
+                    orientamento: bestOr.rot?'ruotato_90':'standard',
+                    y_top: bestY};  // override y_top con quello calcolato
         placePiece(currentBlock, bestGsi, {...piece, part:tp}, bestY);
         remaining.splice(pi, 1);
         placed = true;
@@ -1495,11 +1712,12 @@ function runOptimizer(qty){
       const gsi = p.gsi;
       if(!seen.has(gsi)){
         seen.add(gsi);
-        const s = slotState[gsi];
+        const s = _optimizerSlotState[gsi];
         if(s) usedH += Math.abs(s.lastY) - HOOK_LEN;
       }
     });
-    const totalH = nGB * Z_MAX_MM;
+    const usablePerSlot = Z_MAX_MM; // zona verticale utile per gancio
+    const totalH = nGB * usablePerSlot;
     blk.satPct   = totalH > 0 ? Math.min(100, usedH / totalH * 100) : 0;
     blk.pesoTot  = blk.pieces.reduce((s,p) => s+(p.part.peso_kg||p.part.peso||0), 0);
   });
@@ -1508,14 +1726,23 @@ function runOptimizer(qty){
 // ── Interfaccia: "Ottimizza" unico pulsante ───────────────────────────
 function runAndShow(){
   const qty = Math.max(1, parseInt(document.getElementById('copie-assembly')?.value)||1);
-  // Reset
-  manualParts = manualParts.filter(m => false); // svuota tutto
 
+  // Salva i pezzi inseriti MANUALMENTE dall'utente (non dall'ottimizzatore precedente)
+  // così non vengono persi al re-ottimizza
+  const savedManual = manualParts.filter(m => !m._fromOpt);
+
+  // Reset: rimuovi solo i pezzi dell'ottimizzatore precedente
+  manualParts = [];
+
+  // I pezzi manuali salvati vengono passati all'ottimizzatore come
+  // pezzi "fissi" già piazzati (vengono aggiunti dopo, con le loro coordinate)
   runOptimizer(qty);
 
-  // Popola manualParts dai BLOCKS per il rendering esistente
+  // Popola manualParts dai BLOCKS per il rendering
+  // Salta i pezzi _locked (già presenti in savedManual, verranno reintegrati sotto)
   BLOCKS.forEach(blk => {
     blk.pieces.forEach(p => {
+      if(p._locked) return;   // già in savedManual — non duplicare
       manualParts.push({
         slotIdx  : p.gsi,
         part     : {...p.part},
@@ -1527,6 +1754,10 @@ function runAndShow(){
       });
     });
   });
+
+  // Re-inserisci i pezzi manuali SOPRA i pezzi ottimizzati
+  // (il loro y_top è già calcolato e corretto — non si ri-pacchizzano)
+  savedManual.forEach(m => manualParts.push(m));
 
   _blockView = BLOCKS.length > 0;
   _viewBlock = 0;
@@ -1566,27 +1797,59 @@ function updateMacLegend(){
 
 function updateKPIOptimizer(){
   if(!NDATA) return;
-  const totPeso = manualParts.reduce((s,m)=>s+(m.part.peso_kg||m.part.peso||0),0)
-                + (NDATA.peso_totale||0);
+
+  // ── Peso totale (da manualParts, già popolato da runAndShow) ──
+  const totPeso = manualParts.reduce((s,m)=>s+(m.part.peso_kg||m.part.peso||0),0);
   const el = document.getElementById('kpi-peso');
   if(el) el.textContent = totPeso.toFixed(1)+' kg';
 
-  const totSlots = manualParts.length>0
-    ? Math.max(...manualParts.map(m=>m.slotIdx))+1
+  // ── Ganci attivi e metri catena ──
+  const activeGSIs = Object.keys(_optimizerSlotState).map(Number);
+  const totSlots   = activeGSIs.length > 0
+    ? Math.max(...activeGSIs) + 1
     : (NDATA.columns||[]).length;
-  document.getElementById('kpi-ganci').textContent = totSlots;
-  const m = (totSlots * PASSO_MM / 1000).toFixed(1);
-  document.getElementById('kpi-catena').textContent = m+' m';
+  const kgEl = document.getElementById('kpi-ganci');
+  if(kgEl) kgEl.textContent = totSlots;
+  const kcat = document.getElementById('kpi-catena');
+  if(kcat) kcat.textContent = (totSlots * PASSO_MM / 1000).toFixed(1)+' m';
 
-  // Saturazione globale
-  const totH = manualParts.reduce((s,m)=>s+(m.part.alt_mm||0),0)
-             + (NDATA.columns||[]).reduce((s,c)=>s+(c.h_usata_mm||0),0);
-  const totA = totSlots * Z_MAX_MM;
-  const sat = totA>0 ? Math.min(100, totH/totA*100) : 0;
+  // ── Saturazione: spazio Y consumato / spazio Y teorico ──
+  // Per ogni gancio attivo: spazio consumato = |lastY| - HOOK_LEN
+  //   (lastY parte da -HOOK_LEN e scende; lo spazio usato è la discesa totale)
+  // Spazio teorico per gancio = Z_MAX_MM
+  let usedH = 0;
+  activeGSIs.forEach(gsi => {
+    const s = _optimizerSlotState[gsi];
+    if(s) usedH += Math.max(0, Math.abs(s.lastY) - HOOK_LEN);
+  });
+  const totAvail = activeGSIs.length * Z_MAX_MM;
+  const sat = totAvail > 0 ? Math.min(100, usedH / totAvail * 100) : 0;
+
   const satEl = document.getElementById('kpi-sat');
-  if(satEl) satEl.textContent = sat.toFixed(1)+'%';
+  if(satEl){
+    satEl.textContent  = sat.toFixed(1)+'%';
+    satEl.className    = 'kv' + (sat>85?' ':sat>50?' warn':' danger');
+  }
   const sb = document.getElementById('sat-bar');
-  if(sb){ sb.style.width=sat+'%'; sb.style.background=sat>85?'#f44336':sat>65?'#ff9800':'#00e676'; }
+  if(sb){
+    sb.style.width      = sat.toFixed(1)+'%';
+    sb.style.background = sat>85?'#00e676':sat>50?'#ff9800':'#f44336';
+  }
+
+  // ── Saturazione media per blocco (aggiorna BLOCKS[].satPct) ──
+  const nGB = Math.max(1, Math.round(3000/PASSO_MM));
+  BLOCKS.forEach(blk => {
+    let bUsed = 0;
+    blk.pieces.forEach(p => {
+      const s = _optimizerSlotState[p.gsi];
+      // Contributo di questo pezzo: la sua altezza reale
+      bUsed += (p.part.alt_mm || 0);
+    });
+    // Spazio teorico del blocco = nGB ganci × Z_MAX_MM
+    blk.satPct = nGB * Z_MAX_MM > 0
+      ? Math.min(100, bUsed / (nGB * Z_MAX_MM) * 100)
+      : 0;
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1672,20 +1935,25 @@ function goToBlock(n){
         manualParts.length>0?Math.max(...manualParts.map(m=>m.slotIdx))+1:0) / nGB));
   _activeBlock = Math.max(0, Math.min(n, totalBlocks-1));
 
-  // Centra la vista sul blocco selezionato
-  const blockCenterX = (_activeBlock * nGB + nGB / 2) * PASSO_MM;
-  const p = projFn(blockCenterX, Z_MAX_MM / 2, 0);
+  // Centro geometrico del blocco:
+  // X = metà del blocco in mm
+  // Y = -Z_MAX_MM/2  (i pezzi vanno da 0 a -Z_MAX_MM, centro a metà)
+  const blockStartX  = _activeBlock * nGB * PASSO_MM;
+  const blockEndX    = (_activeBlock + 1) * nGB * PASSO_MM;
+  const blockCenterX = (blockStartX + blockEndX) / 2;
+  const centerY      = -Z_MAX_MM / 2;
 
-  // Scala automatica per mostrare SOLO il blocco da 3m
-  const pL = projFn(_activeBlock * nGB * PASSO_MM, 0, 0);
-  const pR = projFn((_activeBlock + 1) * nGB * PASSO_MM, 0, 0);
-  const blockW = Math.abs(pR.sx - pL.sx) || 1;
+  // Scala: adatta la larghezza del blocco all'80% del canvas
+  const pL = projFn(blockStartX, centerY, 0);
+  const pR = projFn(blockEndX,   centerY, 0);
+  const blockW  = Math.abs(pR.sx - pL.sx) || 1;
   const targetW = canvas.width * 0.80;
   scale = targetW / blockW;
-  // Ricalcola centro con nuova scala
-  const pp = projFn(blockCenterX, Z_MAX_MM / 2, 0);
-  offX = canvas.width  / 2 - pp.sx * scale;
-  offY = canvas.height / 2 - pp.sy * scale;
+
+  // Allinea il centro del blocco al centro del canvas (X e Y)
+  const pCenter = projFn(blockCenterX, centerY, 0);
+  offX = canvas.width  / 2 - pCenter.sx * scale;
+  offY = canvas.height / 2 - pCenter.sy * scale;
 
   draw();
   updateBlockNav();
