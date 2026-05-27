@@ -117,8 +117,8 @@ code{background:rgba(255,255,255,.07);color:#f0a0b0;padding:1px 5px;border-radiu
     <li class="sb-sec">Costi &amp; Analisi</li>
     <li><a href="{{ url_for('storico') }}" class="{% if 'storico' in request.endpoint %}act{% endif %}">
       <i class="bi bi-graph-up-arrow"></i>Storico Costi</a></li>
-    <li><a href="{{ url_for('carico_guidato') }}" class="{% if 'carico_guidato' in request.endpoint %}act{% endif %}">
-      <i class="bi bi-hand-index-thumb"></i>Carico Guidato</a></li>
+    <li><a href="{{ url_for('analisi_costo_verniciatura') }}" class="{% if 'analisi_costo_verniciatura' in request.endpoint %}act{% endif %}">
+      <i class="bi bi-graph-up-arrow"></i>Analisi Costo</a></li>
 
     <li class="sb-sec">Gestione</li>
     <li><a href="{{ url_for('prodotti') }}" class="{% if 'prodott' in request.endpoint %}act{% endif %}">
