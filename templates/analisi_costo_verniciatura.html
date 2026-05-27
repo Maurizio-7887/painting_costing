@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block title %}Analisi Costo Verniciatura — ENOROSSI{% endblock %}
+{% block page_title %}Analisi Costo Verniciatura{% endblock %}
+{% block content %}
+<style>
+/* ── Layout ── */
+.acv-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.acv-kpi{background:var(--card);border-radius:8px;padding:12px 14px;border-bottom:3px solid var(--bdr2)}
+.acv-kpi.grn{border-bottom-color:var(--grn)}
+.acv-kpi.yel{border-bottom-color:var(--yel)}
+.acv-kpi.red{border-bottom-color:var(--red)}
+.acv-kpi.blu{border-bottom-color:#3b82f6}
+.acv-kpi.pur{border-bottom-color:#7c3aed}
+.acv-num{font-size:1.6rem;font-weight:800;line-height:1;margin-bottom:3px}
+.acv-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+
+/* ── Toolbar ── */
+.acv-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.acv-toolbar select,.acv-toolbar input{background:var(--card);border:1px solid var(--bdr2);
+  color:var(--txt);padding:5px 10px;border-radius:5px;font-size:.78rem}
+.sim-panel{background:var(--card);border:1px solid var(--bdr2);border-radius:8px;
+  padding:12px 16px;margin-bottom:14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.sim-lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:3px}
+.sim-val{font-size:1.4rem;font-weight:700;color:var(--grn)}
+
+/* ── Tabella ── */
+.tbl-acv th{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.tbl-acv td{font-size:.78rem;vertical-align:middle}
+.delta-pos{color:#f87171;font-weight:700}   /* reale > SAP = costoso */
+.delta-neg{color:#4ade80;font-weight:700}   /* reale < SAP = risparmio */
+.breakdown-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:3px;gap:1px}
+.bar-seg{height:100%;border-radius:1px}
+.cost-chip{display:inline-block;padding:1px 6px;border-radius:10px;font-size:.65rem;font-weight:600}
+
+/* ── Simulatore laterale ── */
+#sim-drawer{position:fixed;right:0;top:0;width:340px;height:100vh;
+  background:#0f1923;border-left:1px solid var(--bdr2);z-index:999;
+  padding:20px;overflow-y:auto;transform:translateX(100%);transition:transform .3s}
+#sim-drawer.open{transform:translateX(0)}
+#sim-drawer h3{color:var(--grn);font-size:.85rem;text-transform:uppercase;margin-bottom:14px}
+.sim-row{margin-bottom:12px}
+.sim-row label{display:block;font-size:.7rem;color:var(--muted);margin-bottom:4px}
+.sim-row input[type=range]{width:100%;accent-color:var(--grn)}
+.sim-row input[type=number]{background:#1a2633;border:1px solid var(--bdr2);color:var(--txt);
+  padding:5px 8px;border-radius:4px;width:80px;font-size:.8rem}
+#sim-result{background:#111b27;border-radius:6px;padding:12px;margin-top:12px}
+#sim-result .sr-row{display:flex;justify-content:space-between;padding:3px 0;
+  border-bottom:1px solid #1a2633;font-size:.75rem}
+#sim-result .sr-row:last-child{border:none;font-weight:700;font-size:.85rem}
+
+/* ── Import SAP panel ── */
+.import-panel{background:var(--card);border:1px dashed var(--bdr2);border-radius:8px;
+  padding:14px;margin-bottom:14px}
+
+/* ── Stampa ── */
+@media print{
+  .acv-toolbar,.sim-panel,.import-panel,#sim-drawer,header,.sb,.topbar,
+  .no-print{display:none!important}
+  body{background:#fff;color:#000}
+  .acv-grid{grid-template-columns:repeat(5,1fr)}
+  .tbl-acv td,.tbl-acv th{font-size:8px;padding:4px 6px}
+  .breakdown-bar{display:none}
+}
+</style>
+
+<!-- KPI TOP -->
+<div class="acv-grid">
+  <div class="acv-kpi grn">
+    <div class="acv-num" style="color:var(--grn)">{{ kpi.n_prodotti }}</div>
+    <div class="acv-lbl">Codici analizzati</div>
+  </div>
+  <div class="acv-kpi yel">
+    <div class="acv-num" style="color:var(--yel)">{{ kpi.n_con_standard }}</div>
+    <div class="acv-lbl">Con costo SAP</div>
+  </div>
+  <div class="acv-kpi blu">
+    <div class="acv-num" style="color:#60a5fa">
+      {{ kpi.sat_oggi if kpi.sat_oggi != '—' else '—' }}{% if kpi.sat_oggi != '—' %}<span style="font-size:.9rem">%</span>{% endif %}
+    </div>
+    <div class="acv-lbl">Saturazione oggi ({{ kpi.n_lotti_oggi }} lotti)</div>
+  </div>
+  <div class="acv-kpi red">
+    <div class="acv-num" style="color:var(--red)">€ {{ '%.4f'|format(kpi.costo_medio_reale) }}</div>
+    <div class="acv-lbl">Costo medio reale/pezzo</div>
+  </div>
+  <div class="acv-kpi pur">
+    <div class="acv-num" style="color:#a78bfa">
+      {% if kpi.delta_medio_pct is not none %}
+        {{ '%+.1f'|format(kpi.delta_medio_pct) }}<span style="font-size:.9rem">%</span>
+      {% else %}—{% endif %}
+    </div>
+    <div class="acv-lbl">Δ medio vs SAP</div>
+  </div>
+</div>
+
+<!-- PARAMETRI IMPIANTO ATTIVI -->
+<div class="sim-panel no-print">
+  <div>
+    <span class="sim-lbl">Velocità catena</span>
+    <span class="sim-val">{{ cfg.velocita_default }} <small style="font-size:.7rem;color:var(--muted)">m/min</small></span>
+  </div>
+  <div>
+    <span class="sim-lbl">Costo orario esercizio</span>
+    <span class="sim-val">€ {{ cfg.costo_orario_esercizio }}<small style="font-size:.7rem;color:var(--muted)">/h</small></span>
+  </div>
+  <div>
+    <span class="sim-lbl">Costo centro orario</span>
+    <span class="sim-val">€ {{ cfg.costo_centro_orario }}<small style="font-size:.7rem;color:var(--muted)">/h</small></span>
+  </div>
+  <div>
+    <span class="sim-lbl">Costo kWh</span>
+    <span class="sim-val">€ {{ cfg.costo_kwh }}</span>
+  </div>
+  <div>
+    <span class="sim-lbl">Saturazione usata nel calcolo</span>
+    <span class="sim-val" style="color:{% if sat_oggi and sat_oggi > 80 %}var(--grn){% elif sat_oggi and sat_oggi > 50 %}var(--yel){% else %}var(--red){% endif %}">
+      {{ sat_oggi if sat_oggi else 100 }}<small style="font-size:.7rem"> %</small>
+    </span>
+  </div>
+  <div style="margin-left:auto">
+    <a href="{{ url_for('configurazione') }}" class="btn-out" style="font-size:.72rem">⚙ Modifica parametri</a>
+  </div>
+</div>
+
+<!-- IMPORT SAP + TOOLBAR -->
+<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+
+  <!-- Import CSV SAP -->
+  <div class="import-panel" style="flex:1;min-width:280px">
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:8px;font-weight:600">
+      📥 Aggiorna costi standard da SAP
+      <span style="font-weight:normal;font-size:.65rem"> · CSV con colonne: MATNR;COSTO_STD</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="sap-csv-input" accept=".csv,.txt" style="font-size:.72rem;color:var(--muted)">
+      <button class="btn-out no-print" onclick="importaSAPCsv()" style="font-size:.72rem">⬆ Carica</button>
+      <a href="#" onclick="scaricaTemplate()" class="btn-out" style="font-size:.72rem">📄 Template CSV</a>
+      <span id="import-status" style="font-size:.7rem;color:var(--grn)"></span>
+    </div>
+  </div>
+
+  <!-- Filtri + Azioni -->
+  <div class="acv-toolbar" style="flex:1;min-width:200px;justify-content:flex-end">
+    <select id="flt-famiglia" onchange="filtra()">
+      <option value="">Tutte le famiglie</option>
+      {% for f in famiglie %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+    </select>
+    <select id="flt-delta" onchange="filtra()">
+      <option value="">Tutti i delta</option>
+      <option value="over">Reale > SAP (costoso)</option>
+      <option value="under">Reale &lt; SAP (risparmio)</option>
+      <option value="nosap">Senza costo SAP</option>
+    </select>
+    <input type="text" id="flt-cerca" placeholder="🔍 Cerca codice…" oninput="filtra()" style="width:140px">
+    <button class="btn-out no-print" onclick="window.print()">🖨 Stampa Report</button>
+  </div>
+</div>
+
+<!-- TABELLA PRINCIPALE -->
+<div class="card">
+  <div class="card-body" style="padding:0;overflow-x:auto">
+    <table class="tbl tbl-acv" id="tbl-acv">
+      <thead><tr>
+        <th>Codice</th>
+        <th>Nome</th>
+        <th>Famiglia</th>
+        <th style="text-align:center">Sup. m²</th>
+        <th style="text-align:center">Peso kg</th>
+        <th style="text-align:center">t catena<br><span style="font-size:.58rem;font-weight:400">min</span></th>
+        <th style="text-align:right">€ SAP<br><span style="font-size:.58rem;font-weight:400">standard</span></th>
+        <th style="text-align:right">€ Reale<br><span style="font-size:.58rem;font-weight:400">calcolato</span></th>
+        <th style="text-align:right">€ Storico<br><span style="font-size:.58rem;font-weight:400">media 30gg</span></th>
+        <th style="text-align:center">Δ SAP</th>
+        <th style="min-width:160px">Breakdown costo</th>
+        <th class="no-print"></th>
+      </tr></thead>
+      <tbody id="tbl-body">
+      {% for r in righe %}
+      <tr data-famiglia="{{ r.famiglia }}"
+          data-codice="{{ r.codice }}"
+          data-delta="{{ 'over' if r.delta_pct and r.delta_pct > 0 else ('under' if r.delta_pct and r.delta_pct < 0 else 'nosap') }}"
+          onclick="apriSimulatore({{ r|tojson|safe }})">
+        <td><code style="font-size:.72rem">{{ r.codice }}</code></td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.nome }}">{{ r.nome }}</td>
+        <td><span class="bdg bdg-gray" style="font-size:.6rem">{{ r.famiglia }}</span></td>
+        <td style="text-align:center">{{ '%.4f'|format(r.sup_m2) }}</td>
+        <td style="text-align:center">{{ '%.1f'|format(r.peso_kg) }}</td>
+        <td style="text-align:center;color:var(--muted)">{{ '%.3f'|format(r.t_min) }}</td>
+        <!-- € SAP -->
+        <td style="text-align:right;font-weight:600">
+          {% if r.c_standard_sap > 0 %}
+            <span style="color:var(--yel)">€ {{ '%.4f'|format(r.c_standard_sap) }}</span>
+          {% else %}
+            <span style="color:var(--muted);font-size:.65rem">—</span>
+          {% endif %}
+        </td>
+        <!-- € Reale calcolato -->
+        <td style="text-align:right;font-weight:700;color:var(--grn)">
+          € {{ '%.4f'|format(r.c_reale_calc) }}
+        </td>
+        <!-- € Storico medio -->
+        <td style="text-align:right">
+          {% if r.c_storico_medio %}
+            <span style="color:#60a5fa">€ {{ '%.4f'|format(r.c_storico_medio) }}</span>
+            <br><span style="font-size:.6rem;color:var(--muted)">{{ r.sat_storica_media }}% sat · {{ r.n_lotti_storico }} lotti</span>
+          {% else %}
+            <span style="color:var(--muted);font-size:.65rem">nessuno storico</span>
+          {% endif %}
+        </td>
+        <!-- Delta SAP -->
+        <td style="text-align:center">
+          {% if r.delta_pct is not none %}
+            {% if r.delta_pct > 2 %}
+              <span class="cost-chip" style="background:rgba(248,113,113,.15);color:#f87171">
+                ▲ +{{ '%.1f'|format(r.delta_pct) }}%
+              </span>
+            {% elif r.delta_pct < -2 %}
+              <span class="cost-chip" style="background:rgba(74,222,128,.15);color:#4ade80">
+                ▼ {{ '%.1f'|format(r.delta_pct) }}%
+              </span>
+            {% else %}
+              <span class="cost-chip" style="background:rgba(148,163,184,.1);color:var(--muted)">
+                ≈ 0
+              </span>
+            {% endif %}
+          {% else %}
+            <span style="color:var(--muted);font-size:.65rem">—</span>
+          {% endif %}
+        </td>
+        <!-- Breakdown barra visiva -->
+        <td>
+          {% set tot = r.c_reale_calc if r.c_reale_calc > 0 else 0.001 %}
+          <div class="breakdown-bar">
+            <div class="bar-seg" style="width:{{ (r.c_energia/tot*100)|round }}%;background:#3b82f6" title="Energia"></div>
+            <div class="bar-seg" style="width:{{ (r.c_fisso/tot*100)|round }}%;background:#8b5cf6" title="Fisso"></div>
+            <div class="bar-seg" style="width:{{ (r.c_vernice/tot*100)|round }}%;background:#10b981" title="Vernice"></div>
+            <div class="bar-seg" style="width:{{ (r.c_manodopera/tot*100)|round }}%;background:#f59e0b" title="Manodopera"></div>
+            <div class="bar-seg" style="width:{{ (r.c_termico/tot*100)|round }}%;background:#ef4444" title="Termico"></div>
+          </div>
+          <div style="font-size:.58rem;color:var(--muted);display:flex;gap:5px;margin-top:2px;flex-wrap:wrap">
+            <span style="color:#3b82f6">E:€{{ '%.4f'|format(r.c_energia) }}</span>
+            <span style="color:#8b5cf6">F:€{{ '%.4f'|format(r.c_fisso) }}</span>
+            <span style="color:#10b981">V:€{{ '%.4f'|format(r.c_vernice) }}</span>
+            <span style="color:#f59e0b">M:€{{ '%.4f'|format(r.c_manodopera) }}</span>
+            <span style="color:#ef4444">T:€{{ '%.4f'|format(r.c_termico) }}</span>
+          </div>
+        </td>
+        <!-- Pulsante simulatore -->
+        <td class="no-print">
+          <button class="btn-out" style="font-size:.65rem;padding:2px 8px"
+            onclick="event.stopPropagation();apriSimulatore({{ r|tojson|safe }})">
+            🧮 Simula
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- LEGENDA BREAKDOWN -->
+<div style="margin-top:10px;display:flex;gap:14px;font-size:.68rem;color:var(--muted);flex-wrap:wrap" class="no-print">
+  <span><span style="background:#3b82f6;width:10px;height:10px;display:inline-block;border-radius:2px"></span> Energia (kW×h×€/kWh)</span>
+  <span><span style="background:#8b5cf6;width:10px;height:10px;display:inline-block;border-radius:2px"></span> Quota fissa (ammortamento, saturazione-dipendente)</span>
+  <span><span style="background:#10b981;width:10px;height:10px;display:inline-block;border-radius:2px"></span> Vernice (superficie×spessore×densità)</span>
+  <span><span style="background:#f59e0b;width:10px;height:10px;display:inline-block;border-radius:2px"></span> Manodopera (aggancio+sgancio)</span>
+  <span><span style="background:#ef4444;width:10px;height:10px;display:inline-block;border-radius:2px"></span> Termico centro (€/h ripartito su n pezzi)</span>
+</div>
+
+<!-- SIMULATORE DRAWER -->
+<div id="sim-drawer">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <h3 id="sim-nome">Simulatore</h3>
+    <button onclick="chiudiSimulatore()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer">✕</button>
+  </div>
+  <div id="sim-codice" style="font-size:.7rem;color:var(--muted);margin-bottom:12px"></div>
+
+  <div class="sim-row">
+    <label>Saturazione catena: <strong id="lbl-sat">85%</strong></label>
+    <input type="range" id="inp-sat" min="5" max="100" value="85" step="1"
+      oninput="document.getElementById('lbl-sat').textContent=this.value+'%';ricalcola()">
+  </div>
+  <div class="sim-row">
+    <label>Velocità catena (m/min): <strong id="lbl-vel">1.5</strong></label>
+    <input type="range" id="inp-vel" min="0.3" max="3.0" value="1.5" step="0.1"
+      oninput="document.getElementById('lbl-vel').textContent=parseFloat(this.value).toFixed(1);ricalcola()">
+  </div>
+  <div class="sim-row">
+    <label>N° pezzi nel blocco:</label>
+    <input type="number" id="inp-npz" value="20" min="1" max="500" onchange="ricalcola()">
+  </div>
+
+  <div id="sim-result">
+    <div class="sr-row"><span style="color:#3b82f6">Energia</span><span id="sr-energia">—</span></div>
+    <div class="sr-row"><span style="color:#8b5cf6">Quota fissa</span><span id="sr-fisso">—</span></div>
+    <div class="sr-row"><span style="color:#10b981">Vernice</span><span id="sr-vernice">—</span></div>
+    <div class="sr-row"><span style="color:#f59e0b">Manodopera</span><span id="sr-mdo">—</span></div>
+    <div class="sr-row"><span style="color:#ef4444">Termico</span><span id="sr-termico">—</span></div>
+    <div class="sr-row" style="margin-top:6px;padding-top:6px;border-top:1px solid #263545">
+      <span>Costo reale</span><span id="sr-totale" style="color:var(--grn);font-size:1rem">—</span>
+    </div>
+    <div class="sr-row">
+      <span style="color:var(--yel)">€ SAP</span><span id="sr-sap" style="color:var(--yel)">—</span>
+    </div>
+    <div class="sr-row" style="font-size:.9rem">
+      <span>Δ vs SAP</span><span id="sr-delta">—</span>
+    </div>
+    <div style="margin-top:10px;font-size:.65rem;color:var(--muted)">
+      Tempo in catena: <strong id="sr-tmin" style="color:var(--txt)">—</strong> min
+    </div>
+  </div>
+</div>
+
+<script>
+const RIGHE = {{ righe_json|safe }};
+let simProdottoId = null;
+
+// ── Filtra tabella ────────────────────────────────────────────
+function filtra(){
+  const fam   = document.getElementById('flt-famiglia').value;
+  const delta = document.getElementById('flt-delta').value;
+  const cerca = document.getElementById('flt-cerca').value.toLowerCase();
+  document.querySelectorAll('#tbl-body tr').forEach(tr=>{
+    const tfam   = tr.dataset.famiglia || '';
+    const tdelta = tr.dataset.delta    || '';
+    const tcod   = tr.dataset.codice   || '';
+    const testo  = tr.textContent.toLowerCase();
+    const ok =
+      (!fam   || tfam   === fam)   &&
+      (!delta || tdelta === delta) &&
+      (!cerca || testo.includes(cerca));
+    tr.style.display = ok ? '' : 'none';
+  });
+}
+
+// ── Simulatore ───────────────────────────────────────────────
+function apriSimulatore(r){
+  simProdottoId = r.id;
+  document.getElementById('sim-nome').textContent = r.nome.substring(0,30);
+  document.getElementById('sim-codice').textContent = r.codice + ' · ' + r.famiglia + ' · ' + r.sup_m2 + ' m²';
+  document.getElementById('sr-sap').textContent = r.c_standard_sap > 0 ? '€ ' + r.c_standard_sap.toFixed(4) : '—';
+  document.getElementById('sim-drawer').classList.add('open');
+  // Usa saturazione di oggi come default
+  const satOggi = {{ sat_oggi if sat_oggi else 100 }};
+  document.getElementById('inp-sat').value = satOggi;
+  document.getElementById('lbl-sat').textContent = satOggi + '%';
+  document.getElementById('inp-vel').value = {{ cfg.velocita_default }};
+  document.getElementById('lbl-vel').textContent = '{{ cfg.velocita_default }}';
+  ricalcola();
+}
+
+function chiudiSimulatore(){
+  document.getElementById('sim-drawer').classList.remove('open');
+  simProdottoId = null;
+}
+
+let _simTimer = null;
+function ricalcola(){
+  if(!simProdottoId) return;
+  clearTimeout(_simTimer);
+  _simTimer = setTimeout(async ()=>{
+    const sat = parseFloat(document.getElementById('inp-sat').value);
+    const vel = parseFloat(document.getElementById('inp-vel').value);
+    const npz = parseInt(document.getElementById('inp-npz').value) || 1;
+    try{
+      const r = await fetch('/api/analisi_costo/calcola', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({prodotto_id:simProdottoId, saturazione:sat, velocita:vel, n_pezzi:npz})
+      });
+      const d = await r.json();
+      if(d.error){ console.error(d.error); return; }
+      document.getElementById('sr-energia').textContent   = '€ ' + d.costo_energia.toFixed(4);
+      document.getElementById('sr-fisso').textContent     = '€ ' + d.costo_fisso.toFixed(4);
+      document.getElementById('sr-vernice').textContent   = '€ ' + d.costo_vernice.toFixed(4);
+      document.getElementById('sr-mdo').textContent       = '€ ' + d.costo_manodopera.toFixed(4);
+      document.getElementById('sr-termico').textContent   = '€ ' + d.costo_termico.toFixed(4);
+      document.getElementById('sr-totale').textContent    = '€ ' + d.costo_totale.toFixed(4);
+      document.getElementById('sr-tmin').textContent      = d.t_occ_min.toFixed(3);
+      const dt = d.delta_eur;
+      const dp = d.delta_pct;
+      if(dp !== null){
+        const sign = dp > 0 ? '+' : '';
+        const col  = dp > 2 ? '#f87171' : dp < -2 ? '#4ade80' : 'var(--muted)';
+        document.getElementById('sr-delta').innerHTML =
+          `<span style="color:${col}">${sign}${dp.toFixed(1)}% (${sign}€${dt.toFixed(4)})</span>`;
+      } else {
+        document.getElementById('sr-delta').textContent = '— (nessun standard SAP)';
+      }
+    } catch(e){ console.error(e); }
+  }, 200);
+}
+
+// ── Import CSV SAP ────────────────────────────────────────────
+async function importaSAPCsv(){
+  const inp = document.getElementById('sap-csv-input');
+  if(!inp.files.length){ alert('Seleziona un file CSV'); return; }
+  const fd = new FormData();
+  fd.append('file_csv', inp.files[0]);
+  document.getElementById('import-status').textContent = '⏳ Caricamento…';
+  try{
+    const r = await fetch('/api/analisi_costo/import_sap_std', {method:'POST', body:fd});
+    const d = await r.json();
+    if(d.error){ document.getElementById('import-status').textContent='❌ '+d.error; return; }
+    document.getElementById('import-status').textContent =
+      `✅ ${d.updated} codici aggiornati` + (d.not_found?.length ? ` · ⚠ ${d.not_found.length} non trovati` : '');
+    setTimeout(()=>location.reload(), 1500);
+  } catch(e){ document.getElementById('import-status').textContent='❌ Errore upload'; }
+}
+
+function scaricaTemplate(){
+  const csv = 'MATNR;COSTO_STD\nFALC-TF280;1.2350\nFALC-TF320;0.9800\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'template_costi_sap.csv';
+  a.click();
+}
+
+// Chiudi drawer cliccando fuori
+document.addEventListener('click', e=>{
+  const drw = document.getElementById('sim-drawer');
+  if(drw.classList.contains('open') && !drw.contains(e.target) && !e.target.closest('[onclick*="apriSimulatore"]')){
+    chiudiSimulatore();
+  }
+});
+</script>
+{% endblock %}
