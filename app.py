@@ -465,92 +465,176 @@ if _HAS_ORDINE_NESTING:
 
 # ── ABC COSTING ─────────────────────────────────────────────────
 
-def calcola_abc(prodotto: Prodotto, cfg: Configurazione,
+def calcola_giro(cfg: 'Configurazione',
+                 velocita: float = None,
+                 saturazione_pct: float = 100.0) -> dict:
+    """
+    Calcola il COSTO TOTALE di un giro completo di catena (170m).
+
+    Il costo del giro è FISSO per quel metro di tunnel — indipendente
+    da quanti pezzi ci sono appesi. Quello che cambia è la ripartizione.
+
+    Restituisce:
+        c_energia_giro   — kW × t_ciclo_ore × €/kWh
+        c_fisso_giro     — quota ammortamento/riscaldamento (÷ saturazione)
+        c_mdo_giro       — manodopera per il ciclo completo
+        c_centro_giro    — centro orario per il ciclo
+        c_giro_tot       — somma dei 4 componenti
+        t_ciclo_min      — durata ciclo in minuti
+        c_per_m2_giro    — €/m² giro (da usare per ripartizione)
+    """
+    vel    = velocita or cfg.velocita_default or 1.5
+    L      = cfg.lunghezza_tunnel_m or 170.0
+    sat    = max(saturazione_pct, 5.0)
+
+    t_ciclo_min = L / max(vel, 0.01)          # minuti
+    t_ciclo_ore = t_ciclo_min / 60.0
+
+    # Energia: kW_impianto × ore × €/kWh
+    kw = cfg.costo_orario_esercizio / max(cfg.costo_kwh or 0.22, 0.001)
+    c_energia_giro = kw * t_ciclo_ore * (cfg.costo_kwh or 0.22)
+
+    # Quota fissa (ammortamento, riscaldamento) — inversamente prop. alla saturazione
+    # A piena saturazione = costo_orario - energia; a metà = ×2
+    c_fisso_ora   = max(cfg.costo_orario_esercizio - (c_energia_giro / t_ciclo_ore if t_ciclo_ore else 0), 0)
+    c_fisso_giro  = c_fisso_ora * t_ciclo_ore * (100.0 / sat)
+
+    # Manodopera e centro orario (fissi per il ciclo, indip. da saturazione)
+    c_mdo_giro    = cfg.costo_manodopera_ora * t_ciclo_ore
+    c_centro_giro = cfg.costo_centro_orario  * t_ciclo_ore
+
+    c_giro_tot = c_energia_giro + c_fisso_giro + c_mdo_giro + c_centro_giro
+
+    return {
+        'c_energia_giro':  round(c_energia_giro, 4),
+        'c_fisso_giro':    round(c_fisso_giro, 4),
+        'c_mdo_giro':      round(c_mdo_giro, 4),
+        'c_centro_giro':   round(c_centro_giro, 4),
+        'c_giro_tot':      round(c_giro_tot, 4),
+        't_ciclo_min':     round(t_ciclo_min, 2),
+        'vel_usata':       vel,
+        'saturazione_pct': sat,
+    }
+
+
+def calcola_abc(prodotto: 'Prodotto', cfg: 'Configurazione',
                 velocita_override: float = None,
                 saturazione_pct: float = 100.0,
-                n_pezzi_blocco: int = 1) -> dict:
+                n_pezzi_blocco: int = 1,
+                sup_totale_giro_m2: float = None) -> dict:
     """
-    Formula fisica corretta per il costo unitario di verniciatura.
+    Costo unitario di verniciatura per un singolo pezzo.
 
-    TEMPO IN CATENA (fisso per il pezzo, indipendente dal lotto):
-        t_occ_min = passo_gancio_m / (velocita m/min)
-        → il pezzo occupa fisicamente quello spazio sulla catena
+    MODELLO CORRETTO a due livelli:
+    ─────────────────────────────────────────────────────────
+    LIVELLO 1 — COSTO GIRO (fisso per i 170m di tunnel):
+        C_giro = C_energia + C_fisso(sat) + C_mdo + C_centro
 
-    COSTO ENERGIA (proporzionale al tempo):
-        c_energia = kW_impianto × (t_occ_min/60) × €/kWh
+    LIVELLO 2 — RIPARTIZIONE SUL PEZZO:
+        Ogni pezzo paga la sua quota di C_giro proporzionale
+        alla sua superficie rispetto alla superficie totale
+        di tutti i pezzi nel giro:
 
-    COSTO VERNICE (proporzionale alla superficie):
-        c_vernice = sup_m2 × spessore_m × densita_kg_m3 × €/kg / efficienza
+            C_fisso_pezzo = C_giro × (sup_pezzo / Σsup_giro)
 
-    COSTO MANODOPERA:
-        c_mdo = (€/h / 60) × (t_aggancio + t_sgancio)
+        Se sup_totale_giro_m2 non è fornita (chiamata singola),
+        si stima come sup_pezzo / (saturazione/100) — cioè la
+        superficie del pezzo vale una frazione del giro pieno.
 
-    COSTO TERMICO (centro orario: manodopera + ammortamento + manutenzione):
-        c_termico = (costo_centro_orario / 60) × tempo_ciclo_min / n_pezzi_blocco
-        → ripartisce il costo del centro di lavoro (€350/h) sul numero
-          effettivo di pezzi nel blocco/lotto, tenendo conto della saturazione.
+    VERNICE (variabile pura — NON dipende dalla saturazione):
+        C_vernice = sup × spessore × densità × €/kg / efficienza
 
-    EFFETTO SATURAZIONE:
-        I costi fissi impianto (ammortamento, riscaldamento a vuoto) si
-        ripartiscono su meno pezzi quando la catena è sotto-utilizzata.
-        Fattore = 100 / saturazione_pct  (es. 50% sat → costo ×2)
-        Applicato solo alla quota costi fissi (energia strutturale),
-        NON alla vernice (quella è variabile pura).
+    MANODOPERA (per pezzo — aggancio + sgancio):
+        C_mdo_pezzo = €/h / 60 × t_aggancio × 2
+
+    SATURAZIONE → effetto automatico:
+        Se il giro è al 50%, Σsup_giro = metà → C_fisso_pezzo×2
+        → ogni pezzo paga il doppio della quota fissa
+    ─────────────────────────────────────────────────────────
     """
-    spessore_m    = cfg.spessore_default_micron / 1_000_000
-    densita_kg_m3 = cfg.peso_specifico_vernice * 1000
-    c_vernice_kg  = 8.50
-    sup           = prodotto.superficie_m2 or 0
-    passo_m       = prodotto.passo_gancio_m or 0.4
-    vel           = velocita_override or cfg.velocita_default or 1.5
-    sat           = max(saturazione_pct, 5.0)  # minimo 5% per evitare /0
-    n_pezzi       = max(n_pezzi_blocco, 1)     # minimo 1 per evitare /0
+    sup   = prodotto.superficie_m2 or 0
+    vel   = velocita_override or cfg.velocita_default or 1.5
+    sat   = max(saturazione_pct, 5.0)
 
-    # ── Tempo occupazione catena ──
-    t_occ_min = passo_m / vel          # minuti che il pezzo occupa la catena
-    t_occ_ore = t_occ_min / 60.0
+    # ── Superficie totale stimata del giro ──
+    # Se fornita dall'esterno (chiamata da api_carico_salva con tutti i pezzi): usa quella
+    # Altrimenti stima: il pezzo occupa sat% del giro teorico
+    if sup_totale_giro_m2 and sup_totale_giro_m2 > 0:
+        sup_tot = sup_totale_giro_m2
+    else:
+        # Stima: superficie massima teorica del giro (ganci × sup media pezzo ÷ occupazione)
+        # Con saturazione al 100% e un pezzo per gancio: sup_giro ≈ sup_pezzo × n_ganci_tot
+        # Approssimazione conservativa: usa n_pezzi_blocco
+        n_ganci_tot = cfg.n_ganci_totali or 425
+        # stima sup totale da saturazione: se sat=50%, c'è metà dei ganci occupati
+        # e ogni gancio ha in media sup_pezzo di superficie
+        n_pezzi_stimati = max(n_pezzi_blocco, round(n_ganci_tot * sat / 100))
+        sup_tot = sup * n_pezzi_stimati if sup > 0 else 1.0
 
-    # ── Costo energia (kW × ore × €/kWh) ──
-    kw_impianto  = cfg.costo_orario_esercizio / max(cfg.costo_kwh or 0.22, 0.01)
-    c_energia    = kw_impianto * t_occ_ore * (cfg.costo_kwh or 0.22)
+    # ── Costo giro completo ──
+    giro = calcola_giro(cfg, velocita=vel, saturazione_pct=sat)
+    c_giro_tot = giro['c_giro_tot']
 
-    # ── Costo quota fissa impianto (ammortamento, riscaldamento struttura) ──
-    # Questa quota varia con la saturazione: meno pezzi = più costo/pezzo
-    costo_fisso_ora = max(cfg.costo_orario_esercizio - c_energia/t_occ_ore, 0) if t_occ_ore > 0 else 0
-    c_fisso = costo_fisso_ora * t_occ_ore * (100.0 / sat)
+    # ── Quota fissa del giro attribuita a questo pezzo (proporzionale alla sup) ──
+    fraz_sup   = sup / max(sup_tot, 0.0001)    # frazione di superficie occupata dal pezzo
+    c_fisso_pezzo   = giro['c_fisso_giro']   * fraz_sup
+    c_energia_pezzo = giro['c_energia_giro'] * fraz_sup
+    c_mdo_giro_pz   = giro['c_mdo_giro']    * fraz_sup
+    c_centro_pz     = giro['c_centro_giro'] * fraz_sup
 
-    # ── Costo vernice (puro variabile, non dipende da saturazione) ──
-    c_vernice = sup * spessore_m * densita_kg_m3 * c_vernice_kg / cfg.efficienza_applicazione
+    # ── Costo vernice (variabile pura — proporzionale alla superficie del pezzo) ──
+    spessore_m    = (cfg.spessore_default_micron or 120) / 1_000_000
+    densita_kg_m3 = (cfg.peso_specifico_vernice  or 1.2) * 1000
+    c_vernice_kg  = cfg.costo_vernice_kg if hasattr(cfg, 'costo_vernice_kg') and cfg.costo_vernice_kg else 8.50
+    c_vernice = sup * spessore_m * densita_kg_m3 * c_vernice_kg / max(cfg.efficienza_applicazione or 0.65, 0.01)
 
-    # ── Costo manodopera ──
+    # ── Costo manodopera per pezzo (aggancio + sgancio) ──
     comp  = prodotto.complessita_aggancio or 1
     t_agg = [cfg.tempo_aggancio_min,
              cfg.tempo_aggancio_medio_min,
-             cfg.tempo_aggancio_complesso_min][min(comp-1, 2)]
-    c_mdo = (cfg.costo_manodopera_ora / 60.0) * t_agg * 2
-
-    # ── Costo termico centro orario (€/h ÷ 60 × t_ciclo_min ÷ n_pezzi) ──
-    # Ripartisce il costo del centro di lavoro (manodopera + ammortamento +
-    # manutenzione) sul numero effettivo di pezzi nel blocco/lotto.
-    c_termico = (cfg.costo_centro_orario / 60.0) * t_occ_min / n_pezzi
+             cfg.tempo_aggancio_complesso_min][min(comp - 1, 2)]
+    c_mdo_pezzo = (cfg.costo_manodopera_ora / 60.0) * t_agg * 2
 
     # ── Totale ──
-    c_processo = round(c_energia + c_fisso, 4)
-    totale     = c_processo + c_vernice + c_mdo + c_termico
+    c_processo = c_energia_pezzo + c_fisso_pezzo
+    c_totale   = c_processo + c_vernice + c_mdo_pezzo + c_centro_pz + c_mdo_giro_pz
+
+    # Tempo in catena (per riferimento)
+    passo_m   = prodotto.passo_gancio_m or 0.4
+    t_occ_min = passo_m / max(vel, 0.01)
 
     return {
-        'costo_energia':     round(c_energia, 4),
-        'costo_fisso':       round(c_fisso, 4),
-        'costo_processo':    c_processo,
+        'costo_energia':     round(c_energia_pezzo, 4),
+        'costo_fisso':       round(c_fisso_pezzo, 4),
+        'costo_processo':    round(c_processo, 4),
         'costo_vernice':     round(c_vernice, 4),
-        'costo_manodopera':  round(c_mdo, 4),
-        'costo_termico':     round(c_termico, 4),
-        'costo_totale':      round(totale, 4),
-        'costo_m2':          round(totale / sup, 4) if sup > 0 else 0,
+        'costo_manodopera':  round(c_mdo_pezzo + c_mdo_giro_pz, 4),
+        'costo_termico':     round(c_centro_pz, 4),
+        'costo_totale':      round(c_totale, 4),
+        'costo_m2':          round(c_totale / sup, 4) if sup > 0 else 0,
         't_occ_min':         round(t_occ_min, 3),
         'saturazione_pct':   sat,
         'vel_usata':         vel,
+        'fraz_superficie':   round(fraz_sup * 100, 2),   # % di sup sul giro
+        'sup_totale_giro':   round(sup_tot, 4),
+        # Dettaglio giro per trasparenza
+        'c_giro_tot':        giro['c_giro_tot'],
+        't_ciclo_min':       giro['t_ciclo_min'],
     }
+
+
+# Alias compatibile con le chiamate esistenti in app.py
+def calcola_costo_unitario(cfg: 'Configurazione', prodotto: 'Prodotto',
+                            velocita_override: float = None,
+                            saturazione_pct: float = 100.0,
+                            n_pezzi_blocco: int = 1,
+                            sup_totale_giro_m2: float = None) -> dict:
+    """Alias di calcola_abc con firma (cfg, prodotto, ...) per compatibilità."""
+    return calcola_abc(prodotto, cfg,
+                       velocita_override=velocita_override,
+                       saturazione_pct=saturazione_pct,
+                       n_pezzi_blocco=n_pezzi_blocco,
+                       sup_totale_giro_m2=sup_totale_giro_m2)
 
 
 # ── OTTIMIZZATORE ───────────────────────────────────────────────
@@ -4188,38 +4272,52 @@ def api_carico_salva():
     n_pezzi_tot = sum(c['qty'] for c in codici_list) or 1
 
     # ═══════════════════════════════════════════════════════════
-    # 4. COSTO UNITARIO PER OGNI CODICE + AGGIORNAMENTO STORICO
+    # 4. SUPERFICIE TOTALE REALE DEL GIRO
+    #    Somma sup_m2 × qty per ogni prodotto trovato nel DB.
+    #    Usata per ripartire i costi fissi proporzionalmente.
+    #    Prodotti non in DB contribuiscono con stima basata su
+    #    superficie media degli altri.
+    # ═══════════════════════════════════════════════════════════
+    prods_map = {}   # codice → Prodotto
+    sup_totale_giro = 0.0
+    for item in codici_list:
+        p = Prodotto.query.filter_by(codice=item['codice']).first()
+        prods_map[item['codice']] = p
+        if p and (p.superficie_m2 or 0) > 0:
+            sup_totale_giro += p.superficie_m2 * item['qty']
+
+    # Se sup totale = 0 (nessun prodotto in DB), usa stima da saturazione
+    if sup_totale_giro <= 0:
+        sup_totale_giro = None   # calcola_abc userà stima interna
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. COSTO UNITARIO PER OGNI CODICE + AGGIORNAMENTO STORICO
     # ═══════════════════════════════════════════════════════════
     dettaglio = []
 
     for item in codici_list:
         cod  = item['codice']
         qty  = item['qty']
-        prod = Prodotto.query.filter_by(codice=cod).first()
+        prod = prods_map.get(cod)
 
-        # ── A. Calcolo costo unitario ──
+        # ── A. Calcolo costo unitario con superficie totale giro ──
         if prod and (prod.superficie_m2 or 0) > 0:
-            # Formula fisica completa (vedi calcola_costo_unitario)
             try:
-                cu = calcola_costo_unitario(
-                    cfg, prod,
-                    velocita_override = velocita,
-                    saturazione_pct   = saturaz_pct,
-                    n_pezzi_blocco    = n_pezzi_tot
+                cu = calcola_abc(
+                    prod, cfg,
+                    velocita_override   = velocita,
+                    saturazione_pct     = saturaz_pct,
+                    n_pezzi_blocco      = n_pezzi_tot,
+                    sup_totale_giro_m2  = sup_totale_giro,   # ← chiave: ripartizione reale
                 )
-                c_unit    = cu['costo_totale']
-                bkd       = cu
-            except Exception as exc:
-                # Fallback geometrico: ripartizione proporzionale per superficie
-                sup_tot = sum(
-                    (Prodotto.query.filter_by(codice=x['codice']).first() or type('P', (), {'superficie_m2': 0})()).superficie_m2 * x['qty']
-                    for x in codici_list
-                ) or 1
-                fraz   = ((prod.superficie_m2 or 0) / sup_tot)
+                c_unit = cu['costo_totale']
+                bkd    = cu
+            except Exception:
+                fraz   = (prod.superficie_m2 / max(sup_totale_giro or 1, 0.0001))
                 c_unit = round(costo_giro_tot * fraz, 4)
                 bkd    = {}
         else:
-            # Codice sconosciuto: ripartizione uniforme sul numero pezzi
+            # Prodotto sconosciuto: quota uniforme sui pezzi
             c_unit = round(costo_giro_tot / n_pezzi_tot, 4)
             bkd    = {}
 
