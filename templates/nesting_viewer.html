@@ -13,6 +13,23 @@ body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace}
 .kl{font-size:9px;color:#4a6070;text-transform:uppercase}
 .kv{font-size:16px;font-weight:bold;color:#00e676}
 .kv.warn{color:#ff9800}.kv.danger{color:#f44336}
+/* Saturazione grande */
+.kv-sat{font-size:32px;font-weight:bold;letter-spacing:1px;line-height:1.1;color:#00e676}
+.kv-sat.warn{color:#ff9800}.kv-sat.danger{color:#f44336}
+/* Riconciliazione */
+#kpi-ric-box{background:#111b27;border-radius:5px;padding:8px 9px;margin-bottom:5px;border:1px solid #1a2633}
+#kpi-ric-box .kl{font-size:9px;color:#4a6070;text-transform:uppercase;margin-bottom:4px}
+.ric-counts{font-size:12px;color:#80cbc4;margin-bottom:4px;font-weight:bold}
+.ric-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;
+  font-weight:bold;font-family:'Courier New',monospace;margin-top:2px}
+.ric-ok{background:#00e676;color:#000}
+.ric-warn{background:#f44336;color:#fff;animation:blink .8s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+/* Pulsante report produzione */
+#btn-report-prod{width:100%;font-size:10px;background:#1a2633;border:1px solid #ff9800;
+  color:#ff9800;font-weight:bold;padding:5px;border-radius:3px;cursor:pointer;
+  font-family:'Courier New',monospace;margin-top:5px}
+#btn-report-prod:hover{background:#ff9800;color:#000}
 .sat-w{height:3px;background:#1a2633;border-radius:2px;margin-top:3px}
 .sat-b{height:3px;border-radius:2px;background:#00e676;transition:width .4s}
 .ci{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:3px;
@@ -181,9 +198,16 @@ select.cm-input option{background:#0d1117}
     <div class="kpi" id="kpi-blocchi-box" style="display:none"><div class="kl">Blocchi catena</div><div class="kv" id="kpi-blocchi">—</div></div>
     <div class="kpi"><div class="kl">Max kg/gancio</div><div class="kv" id="kpi-maxkg">—</div></div>
     <div class="kpi">
-      <div class="kl">Saturazione</div>
-      <div class="kv" id="kpi-sat">—</div>
-      <div class="sat-w"><div class="sat-b" id="sat-bar" style="width:0%"></div></div>
+      <div class="kl">Saturazione globale</div>
+      <div class="kv-sat" id="kpi-sat">—</div>
+      <div class="sat-w" style="height:5px;margin-top:5px"><div class="sat-b" id="sat-bar" style="width:0%"></div></div>
+    </div>
+
+    <!-- RICONCILIAZIONE PEZZI -->
+    <div id="kpi-ric-box" style="display:none">
+      <div class="kl">🔎 Riconciliazione pezzi</div>
+      <div class="ric-counts"><span id="ric-piazzati">0</span> / <span id="ric-totali">0</span> pezzi piazzati</div>
+      <div id="ric-badge"></div>
     </div>
     <div style="margin-top:10px">
       <button class="tb" style="width:100%;font-size:10px" onclick="showUpload()">📁 Nuovo STEP</button>
@@ -197,6 +221,10 @@ select.cm-input option{background:#0d1117}
         ⚡ Ottimizza Catena
       </button>
     </div>
+    <div style="margin-top:5px">
+      <button id="btn-report-prod" onclick="stampaReportProduzione()" title="Riconciliazione completa per codice pezzo + blocchi + pesi">🖨 Stampa Report Produzione</button>
+    </div>
+
     <div id="clist" style="margin-top:8px"></div>
 
     <!-- KPI copie assembly -->
@@ -404,23 +432,42 @@ function resetView(){
   if(!NDATA) return;
   const maxManSlot = manualParts.length>0 ? Math.max(...manualParts.map(m=>m.slotIdx))+1 : 0;
   const nCols = _blockView
-    ? Math.max(1, Math.round(3000/PASSO_MM))          // in block-view: un blocco da 3m
+    ? Math.max(1, Math.round(3000/PASSO_MM))
     : Math.max(NDATA.columns.length, maxManSlot);
   const tX = nCols * PASSO_MM;
 
-  // Centro verticale: i pezzi vanno da y=0 (gancio) a y=-Z_MAX_MM (fondo)
-  // → centro geometrico a y = -Z_MAX_MM/2
-  const centerY = -Z_MAX_MM / 2;
+  // Calcola range Y reale (da tutti i pezzi presenti)
+  let yMin = -HOOK_LEN, yMax = 0;
+  const allPcs = [
+    ...(NDATA.columns||[]).flatMap(c=>c.pezzi||[]),
+    ...manualParts.map(m=>m.part)
+  ];
+  if(allPcs.length > 0){
+    allPcs.forEach(p=>{
+      if(p.y_top !== undefined){
+        yMax = Math.max(yMax, p.y_top);
+        yMin = Math.min(yMin, p.y_top - (p.alt_mm||0));
+      }
+    });
+  } else { yMin = -Z_MAX_MM; }
+  const yRange  = Math.abs(yMin - yMax) || Z_MAX_MM;
+  const yMargin = yRange * 0.08;
+  const centerY = ((yMax + yMargin) + (yMin - yMargin)) / 2;
+  const visH    = yRange + 2*yMargin;
 
-  // Scala: adatta la larghezza al canvas
-  const targetW = canvas.width * 0.85;
-  const testP_a = projFn(0,  centerY, 0);
-  const testP_b = projFn(tX, centerY, 0);
-  const rawW    = Math.abs(testP_b.sx - testP_a.sx) || 1;
-  const autoScale = Math.min(targetW / rawW, viewMode==='iso' ? 0.28 : 0.40);
-  scale = autoScale;
+  // Scala: fit in larghezza E altezza
+  const testA   = projFn(0,  centerY, 0);
+  const testB   = projFn(tX, centerY, 0);
+  const rawW    = Math.abs(testB.sx - testA.sx) || 1;
+  const scaleW  = Math.min(canvas.width  * 0.85 / rawW, viewMode==='iso' ? 0.28 : 0.40);
 
-  // Centro orizzontale a metà catena, verticale al centro geometrico
+  const testT = projFn(tX/2, yMax+yMargin, 0);
+  const testBt= projFn(tX/2, yMin-yMargin, 0);
+  const rawH  = Math.abs(testBt.sy - testT.sy) || 1;
+  const scaleH = canvas.height * 0.88 / rawH;
+
+  scale = Math.min(scaleW, scaleH);
+
   const p = projFn(tX/2, centerY, 0);
   offX = canvas.width/2  - p.sx*scale;
   offY = canvas.height/2 - p.sy*scale;
@@ -986,8 +1033,9 @@ function autoPlace(part){
       const yTop=tryFitInSlot(si, testPart);
       if(yTop===null) continue;
       // Residuo = spazio rimasto nel gancio dopo il piazzamento
-      const usedAfter = Math.abs(yTop - or.H);
-      const residuo   = Z_MAX_MM - usedAfter;
+      // Spazio residuo dopo aver piazzato questo pezzo su questo slot
+      const lowestAfter = yTop - or.H;
+      const residuo     = Z_MAX_MM - (Math.abs(lowestAfter) - HOOK_LEN);
       if(residuo > bestResiduo){
         bestResiduo=residuo; bestSlot=si; bestOrient=or; bestY=yTop;
       }
@@ -1652,57 +1700,81 @@ function runOptimizer(qty){
     _optimizerSlotState[gsi].peso += (partWithY.peso_kg||partWithY.peso||0);
   }
 
-  // ── Algoritmo principale: First Fit Decreasing cross-blocco ──────────
-  // Tiene aperto il blocco corrente finché non è saturo, poi avanza.
-  // "Saturo" = nessun pezzo rimasto entra in nessuno slot del blocco.
+  // ── Algoritmo principale: Best Fit Decreasing cross-blocco ──────────
+  // Strategia: per ogni pezzo cerca il gancio del blocco corrente che
+  // ha il MINIMO spazio residuo sufficiente a contenere il pezzo
+  // (Best Fit = minimizza buchi, massimizza saturazione per gancio).
+  // Se nessun gancio nel blocco corrente può contenere il pezzo,
+  // apri un nuovo blocco.
+
+  // spazioResiduoGancio(gsi): quanto spazio verticale resta su questo gancio
+  function spazioResiduo(gsi){
+    const lowest = getLowestY(gsi);   // già negativo, es. -1680
+    // spazio usato = |lowest| - HOOK_LEN  (HOOK_LEN = zona non verniciabile)
+    const usato  = Math.max(0, Math.abs(lowest) - HOOK_LEN);
+    return Z_MAX_MM - usato;          // spazio disponibile in mm
+  }
 
   let currentBlock = 0;
   const remaining  = [...GLOBAL_PIECES]; // copia modificabile
+  let safetyMax    = remaining.length * 200; // sicurezza anti-loop infinito
 
-  while(remaining.length > 0){
+  while(remaining.length > 0 && safetyMax-- > 0){
     const blockStart = currentBlock * nGB;
     let placed = false;
 
-    // Prova ogni pezzo rimanente nel blocco corrente
+    // Scansiona tutti i pezzi (già ordinati per H decrescente da buildGlobalPieces)
     for(let pi = 0; pi < remaining.length; pi++){
       const piece = remaining[pi];
       const orientations = [
         {L: piece.part.largh_mm||100, H: piece.part.alt_mm||100, rot: false},
         {L: piece.part.alt_mm||100,   H: piece.part.largh_mm||100, rot: true}
       ];
-      let bestGsi=-1, bestOr=null, bestY=null, bestResiduo=-Infinity;
+
+      // Best Fit: cerca il gancio con minimo spazio residuo sufficiente
+      let bestGsi=-1, bestOr=null, bestY=null;
+      let bestResiduo=Infinity; // vogliamo il gancio PIÙ PIENO che ancora contiene il pezzo
 
       for(const or of orientations){
         const tp = {...piece.part, largh_mm:or.L, alt_mm:or.H};
         for(let li = 0; li < nGB; li++){
-          const gsi = blockStart + li;
+          const gsi  = blockStart + li;
           const yTop = trySlot(gsi, tp);
           if(yTop === null) continue;
-          const residuo = Z_MAX_MM - Math.abs(yTop - or.H);
-          if(residuo > bestResiduo){ bestResiduo=residuo; bestGsi=gsi; bestOr=or; bestY=yTop; }
+          // Spazio residuo DOPO aver piazzato questo pezzo
+          const residuoDopoIl = spazioResiduo(gsi) - or.H - gapV;
+          // Best Fit: preferisci il gancio con meno spazio residuo rimasto (gancio più pieno)
+          // ma che ha ancora almeno 0mm di spazio dopo
+          if(residuoDopoIl >= 0 && residuoDopoIl < bestResiduo){
+            bestResiduo = residuoDopoIl;
+            bestGsi = gsi; bestOr = or; bestY = yTop;
+          }
         }
-        if(bestGsi >= 0) break; // standard orientation fits, no need to rotate
+        if(bestGsi >= 0) break; // orientamento standard trovato
       }
 
       if(bestGsi >= 0){
-        const tp = {...piece.part, largh_mm:bestOr.L, alt_mm:bestOr.H,
-                    orientamento: bestOr.rot?'ruotato_90':'standard',
-                    y_top: bestY};  // override y_top con quello calcolato
+        const tp = {...piece.part,
+          largh_mm    : bestOr.L,
+          alt_mm      : bestOr.H,
+          orientamento: bestOr.rot ? 'ruotato_90' : 'standard',
+          y_top       : bestY
+        };
         placePiece(currentBlock, bestGsi, {...piece, part:tp}, bestY);
         remaining.splice(pi, 1);
         placed = true;
-        break; // restart scan from the top (largest pieces first)
+        break; // riparti dalla testa (pezzi grandi prima)
       }
     }
 
     if(!placed){
-      // Nessun pezzo rimanente entra nel blocco corrente → chiudi e avanza
+      // Nessun pezzo rimasto entra nel blocco corrente → avanza
       if(remaining.length > 0) currentBlock++;
       else break;
-      // Safety: evita loop infinito se un pezzo non entra MAI
-      if(currentBlock > 9999) { console.warn('Optimizer: troppi blocchi, stop.'); break; }
+      if(currentBlock > 9999){ console.warn('Optimizer: limite blocchi raggiunto'); break; }
     }
   }
+  if(safetyMax <= 0) console.warn('Optimizer: safety loop limit hit');
 
   // Calcola saturation per blocco
   BLOCKS.forEach(blk => {
@@ -1795,10 +1867,61 @@ function updateMacLegend(){
   });
 }
 
+// ── Calcola riconciliazione pezzi (richiesti vs piazzati) ──────────
+// Ritorna {totRichiesti, totPiazzati, byCode: Map(codice→{richiesti,piazzati,macs})}
+function calcRiconciliazione(){
+  // ── RICHIESTI: tutti i pezzi in NDATA.columns × copie + CODA × qty ──
+  const byCode = new Map(); // codice → {richiesti, piazzati, macs:Set}
+
+  function addRichiesto(nome, macName){
+    if(!byCode.has(nome)) byCode.set(nome, {richiesti:0, piazzati:0, macs:new Set()});
+    byCode.get(nome).richiesti++;
+    byCode.get(nome).macs.add(macName||'Assembly');
+  }
+  function addPiazzato(nome){
+    if(!byCode.has(nome)) byCode.set(nome, {richiesti:0, piazzati:0, macs:new Set()});
+    byCode.get(nome).piazzati++;
+  }
+
+  const qty = Math.max(1, parseInt(document.getElementById('copie-assembly')?.value)||1);
+  // Assembly principale
+  for(let q=0; q<qty; q++){
+    (NDATA.columns||[]).forEach(col=>{
+      (col.pezzi||[]).forEach(p=>addRichiesto(p.nome||p.name||'?', (NDATA.nome||'Assembly')+(qty>1?` #${q+1}`:'')));
+    });
+  }
+  // CODA
+  CODA.forEach(item=>{
+    for(let q=0; q<(item.qty||1); q++){
+      (item.pezzi||[]).forEach(p=>{
+        const n = parseInt(p.qty||p.qta||1);
+        for(let i=0;i<n;i++) addRichiesto(p.nome||p.name||'?', item.nome+(item.qty>1?` #${q+1}`:''));
+      });
+    }
+  });
+
+  // ── PIAZZATI: pezzi effettivamente in BLOCKS (non _locked = già contati da manualParts) ──
+  BLOCKS.forEach(blk=>{
+    blk.pieces.forEach(p=>{
+      if(p._locked) return; // pezzi manuali bloccati — già nei richiesti via NDATA/CODA
+      if((p.part._multiSlotIndex||0) > 0) return; // multi-slot: conta solo anchor
+      addPiazzato(p.part.nome||p.part.name||'?');
+    });
+  });
+  // Pezzi manuali bloccati
+  manualParts.filter(m=>!m._fromOpt&&!(m.part._multiSlotIndex>0)).forEach(m=>{
+    addPiazzato(m.part.nome||m.part.name||'?');
+  });
+
+  let totRichiesti=0, totPiazzati=0;
+  byCode.forEach(v=>{ totRichiesti+=v.richiesti; totPiazzati+=v.piazzati; });
+  return {totRichiesti, totPiazzati, byCode};
+}
+
 function updateKPIOptimizer(){
   if(!NDATA) return;
 
-  // ── Peso totale (da manualParts, già popolato da runAndShow) ──
+  // ── Peso totale ──
   const totPeso = manualParts.reduce((s,m)=>s+(m.part.peso_kg||m.part.peso||0),0);
   const el = document.getElementById('kpi-peso');
   if(el) el.textContent = totPeso.toFixed(1)+' kg';
@@ -1813,10 +1936,7 @@ function updateKPIOptimizer(){
   const kcat = document.getElementById('kpi-catena');
   if(kcat) kcat.textContent = (totSlots * PASSO_MM / 1000).toFixed(1)+' m';
 
-  // ── Saturazione: spazio Y consumato / spazio Y teorico ──
-  // Per ogni gancio attivo: spazio consumato = |lastY| - HOOK_LEN
-  //   (lastY parte da -HOOK_LEN e scende; lo spazio usato è la discesa totale)
-  // Spazio teorico per gancio = Z_MAX_MM
+  // ── Saturazione reale da slotState ──
   let usedH = 0;
   activeGSIs.forEach(gsi => {
     const s = _optimizerSlotState[gsi];
@@ -1827,8 +1947,8 @@ function updateKPIOptimizer(){
 
   const satEl = document.getElementById('kpi-sat');
   if(satEl){
-    satEl.textContent  = sat.toFixed(1)+'%';
-    satEl.className    = 'kv' + (sat>85?' ':sat>50?' warn':' danger');
+    satEl.textContent = sat.toFixed(1)+'%';
+    satEl.className   = 'kv-sat' + (sat>85?'':sat>50?' warn':' danger');
   }
   const sb = document.getElementById('sat-bar');
   if(sb){
@@ -1836,20 +1956,30 @@ function updateKPIOptimizer(){
     sb.style.background = sat>85?'#00e676':sat>50?'#ff9800':'#f44336';
   }
 
-  // ── Saturazione media per blocco (aggiorna BLOCKS[].satPct) ──
+  // ── Saturazione per blocco ──
   const nGB = Math.max(1, Math.round(3000/PASSO_MM));
   BLOCKS.forEach(blk => {
     let bUsed = 0;
-    blk.pieces.forEach(p => {
-      const s = _optimizerSlotState[p.gsi];
-      // Contributo di questo pezzo: la sua altezza reale
-      bUsed += (p.part.alt_mm || 0);
-    });
-    // Spazio teorico del blocco = nGB ganci × Z_MAX_MM
-    blk.satPct = nGB * Z_MAX_MM > 0
-      ? Math.min(100, bUsed / (nGB * Z_MAX_MM) * 100)
-      : 0;
+    blk.pieces.forEach(p => { bUsed += (p.part.alt_mm||0); });
+    blk.satPct = nGB*Z_MAX_MM > 0 ? Math.min(100, bUsed/(nGB*Z_MAX_MM)*100) : 0;
   });
+
+  // ── Riconciliazione pezzi ──
+  const ric = calcRiconciliazione();
+  const ricBox = document.getElementById('kpi-ric-box');
+  if(ricBox) ricBox.style.display = 'block';
+  const ricP = document.getElementById('ric-piazzati');
+  const ricT = document.getElementById('ric-totali');
+  const ricB = document.getElementById('ric-badge');
+  if(ricP) ricP.textContent = ric.totPiazzati;
+  if(ricT) ricT.textContent = ric.totRichiesti;
+  if(ricB){
+    const completo = ric.totPiazzati >= ric.totRichiesti && ric.totRichiesti > 0;
+    const mancanti = ric.totRichiesti - ric.totPiazzati;
+    ricB.innerHTML = completo
+      ? '<span class="ric-badge ric-ok">✅ 100% COMPLETO</span>'
+      : `<span class="ric-badge ric-warn">⚠ Mancano ${mancanti} pezzi!</span>`;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1935,22 +2065,46 @@ function goToBlock(n){
         manualParts.length>0?Math.max(...manualParts.map(m=>m.slotIdx))+1:0) / nGB));
   _activeBlock = Math.max(0, Math.min(n, totalBlocks-1));
 
-  // Centro geometrico del blocco:
-  // X = metà del blocco in mm
-  // Y = -Z_MAX_MM/2  (i pezzi vanno da 0 a -Z_MAX_MM, centro a metà)
-  const blockStartX  = _activeBlock * nGB * PASSO_MM;
-  const blockEndX    = (_activeBlock + 1) * nGB * PASSO_MM;
+  const blockStartX = _activeBlock * nGB * PASSO_MM;
+  const blockEndX   = (_activeBlock + 1) * nGB * PASSO_MM;
   const blockCenterX = (blockStartX + blockEndX) / 2;
-  const centerY      = -Z_MAX_MM / 2;
 
-  // Scala: adatta la larghezza del blocco all'80% del canvas
+  // Calcola il range Y reale dei pezzi di questo blocco
+  // così la centratura include davvero tutto ciò che è disegnato
+  let yMin = -HOOK_LEN, yMax = 0;
+  const blk = BLOCKS[_activeBlock];
+  if(blk && blk.pieces.length > 0){
+    blk.pieces.forEach(p => {
+      if(p.part.y_top !== undefined){
+        yMax = Math.max(yMax, p.part.y_top);           // valore meno negativo = più in alto
+        yMin = Math.min(yMin, p.part.y_top - p.part.alt_mm); // valore più negativo = più in basso
+      }
+    });
+  } else {
+    yMin = -Z_MAX_MM;
+  }
+  // Aggiungi un margine del 10% sopra e sotto
+  const yRange  = Math.abs(yMin - yMax) || Z_MAX_MM;
+  const yMargin = yRange * 0.10;
+  const yTopVis = yMax + yMargin;       // coordinata più alta (meno negativa) da mostrare
+  const yBotVis = yMin - yMargin;       // coordinata più bassa (più negativa) da mostrare
+  const centerY = (yTopVis + yBotVis) / 2;
+
+  // Scala: adatta larghezza blocco all'80% del canvas
+  // E altezza contenuto al 85% del canvas — prendi la scala più restrittiva
   const pL = projFn(blockStartX, centerY, 0);
   const pR = projFn(blockEndX,   centerY, 0);
   const blockW  = Math.abs(pR.sx - pL.sx) || 1;
-  const targetW = canvas.width * 0.80;
-  scale = targetW / blockW;
+  const scaleW  = (canvas.width  * 0.80) / blockW;
 
-  // Allinea il centro del blocco al centro del canvas (X e Y)
+  const pT = projFn(blockCenterX, yTopVis, 0);
+  const pB = projFn(blockCenterX, yBotVis, 0);
+  const blockH = Math.abs(pB.sy - pT.sy) || 1;
+  const scaleH = (canvas.height * 0.85) / blockH;
+
+  scale = Math.min(scaleW, scaleH);   // usa la scala più piccola (fit completo)
+
+  // Centra sul centro geometrico reale
   const pCenter = projFn(blockCenterX, centerY, 0);
   offX = canvas.width  / 2 - pCenter.sx * scale;
   offY = canvas.height / 2 - pCenter.sy * scale;
@@ -2103,6 +2257,200 @@ function addCodaFromFile(f){
 
 // Legacy applyCodaItem — non più usato, rimpiazzato da ottimizzaTutto
 function applyCodaItem(idx){ ottimizzaTutto(); }
+
+// ══════════════════════════════════════════════════════════════════════
+// REPORT PRODUZIONE — riconciliazione completa per codice + blocchi + pesi
+// ══════════════════════════════════════════════════════════════════════
+function stampaReportProduzione(){
+  if(!NDATA || BLOCKS.length===0){
+    showToastErr('Esegui prima ⚡ Ottimizza Catena!');
+    return;
+  }
+  const ric      = calcRiconciliazione();
+  const dataOra  = new Date().toLocaleString('it-IT');
+  const nGB      = Math.max(1, Math.round(3000/PASSO_MM));
+  const totMetri = (BLOCKS.length * nGB * PASSO_MM / 1000).toFixed(1);
+  const totPeso  = manualParts.reduce((s,m)=>s+(m.part.peso_kg||m.part.peso||0),0);
+  const completo = ric.totPiazzati >= ric.totRichiesti && ric.totRichiesti>0;
+
+  // ── Tabella riconciliazione per codice pezzo ──
+  let tableRows = '';
+  // Raggruppa per macchina → codice
+  const byMac = new Map();
+  ric.byCode.forEach((v, codice)=>{
+    v.macs.forEach(mac=>{
+      if(!byMac.has(mac)) byMac.set(mac, []);
+      byMac.get(mac).push({codice, richiesti:v.richiesti, piazzati:v.piazzati});
+    });
+  });
+
+  byMac.forEach((pezzi, macName)=>{
+    const macOk = pezzi.every(p=>p.piazzati>=p.richiesti);
+    tableRows += `<tr style="background:#0d1a2a">
+      <td colspan="4" style="padding:6px 10px;color:#00e676;font-weight:bold;font-size:12px;
+          border-top:2px solid #1a3a5c;border-bottom:1px solid #1a2633">
+        🏭 ${macName}
+        <span style="float:right;font-size:10px;color:${macOk?'#00e676':'#f44336'}">
+          ${macOk?'✅ COMPLETO':'⚠ INCOMPLETO'}
+        </span>
+      </td>
+    </tr>`;
+    pezzi.forEach(p=>{
+      const ok = p.piazzati >= p.richiesti;
+      const pct = p.richiesti>0 ? (p.piazzati/p.richiesti*100).toFixed(0) : '0';
+      const mancanti = Math.max(0, p.richiesti - p.piazzati);
+      tableRows += `<tr style="border-bottom:1px solid #0d1a2a">
+        <td style="padding:5px 10px 5px 24px;font-size:11px;color:#b0bec5">
+          <code style="background:#111b27;padding:1px 6px;border-radius:3px;font-size:10px">${p.codice}</code>
+        </td>
+        <td style="padding:5px 10px;text-align:center;font-size:12px;color:#80cbc4">${p.richiesti}</td>
+        <td style="padding:5px 10px;text-align:center;font-size:12px;
+            color:${ok?'#00e676':'#f44336'};font-weight:bold">${p.piazzati}</td>
+        <td style="padding:5px 10px;text-align:center">
+          ${ok
+            ? `<span style="background:#00e676;color:#000;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:bold">${pct}%</span>`
+            : `<span style="background:#f44336;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:bold">Mancano ${mancanti}</span>`
+          }
+        </td>
+      </tr>`;
+    });
+  });
+
+  // ── Riepilogo blocchi ──
+  let blkRows = '';
+  BLOCKS.forEach((blk,i)=>{
+    const mS = (i*nGB*PASSO_MM/1000).toFixed(1);
+    const mE = ((i+1)*nGB*PASSO_MM/1000).toFixed(1);
+    const macSet = [...new Set(blk.pieces.filter(p=>!p._locked).map(p=>p.macName||'?'))];
+    const satC = blk.satPct>85?'#00e676':blk.satPct>50?'#ff9800':'#f44336';
+    blkRows += `<tr style="border-bottom:1px solid #0d1a2a">
+      <td style="padding:5px 10px;text-align:center;font-weight:bold;color:#00e676">B${i+1}</td>
+      <td style="padding:5px 10px;text-align:center;color:#b0bec5">${mS}–${mE} m</td>
+      <td style="padding:5px 10px;text-align:center;color:#b0bec5">${blk.pieces.filter(p=>!(p.part._multiSlotIndex>0)).length} pz</td>
+      <td style="padding:5px 10px;text-align:center;color:#ff9800">${blk.pesoTot.toFixed(1)} kg</td>
+      <td style="padding:5px 10px;text-align:center;font-weight:bold;color:${satC}">${blk.satPct.toFixed(1)}%</td>
+      <td style="padding:5px 10px;font-size:9px;color:#4a6070">${macSet.slice(0,3).join(', ')}${macSet.length>3?'…':''}</td>
+    </tr>`;
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Report Produzione — Nesting Catena — ${dataOra}</title>
+<style>
+  @page{size:A4 portrait;margin:12mm}
+  *{box-sizing:border-box}
+  body{background:#080c0e;color:#b0bec5;font-family:'Courier New',monospace;margin:0;padding:16px}
+  @media print{
+    body{background:#fff;color:#000;padding:0}
+    .no-print{display:none!important}
+    tr{page-break-inside:avoid}
+    .dark-bg{background:#f5f5f5!important;color:#000!important}
+  }
+  h1{color:#00e676;font-size:18px;margin:0 0 2px}
+  h2{color:#ff9800;font-size:11px;margin:0 0 12px;font-weight:normal}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;
+    border-bottom:2px solid #00e676;padding-bottom:8px;margin-bottom:14px}
+  .header-right{text-align:right;font-size:10px;color:#4a6070}
+  .ric-global{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .ric-chip{background:#111b27;border-radius:6px;padding:8px 14px;flex:1;min-width:120px}
+  .ric-chip .lbl{font-size:8px;color:#4a6070;text-transform:uppercase;margin-bottom:2px}
+  .ric-chip .val{font-size:22px;font-weight:bold;color:#00e676}
+  .ric-chip .val.warn{color:#ff9800}.ric-chip .val.danger{color:#f44336}
+  .section-title{font-size:10px;color:#4a6070;text-transform:uppercase;letter-spacing:1px;
+    margin:14px 0 5px;border-bottom:1px solid #1a2633;padding-bottom:3px}
+  table{width:100%;border-collapse:collapse;background:#080c0e}
+  th{background:#0a1a12;color:#00e676;font-size:9px;padding:6px 10px;
+    border:1px solid #1a2633;text-align:left;text-transform:uppercase}
+  td{border:1px solid #0d1a2a;vertical-align:middle}
+  .badge-ok{background:#00e676;color:#000;padding:4px 16px;border-radius:20px;
+    font-size:13px;font-weight:bold;display:inline-block}
+  .badge-warn{background:#f44336;color:#fff;padding:4px 16px;border-radius:20px;
+    font-size:13px;font-weight:bold;display:inline-block}
+  .btn-print{position:fixed;bottom:20px;right:20px;background:#00e676;color:#000;
+    border:none;padding:10px 22px;border-radius:20px;cursor:pointer;
+    font-family:'Courier New',monospace;font-weight:bold;font-size:12px;
+    box-shadow:0 4px 14px rgba(0,230,118,.4)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>⛓ REPORT PRODUZIONE NESTING</h1>
+    <h2>ENOROSSI Paint Optimizer V5 · ${dataOra}</h2>
+  </div>
+  <div class="header-right">
+    <div style="font-size:14px;font-weight:bold;color:#b0bec5;margin-bottom:4px">${NDATA.nome||'Assembly'}</div>
+    <div>Passo catena: ${PASSO_MM}mm</div>
+    <div>Z max gancio: ${Z_MAX_MM}mm</div>
+    <div style="margin-top:4px">
+      ${completo
+        ? '<span class="badge-ok">✅ 100% COMPLETO</span>'
+        : `<span class="badge-warn">⚠ ${ric.totRichiesti-ric.totPiazzati} PEZZI MANCANTI</span>`}
+    </div>
+  </div>
+</div>
+
+<!-- KPI GLOBALI -->
+<div class="ric-global">
+  <div class="ric-chip">
+    <div class="lbl">Pezzi richiesti</div>
+    <div class="val">${ric.totRichiesti}</div>
+  </div>
+  <div class="ric-chip">
+    <div class="lbl">Pezzi piazzati</div>
+    <div class="val ${ric.totPiazzati>=ric.totRichiesti?'':'danger'}">${ric.totPiazzati}</div>
+  </div>
+  <div class="ric-chip">
+    <div class="lbl">Blocchi catena</div>
+    <div class="val">${BLOCKS.length}</div>
+  </div>
+  <div class="ric-chip">
+    <div class="lbl">Metri catena</div>
+    <div class="val">${totMetri} m</div>
+  </div>
+  <div class="ric-chip">
+    <div class="lbl">Peso totale</div>
+    <div class="val">${totPeso.toFixed(1)} kg</div>
+  </div>
+</div>
+
+<!-- RICONCILIAZIONE PER CODICE PEZZO -->
+<div class="section-title">📋 Riconciliazione per codice pezzo / macchina</div>
+<table>
+  <thead><tr>
+    <th style="width:40%">Codice Pezzo</th>
+    <th style="width:12%;text-align:center">Richiesti</th>
+    <th style="width:12%;text-align:center">Piazzati</th>
+    <th style="width:16%;text-align:center">Stato</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+
+<!-- RIEPILOGO BLOCCHI -->
+<div class="section-title" style="margin-top:18px">⛓ Riepilogo blocchi catena</div>
+<table>
+  <thead><tr>
+    <th style="width:8%">Blocco</th>
+    <th style="width:18%">Posizione</th>
+    <th style="width:12%;text-align:center">Pezzi</th>
+    <th style="width:14%;text-align:center">Peso</th>
+    <th style="width:12%;text-align:center">Saturaz.</th>
+    <th>Macchine</th>
+  </tr></thead>
+  <tbody>${blkRows}</tbody>
+</table>
+
+<button class="btn-print no-print" onclick="window.print()">🖨 Stampa / Salva PDF</button>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=960');
+  win.document.write(html);
+  win.document.close();
+}
 
 function removeCodaItem(idx){
   const item=CODA[idx];
