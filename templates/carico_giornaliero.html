@@ -3,324 +3,500 @@
 {% block page_title %}Carico Giornaliero Verniciatura{% endblock %}
 {% block head %}
 <style>
-.upload-zone{border:2px dashed var(--bdr2);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2)}
+/* ── Upload zone ── */
+.upload-zone{border:2px dashed var(--bdr2);border-radius:12px;padding:32px 20px;text-align:center;
+  cursor:pointer;transition:all .2s;background:var(--bg2)}
 .upload-zone:hover,.upload-zone.drag{border-color:var(--grn-h);background:rgba(28,110,46,.06)}
-.upload-zone.drag{transform:scale(1.01)}
-.preview-img{max-width:100%;max-height:340px;border-radius:8px;border:1px solid var(--bdr);display:block;margin:0 auto}
+.preview-img{max-width:100%;max-height:280px;border-radius:8px;border:1px solid var(--bdr);display:block;margin:0 auto}
+/* ── Form ── */
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
-.extracted-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(28,110,46,.15);border:1px solid rgba(28,110,46,.3);border-radius:5px;padding:2px 8px;font-size:.7rem;color:var(--grn-h);margin:2px}
-.step-num{width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.log-row{padding:8px 0;border-bottom:1px solid var(--bdr);display:grid;grid-template-columns:90px 1fr 80px 80px 90px 80px;gap:8px;align-items:center;font-size:.78rem}
+.field-row-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;
+  font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* ── Codici tag ── */
+.cod-row{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg0);
+  border:1px solid var(--bdr2);border-radius:6px;margin-bottom:4px}
+.cod-chip{background:rgba(28,110,46,.18);color:var(--grn-h);border:1px solid rgba(28,110,46,.3);
+  border-radius:4px;padding:2px 8px;font-size:.72rem;font-weight:600;min-width:120px}
+.cod-db{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+/* ── Breakdown costo ── */
+.bkd-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1px;margin-top:4px}
+.bkd-seg{height:100%;border-radius:1px}
+.bkd-lbl{font-size:.62rem;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px}
+/* ── Log giornata ── */
+.log-row{padding:8px 12px;border-bottom:1px solid var(--bdr);font-size:.76rem;display:grid;
+  grid-template-columns:70px 1fr auto auto auto auto;gap:8px;align-items:center}
 .log-row:last-child{border-bottom:none}
-.spinner{width:18px;height:18px;border:2px solid var(--bdr2);border-top-color:var(--grn-h);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+/* ── Spinner ── */
+.spinner{width:16px;height:16px;border:2px solid var(--bdr2);border-top-color:var(--grn-h);
+  border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* ── Saturazione meter ── */
+.sat-meter{height:10px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;margin-top:3px}
+.sat-fill{height:100%;border-radius:5px;transition:width .5s}
+/* ── Nota OCR ── */
+.ocr-nota{background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.25);border-radius:6px;
+  padding:6px 10px;font-size:.7rem;color:#90caf9;margin-bottom:10px}
+/* ── Stampa ── */
+@media print{
+  .no-print{display:none!important}
+  .card{border:1px solid #ccc!important;background:#fff!important}
+  body{background:#fff;color:#000}
+}
 </style>
 {% endblock %}
 {% block content %}
 
-<!-- INTESTAZIONE -->
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+<!-- ── HEADER ── -->
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
   <div>
-    <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px">
-      <i class="bi bi-calendar3" style="margin-right:4px"></i>
-      Registrazione lavori verniciatura — {{ oggi }}
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">
+      <i class="bi bi-calendar3" style="margin-right:4px"></i>{{ oggi }}
+      &nbsp;·&nbsp; Operaio: <strong style="color:var(--txt)" id="hdr-operaio">—</strong>
     </div>
-    <div style="font-size:.82rem;color:var(--muted)">
-      Fotografa o scansiona l'ordine di produzione NetPro → il sistema estrae i dati automaticamente
+    <div style="font-size:.8rem;color:var(--muted)">
+      Scannerizza ordine NetPro → OCR estrae i codici → calcolo costo unitario reale per codice
     </div>
   </div>
-  <a href="{{ url_for('storico') }}" class="btn-out" style="font-size:.72rem">
-    <i class="bi bi-graph-up-arrow"></i>Storico Costi
-  </a>
+  <div style="display:flex;gap:8px" class="no-print">
+    <button onclick="window.print()" class="btn-out" style="font-size:.72rem">
+      <i class="bi bi-printer"></i>Stampa log
+    </button>
+    <a href="{{ url_for('storico') }}" class="btn-out" style="font-size:.72rem">
+      <i class="bi bi-graph-up-arrow"></i>Storico
+    </a>
+  </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+<div style="display:grid;grid-template-columns:1.1fr .9fr;gap:16px">
 
-  <!-- ── COLONNA SINISTRA: upload + estrazione ── -->
-  <div>
+<!-- ════════════════════════════════════════════════════════════
+     COLONNA SINISTRA — upload + form + calcolo
+     ════════════════════════════════════════════════════════════ -->
+<div>
 
-    <!-- Step 1: Upload -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
-        <div class="step-num">1</div>
-        Carica ordine NetPro (foto o scan)
-      </div>
-      <div class="card-body">
-        <div class="upload-zone" id="dropzone"
-             onclick="document.getElementById('file-input').click()"
-             ondragover="ev.preventDefault();this.classList.add('drag')"
-             ondragleave="this.classList.remove('drag')"
-             ondrop="handleDrop(event)">
-          <i class="bi bi-camera" style="font-size:2.2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
-          <div style="font-size:.82rem;color:var(--muted);margin-bottom:4px">
-            Clicca o trascina qui la foto dell'ordine
-          </div>
-          <div style="font-size:.68rem;color:var(--muted2)">JPG, PNG, PDF, TIFF — max 10MB</div>
+  <!-- STEP 1: SCAN -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+      <div class="step-num">1</div>
+      Scansiona ordine NetPro cartaceo
+      <span id="ocr-spinner" style="display:none;margin-left:auto"><span class="spinner"></span></span>
+    </div>
+    <div class="card-body">
+      <div class="upload-zone no-print" id="dropzone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="handleDrop(event)">
+        <i class="bi bi-camera" style="font-size:2rem;color:var(--muted);margin-bottom:8px;display:block"></i>
+        <div style="font-size:.82rem;color:var(--muted);margin-bottom:3px">
+          Clicca o trascina la foto / scan dell'ordine
         </div>
-        <input type="file" id="file-input" accept="image/*,.pdf" style="display:none"
-               onchange="handleFile(this.files[0])">
+        <div style="font-size:.66rem;color:var(--muted2)">JPG · PNG · PDF — max 10MB</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*,.pdf"
+             style="display:none" onchange="handleFile(this.files[0])">
 
-        <div id="preview-wrap" style="display:none;margin-top:12px">
-          <img id="preview-img" class="preview-img" src="" alt="Anteprima ordine">
-          <button class="btn-out" style="margin-top:8px;width:100%;justify-content:center;font-size:.75rem"
-                  onclick="resetUpload()">
-            <i class="bi bi-x"></i>Cambia immagine
+      <div id="preview-wrap" style="display:none;margin-top:10px">
+        <img id="preview-img" class="preview-img no-print" src="" alt="">
+        <div id="doc-num-badge" style="margin-top:6px;font-size:.68rem;color:var(--muted)"></div>
+        <button class="btn-out no-print" style="margin-top:6px;font-size:.72rem"
+                onclick="resetUpload()">
+          <i class="bi bi-x"></i>Cambia documento
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: DATI ESTRATTI -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+      <div class="step-num">2</div>
+      Dati estratti — verifica e correggi
+    </div>
+    <div class="card-body">
+
+      <!-- placeholder -->
+      <div id="ocr-placeholder" style="color:var(--muted2);font-size:.78rem;text-align:center;padding:20px 0">
+        <i class="bi bi-file-earmark-text"
+           style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:.4"></i>
+        Carica un ordine per estrarre i dati
+      </div>
+
+      <div id="ocr-form" style="display:none">
+
+        <!-- Nota OCR (se presente) -->
+        <div id="ocr-nota-box" class="ocr-nota" style="display:none"></div>
+
+        <!-- Riga 1: Commessa + Serie + Data -->
+        <div class="field-row-3">
+          <div>
+            <label class="form-label">Commessa</label>
+            <input type="text" id="f-commessa" class="form-control" placeholder="es. 20310">
+          </div>
+          <div>
+            <label class="form-label">Num. Serie</label>
+            <input type="text" id="f-serie" class="form-control" placeholder="RB100-2026-310">
+          </div>
+          <div>
+            <label class="form-label">Data produzione</label>
+            <input type="date" id="f-data" class="form-control">
+          </div>
+        </div>
+
+        <!-- Riga 2: Cliente + Colore -->
+        <div class="field-row">
+          <div>
+            <label class="form-label">Cliente</label>
+            <input type="text" id="f-cliente" class="form-control" placeholder="Ragione sociale">
+          </div>
+          <div>
+            <label class="form-label">Colore verniciatura</label>
+            <input type="text" id="f-colore" class="form-control" placeholder="VERDE RAL 6005">
+          </div>
+        </div>
+
+        <!-- Riga 3: parametri catena (tutti 4 per il calcolo costo) -->
+        <div class="field-row-4">
+          <div>
+            <label class="form-label">Ganci occupati</label>
+            <input type="number" id="f-ganci" class="form-control" min="1"
+                   placeholder="{{ cfg.n_ganci_totali }}" oninput="aggiornaSat()">
+          </div>
+          <div>
+            <label class="form-label">Velocità (m/min)</label>
+            <input type="number" id="f-velocita" class="form-control" step="0.1"
+                   value="{{ cfg.velocita_default }}" oninput="aggiornaCostoStimato()">
+          </div>
+          <div>
+            <label class="form-label">Kg totali</label>
+            <input type="number" id="f-peso" class="form-control" step="0.1" placeholder="0">
+          </div>
+          <div>
+            <label class="form-label">Operaio</label>
+            <input type="text" id="f-operaio" class="form-control" placeholder="Nome">
+          </div>
+        </div>
+
+        <!-- Saturazione calcolata live -->
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted)">
+            <span>Saturazione catena ({{ cfg.n_ganci_totali }} ganci totali)</span>
+            <strong id="sat-pct-lbl" style="color:var(--grn-h)">—</strong>
+          </div>
+          <div class="sat-meter">
+            <div class="sat-fill" id="sat-bar" style="width:0%;background:var(--grn-h)"></div>
+          </div>
+          <div style="font-size:.62rem;color:var(--muted2);margin-top:2px">
+            ⚠ La saturazione influenza i costi fissi: meno pezzi = costo unitario più alto
+          </div>
+        </div>
+
+        <!-- ── CODICI PEZZI CON QUANTITÀ ── -->
+        <label class="form-label">
+          Codici pezzi verniciati
+          <span id="codici-count" style="color:var(--muted);font-weight:400"></span>
+        </label>
+        <div id="codici-list" style="margin-bottom:8px">
+          <!-- Popolato da renderCodici() -->
+        </div>
+        <!-- Aggiungi manuale -->
+        <div style="display:grid;grid-template-columns:1fr 70px 60px auto;gap:6px;margin-bottom:12px">
+          <input type="text" id="add-codice" class="form-control"
+                 style="font-size:.78rem;text-transform:uppercase"
+                 placeholder="Codice (es. FALC-TF280)"
+                 onkeydown="if(event.key==='Enter')aggiungiCodice()">
+          <input type="number" id="add-qty" class="form-control"
+                 style="font-size:.78rem" placeholder="qty" value="1" min="1">
+          <input type="text" id="add-desc" class="form-control"
+                 style="font-size:.78rem" placeholder="desc">
+          <button class="btn-grn" style="font-size:.75rem;padding:.3rem .7rem"
+                  onclick="aggiungiCodice()">
+            <i class="bi bi-plus-lg"></i>
           </button>
         </div>
-      </div>
-    </div>
 
-    <!-- Step 2: Estrazione OCR -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
-        <div class="step-num">2</div>
-        Dati estratti dall'ordine
-        <span id="ocr-spinner" style="display:none;margin-left:auto"><span class="spinner"></span></span>
-      </div>
-      <div class="card-body">
-        <div id="ocr-placeholder" style="color:var(--muted2);font-size:.78rem;text-align:center;padding:20px 0">
-          <i class="bi bi-file-earmark-text" style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:.4"></i>
-          Carica un ordine per estrarre i dati
+        <!-- Note -->
+        <div>
+          <label class="form-label">Note / osservazioni</label>
+          <textarea id="f-note" class="form-control" rows="2"
+                    placeholder="Problemi, colori speciali, interruzioni catena…"></textarea>
         </div>
 
-        <div id="ocr-form" style="display:none">
-          <div class="field-row">
-            <div>
-              <label class="form-label">Commessa / Macchina</label>
-              <input type="text" id="f-commessa" class="form-control" placeholder="es. 20310">
-            </div>
-            <div>
-              <label class="form-label">Num. serie</label>
-              <input type="text" id="f-serie" class="form-control" placeholder="es. RB100-2026-0310">
-            </div>
+        <!-- ── ANTEPRIMA COSTO ── -->
+        <div id="costo-preview" style="display:none;margin-top:14px;border:1px solid rgba(28,110,46,.25);
+             border-radius:8px;padding:12px;background:rgba(28,110,46,.06)">
+          <div style="font-size:.62rem;color:var(--muted);text-transform:uppercase;
+               letter-spacing:.08em;margin-bottom:8px">
+            Stima costo giro catena (calcolata lato server)
           </div>
-          <div class="field-row">
-            <div>
-              <label class="form-label">Cliente</label>
-              <input type="text" id="f-cliente" class="form-control" placeholder="Ragione sociale">
-            </div>
-            <div>
-              <label class="form-label">Data produzione</label>
-              <input type="date" id="f-data" class="form-control">
-            </div>
+          <!-- Totale giro -->
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-size:.78rem;color:var(--muted)">Costo totale giro</span>
+            <span style="font-size:1.5rem;font-weight:800;color:var(--grn-h)" id="cp-totale">€ —</span>
           </div>
-          <div class="field-row">
-            <div>
-              <label class="form-label">Colore verniciatura</label>
-              <input type="text" id="f-colore" class="form-control" placeholder="es. VERDE RAL 6005">
-            </div>
-            <div>
-              <label class="form-label">Operaio</label>
-              <input type="text" id="f-operaio" class="form-control" placeholder="Nome operaio">
-            </div>
+          <!-- Breakdown barra -->
+          <div class="bkd-bar" id="cp-bar">
+            <div class="bkd-seg" style="background:#3b82f6;width:25%"></div>
+            <div class="bkd-seg" style="background:#8b5cf6;width:25%"></div>
+            <div class="bkd-seg" style="background:#f59e0b;width:25%"></div>
+            <div class="bkd-seg" style="background:#ef4444;width:25%"></div>
           </div>
-
-          <!-- Codici pezzi verniciati -->
-          <label class="form-label" style="margin-top:6px">Codici pezzi verniciati</label>
-          <div id="codici-wrap" style="min-height:36px;border:1px solid var(--bdr2);border-radius:7px;padding:6px;margin-bottom:10px;background:var(--bg0)">
-            <!-- Popolato dinamicamente -->
-          </div>
-          <div style="display:flex;gap:6px">
-            <input type="text" id="codice-add" class="form-control" placeholder="Aggiungi codice manualmente"
-                   style="font-size:.8rem" onkeydown="if(event.key==='Enter')aggiungiCodice()">
-            <button class="btn-out" style="font-size:.75rem;white-space:nowrap" onclick="aggiungiCodice()">
-              <i class="bi bi-plus"></i>Aggiungi
-            </button>
-          </div>
-
-          <div class="field-row-3" style="margin-top:12px">
-            <div>
-              <label class="form-label">N° ganci usati</label>
-              <input type="number" id="f-ganci" class="form-control" placeholder="es. 7" min="1">
-            </div>
-            <div>
-              <label class="form-label">Velocità (m/min)</label>
-              <input type="number" id="f-velocita" class="form-control" step="0.1" placeholder="1.5">
-            </div>
-            <div>
-              <label class="form-label">Kg totali verniciati</label>
-              <input type="number" id="f-peso" class="form-control" step="0.1" placeholder="0.0">
-            </div>
-          </div>
-
-          <div style="margin-top:6px">
-            <label class="form-label">Note / osservazioni</label>
-            <textarea id="f-note" class="form-control" rows="2" placeholder="Problemi riscontrati, colori speciali, ecc."></textarea>
-          </div>
-
-          <div id="costo-preview" style="display:none;margin-top:12px;padding:10px;background:rgba(28,110,46,.08);border:1px solid rgba(28,110,46,.2);border-radius:8px">
-            <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.08em">Costo stimato giro catena</div>
-            <div style="font-size:1.4rem;font-weight:700;color:var(--grn-h)" id="costo-val">€ —</div>
-            <div style="font-size:.65rem;color:var(--muted);margin-top:2px" id="costo-det"></div>
-          </div>
+          <div class="bkd-lbl" id="cp-lbl"></div>
+          <!-- Tabella per codice -->
+          <div id="cp-codici" style="margin-top:10px"></div>
         </div>
-      </div>
-    </div>
 
+      </div><!-- /ocr-form -->
+    </div>
   </div>
 
-  <!-- ── COLONNA DESTRA: storico giornata ── -->
-  <div>
+</div><!-- /colonna sx -->
 
-    <!-- Step 3: Registra -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
-        <div class="step-num">3</div>
-        Registra nel sistema
-      </div>
-      <div class="card-body">
-        <button id="btn-salva" class="btn-grn" style="width:100%;justify-content:center;padding:.65rem;font-size:.9rem"
-                onclick="salvaCarico()" disabled>
-          <i class="bi bi-check2-circle"></i>Conferma e registra
-        </button>
-        <div style="font-size:.65rem;color:var(--muted);margin-top:6px;text-align:center">
-          I dati vengono salvati nel database e alimentano lo Storico Costi per codice
-        </div>
+<!-- ════════════════════════════════════════════════════════════
+     COLONNA DESTRA — conferma + KPI + log giornata
+     ════════════════════════════════════════════════════════════ -->
+<div>
+
+  <!-- STEP 3: CONFERMA -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+      <div class="step-num">3</div>
+      Conferma e registra
+    </div>
+    <div class="card-body">
+      <button id="btn-salva" class="btn-grn"
+              style="width:100%;justify-content:center;padding:.65rem;font-size:.9rem;margin-bottom:8px"
+              onclick="salvaCarico()" disabled>
+        <i class="bi bi-check2-circle"></i>Registra nel sistema
+      </button>
+      <div style="font-size:.62rem;color:var(--muted2);text-align:center;line-height:1.4">
+        Calcola il costo unitario per ogni codice con la formula fisica completa<br>
+        (energia + quota fissa + vernice + manodopera + centro orario)<br>
+        e aggiorna la media ponderata annuale per quantità
       </div>
     </div>
+  </div>
 
-    <!-- KPI giornata -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div class="kpi" style="border-bottom-color:var(--grn)">
-        <i class="bi bi-camera kpi-ico"></i>
-        <div class="kpi-num" style="color:var(--grn-h)" id="kpi-giri">{{ giri_oggi }}</div>
-        <div class="kpi-lbl">Giri catena oggi</div>
-      </div>
-      <div class="kpi" style="border-bottom-color:var(--yel)">
-        <i class="bi bi-currency-euro kpi-ico"></i>
-        <div class="kpi-num" style="color:var(--yel)" id="kpi-costo">€ {{ '%.0f'|format(costo_oggi) }}</div>
-        <div class="kpi-lbl">Costo totale oggi</div>
-      </div>
+  <!-- KPI GIORNATA -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div class="kpi" style="border-bottom-color:var(--grn);padding:12px 14px">
+      <i class="bi bi-arrow-repeat kpi-ico"></i>
+      <div class="kpi-num" style="color:var(--grn-h);font-size:1.6rem" id="kpi-giri">{{ giri_oggi }}</div>
+      <div class="kpi-lbl">Giri oggi</div>
     </div>
+    <div class="kpi" style="border-bottom-color:var(--yel);padding:12px 14px">
+      <i class="bi bi-currency-euro kpi-ico"></i>
+      <div class="kpi-num" style="color:var(--yel);font-size:1.6rem" id="kpi-costo">€ {{ '%.0f'|format(costo_oggi) }}</div>
+      <div class="kpi-lbl">Costo totale</div>
+    </div>
+    <div class="kpi" style="border-bottom-color:#3b82f6;padding:12px 14px">
+      <i class="bi bi-link-45deg kpi-ico"></i>
+      <div class="kpi-num" style="color:#60a5fa;font-size:1.6rem" id="kpi-ganci">{{ ganci_oggi }}</div>
+      <div class="kpi-lbl">Ganci totali</div>
+    </div>
+    <div class="kpi" style="border-bottom-color:#8b5cf6;padding:12px 14px">
+      <i class="bi bi-speedometer2 kpi-ico"></i>
+      <div class="kpi-num" style="color:#a78bfa;font-size:1.6rem" id="kpi-sat">{{ sat_media }}%</div>
+      <div class="kpi-lbl">Saturaz. media</div>
+    </div>
+  </div>
 
-    <!-- Log giornata -->
-    <div class="card">
-      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-        <span><i class="bi bi-list-ul" style="margin-right:6px"></i>Registrazioni di oggi</span>
-        <span style="font-size:.65rem;color:var(--muted)">{{ oggi }}</span>
+  <!-- LOG GIORNATA -->
+  <div class="card">
+    <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+      <span><i class="bi bi-list-ul" style="margin-right:5px"></i>Registrazioni — {{ oggi }}</span>
+      <span style="font-size:.62rem;color:var(--muted)">{{ log_oggi|length }} giri</span>
+    </div>
+    <div class="card-body" style="padding:0;max-height:520px;overflow-y:auto">
+
+      {% if log_oggi %}
+      <div style="padding:4px 12px;font-size:.58rem;font-weight:700;text-transform:uppercase;
+           letter-spacing:.08em;color:var(--muted);display:grid;
+           grid-template-columns:70px 1fr auto auto auto auto;gap:8px">
+        <span>Ora</span><span>Commessa</span><span>G.</span><span>Kg</span>
+        <span>€ giro</span><span></span>
       </div>
-      <div class="card-body" style="padding:0">
-        {% if log_oggi %}
-        <div style="padding:4px 12px 4px;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:grid;grid-template-columns:90px 1fr 80px 80px 90px 80px;gap:8px">
-          <span>Ora</span><span>Commessa</span><span>Ganci</span><span>Kg</span><span>Costo</span><span></span>
-        </div>
-        {% for log in log_oggi %}
-        <div class="log-row" style="padding:8px 12px">
-          <span style="color:var(--muted);font-size:.72rem">{{ log.ora }}</span>
-          <div>
-            <div style="font-weight:600;font-size:.78rem">{{ log.commessa }}</div>
-            <div style="font-size:.65rem;color:var(--muted)">{{ log.operaio }} · {{ log.colore }}</div>
+      {% for log in log_oggi %}
+      {% set codici_log = log.codici_json | from_json if log.codici_json else [] %}
+      <div class="log-row" style="cursor:pointer" onclick="espandiLog(this)" data-id="{{ log.id }}">
+        <span style="color:var(--muted);font-size:.7rem">{{ log.ora[:5] }}</span>
+        <div>
+          <div style="font-weight:600;font-size:.76rem">
+            {{ log.commessa or '—' }}
+            {% if log.num_serie %}<span style="font-size:.62rem;color:var(--muted)"> · {{ log.num_serie }}</span>{% endif %}
           </div>
-          <span style="color:var(--txt)">{{ log.n_ganci }}</span>
-          <span style="color:var(--txt)">{{ '%.1f'|format(log.kg_totali or 0) }}</span>
-          <span style="color:var(--grn-h);font-weight:600">€ {{ '%.2f'|format(log.costo_calcolato or 0) }}</span>
-          <form method="POST" action="{{ url_for('carico_giornaliero_delete', log_id=log.id) }}" style="margin:0">
-            <button type="submit" class="btn-out"
-                    style="font-size:.65rem;padding:.2rem .5rem;color:var(--red)"
-                    onclick="return confirm('Eliminare questa registrazione?')">
-              <i class="bi bi-trash"></i>
-            </button>
-          </form>
+          <div style="font-size:.62rem;color:var(--muted)">
+            {{ log.operaio or '—' }} · {{ log.colore or '—' }}
+          </div>
+        </div>
+        <span>{{ log.n_ganci or '—' }}</span>
+        <span>{{ '%.0f'|format(log.kg_totali or 0) }}</span>
+        <span style="color:var(--grn-h);font-weight:700">€ {{ '%.2f'|format(log.costo_calcolato or 0) }}</span>
+        <form method="POST" action="{{ url_for('carico_giornaliero_delete', log_id=log.id) }}"
+              style="margin:0" class="no-print">
+          <button type="submit" class="btn-out"
+                  style="font-size:.62rem;padding:.15rem .4rem;color:var(--red)"
+                  onclick="return confirm('Eliminare questa registrazione?')">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+      </div>
+      <!-- Dettaglio espandibile -->
+      <div id="log-det-{{ log.id }}" style="display:none;padding:6px 12px 10px;
+           background:rgba(255,255,255,.015);border-bottom:1px solid var(--bdr)">
+        <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">Codici verniciati:</div>
+        {% for c in codici_log %}
+        <div style="display:flex;gap:8px;font-size:.7rem;padding:2px 0;align-items:center">
+          <code style="min-width:120px">{{ c.codice if c is mapping else c }}</code>
+          <span style="color:var(--muted)">×{{ c.qty if c is mapping else 1 }}</span>
+          {% if c is mapping and c.descrizione %}
+          <span style="color:var(--muted2)">{{ c.descrizione }}</span>
+          {% endif %}
         </div>
         {% endfor %}
-        {% else %}
-        <div style="padding:30px;text-align:center;color:var(--muted2);font-size:.78rem">
-          <i class="bi bi-inbox" style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:.4"></i>
-          Nessuna registrazione ancora oggi
-        </div>
+        {% if not codici_log %}
+        <span style="color:var(--muted2);font-size:.7rem">nessun codice registrato</span>
         {% endif %}
       </div>
-    </div>
+      {% endfor %}
 
+      {% else %}
+      <div style="padding:30px;text-align:center;color:var(--muted2);font-size:.78rem">
+        <i class="bi bi-inbox" style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:.3"></i>
+        Nessuna registrazione ancora oggi
+      </div>
+      {% endif %}
+
+    </div>
   </div>
-</div>
+
+  <!-- PARAMETRI IMPIANTO (riferimento) -->
+  <div style="margin-top:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--bdr);
+       border-radius:8px;font-size:.62rem;color:var(--muted2)">
+    <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+         color:var(--muted);margin-bottom:4px">Parametri impianto attivi</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <span>🏭 Tunnel: <strong style="color:var(--muted)">{{ cfg.lunghezza_tunnel_m }}m</strong></span>
+      <span>⚡ €/kWh: <strong style="color:var(--muted)">{{ cfg.costo_kwh }}</strong></span>
+      <span>👷 MDO: <strong style="color:var(--muted)">€{{ cfg.costo_manodopera_ora }}/h</strong></span>
+      <span>🏗 Centro: <strong style="color:var(--muted)">€{{ cfg.costo_centro_orario }}/h</strong></span>
+      <span>🔗 Ganci tot: <strong style="color:var(--muted)">{{ cfg.n_ganci_totali }}</strong></span>
+      <a href="{{ url_for('configurazione') }}" style="color:var(--red);font-size:.6rem">⚙ modifica</a>
+    </div>
+  </div>
+
+</div><!-- /colonna dx -->
+</div><!-- /grid -->
 
 {% endblock %}
 {% block scripts %}
 <script>
-// ── Stato ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// STATO
+// ═══════════════════════════════════════════════════════════════
 let currentFile = null;
-let codiciEstratti = [];
+let codiciList  = [];   // [{codice, qty, descrizione}]
+const N_GANCI_TOT = {{ cfg.n_ganci_totali }};
+const VEL_DEFAULT = {{ cfg.velocita_default }};
 
-// ── Upload / drag&drop ────────────────────────────────────────
-function handleDrop(ev) {
+// ═══════════════════════════════════════════════════════════════
+// UPLOAD / DROP
+// ═══════════════════════════════════════════════════════════════
+function handleDrop(ev){
   ev.preventDefault();
   document.getElementById('dropzone').classList.remove('drag');
   const f = ev.dataTransfer.files[0];
-  if (f) handleFile(f);
+  if(f) handleFile(f);
 }
 
-function handleFile(file) {
-  if (!file) return;
+function handleFile(file){
+  if(!file) return;
   currentFile = file;
-  // Mostra preview
-  if (file.type.startsWith('image/')) {
-    const reader = new FileReader();
-    reader.onload = e => {
+  // Preview
+  if(file.type.startsWith('image/')){
+    const rd = new FileReader();
+    rd.onload = e => {
       document.getElementById('preview-img').src = e.target.result;
       document.getElementById('preview-wrap').style.display = 'block';
       document.getElementById('dropzone').style.display = 'none';
     };
-    reader.readAsDataURL(file);
+    rd.readAsDataURL(file);
   } else {
     document.getElementById('preview-wrap').style.display = 'block';
     document.getElementById('dropzone').style.display = 'none';
     document.getElementById('preview-img').src = '';
   }
-  // Avvia OCR
   eseguiOCR(file);
 }
 
-function resetUpload() {
+function resetUpload(){
   currentFile = null;
-  codiciEstratti = [];
-  document.getElementById('preview-wrap').style.display = 'none';
-  document.getElementById('dropzone').style.display = 'block';
+  codiciList  = [];
+  document.getElementById('preview-wrap').style.display  = 'none';
+  document.getElementById('dropzone').style.display      = 'block';
   document.getElementById('ocr-placeholder').style.display = 'block';
-  document.getElementById('ocr-form').style.display = 'none';
-  document.getElementById('btn-salva').disabled = true;
+  document.getElementById('ocr-form').style.display      = 'none';
+  document.getElementById('btn-salva').disabled          = true;
   document.getElementById('costo-preview').style.display = 'none';
+  document.getElementById('doc-num-badge').textContent   = '';
 }
 
-// ── OCR: invia immagine al server ─────────────────────────────
-async function eseguiOCR(file) {
+// ═══════════════════════════════════════════════════════════════
+// OCR — invia al server, riceve campi estratti
+// ═══════════════════════════════════════════════════════════════
+async function eseguiOCR(file){
   document.getElementById('ocr-placeholder').style.display = 'none';
-  document.getElementById('ocr-form').style.display = 'none';
-  document.getElementById('ocr-spinner').style.display = 'inline';
+  document.getElementById('ocr-form').style.display        = 'none';
+  document.getElementById('ocr-spinner').style.display     = 'inline';
+  document.getElementById('btn-salva').disabled            = true;
 
   const fd = new FormData();
   fd.append('file', file);
 
   try {
-    const r = await fetch('/api/carico/ocr', { method: 'POST', body: fd });
+    const r = await fetch('/api/carico/ocr', {method:'POST', body:fd});
     const d = await r.json();
 
-    if (d.error) {
-      alert('Errore OCR: ' + d.error);
-      document.getElementById('ocr-placeholder').style.display = 'block';
-      return;
-    }
+    if(d.error){ alert('Errore OCR: ' + d.error); resetUpload(); return; }
 
-    // Popola form con dati estratti
-    document.getElementById('f-commessa').value  = d.commessa    || '';
-    document.getElementById('f-serie').value     = d.num_serie   || '';
-    document.getElementById('f-cliente').value   = d.cliente     || '';
-    document.getElementById('f-data').value      = d.data        || new Date().toISOString().split('T')[0];
-    document.getElementById('f-colore').value    = d.colore      || '';
-    document.getElementById('f-ganci').value     = d.n_ganci     || '';
-    document.getElementById('f-velocita').value  = d.velocita    || '1.5';
-    document.getElementById('f-peso').value      = d.kg_totali   || '';
+    // ── Popola form ──
+    document.getElementById('f-commessa').value = d.commessa  || '';
+    document.getElementById('f-serie').value    = d.num_serie || '';
+    document.getElementById('f-cliente').value  = d.cliente   || '';
+    document.getElementById('f-data').value     = d.data      || new Date().toISOString().split('T')[0];
+    document.getElementById('f-colore').value   = d.colore    || '';
+    document.getElementById('f-ganci').value    = d.n_ganci   || '';
+    document.getElementById('f-velocita').value = d.velocita  || VEL_DEFAULT;
+    document.getElementById('f-peso').value     = d.kg_totali || '';
+    document.getElementById('hdr-operaio').textContent = document.getElementById('f-operaio').value || '—';
 
-    // Codici pezzi
-    codiciEstratti = d.codici || [];
+    // Doc num badge
+    if(d.doc_num)
+      document.getElementById('doc-num-badge').textContent = '📄 ' + d.doc_num;
+
+    // Nota OCR (es. tesseract mancante)
+    const nb = document.getElementById('ocr-nota-box');
+    if(d._nota){ nb.textContent = '⚠ ' + d._nota; nb.style.display = 'block'; }
+    else { nb.style.display = 'none'; }
+
+    // ── Codici estratti ──
+    // Il server restituisce [{codice, qty, descrizione}]
+    codiciList = (d.codici || []).map(c =>
+      typeof c === 'string'
+        ? {codice: c, qty: 1, descrizione: ''}
+        : {codice: c.codice||c, qty: parseInt(c.qty||1), descrizione: c.descrizione||''}
+    ).filter(c => c.codice);
     renderCodici();
 
     document.getElementById('ocr-form').style.display = 'block';
-    document.getElementById('btn-salva').disabled = false;
-    calcolaCosto();
+    document.getElementById('btn-salva').disabled     = false;
 
-  } catch(err) {
+    aggiornaSat();
+    await calcolaCostoStimato();
+
+  } catch(err){
     alert('Errore di rete: ' + err);
     document.getElementById('ocr-placeholder').style.display = 'block';
   } finally {
@@ -328,101 +504,230 @@ async function eseguiOCR(file) {
   }
 }
 
-// ── Codici pezzi ──────────────────────────────────────────────
-function renderCodici() {
-  const wrap = document.getElementById('codici-wrap');
-  wrap.innerHTML = codiciEstratti.map((c, i) =>
-    `<span class="extracted-tag">
-      ${c}
-      <button onclick="rimuoviCodice(${i})" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 3px;line-height:1">×</button>
-    </span>`
-  ).join('') || '<span style="color:var(--muted2);font-size:.72rem">Nessun codice — aggiungili manualmente</span>';
-}
+// ═══════════════════════════════════════════════════════════════
+// CODICI — render + CRUD
+// ═══════════════════════════════════════════════════════════════
+function renderCodici(){
+  const wrap = document.getElementById('codici-list');
+  const cnt  = document.getElementById('codici-count');
+  cnt.textContent = codiciList.length > 0
+    ? `(${codiciList.length} cod · ${codiciList.reduce((s,c)=>s+c.qty,0)} pz tot)`
+    : '';
 
-function aggiungiCodice() {
-  const inp = document.getElementById('codice-add');
-  const val = inp.value.trim().toUpperCase();
-  if (val && !codiciEstratti.includes(val)) {
-    codiciEstratti.push(val);
-    renderCodici();
+  if(codiciList.length === 0){
+    wrap.innerHTML = '<div style="color:var(--muted2);font-size:.72rem;padding:6px 0">Nessun codice — aggiungili manualmente</div>';
+    return;
   }
-  inp.value = '';
+
+  wrap.innerHTML = codiciList.map((c,i) => `
+    <div class="cod-row">
+      <span class="cod-chip">${c.codice}</span>
+      <span style="font-size:.68rem;color:var(--muted)">×</span>
+      <input type="number" value="${c.qty}" min="1"
+        style="width:52px;background:var(--bg2);border:1px solid var(--bdr2);color:var(--txt);
+               border-radius:4px;padding:2px 5px;font-size:.78rem;text-align:center"
+        onchange="codiciList[${i}].qty=Math.max(1,parseInt(this.value)||1);calcolaCostoStimato()">
+      <input type="text" value="${c.descrizione||''}" placeholder="desc"
+        style="flex:1;background:var(--bg2);border:1px solid var(--bdr2);color:var(--muted);
+               border-radius:4px;padding:2px 6px;font-size:.72rem"
+        onchange="codiciList[${i}].descrizione=this.value">
+      <button onclick="rimuoviCodice(${i})"
+        style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0 3px">
+        ×
+      </button>
+    </div>`).join('');
 }
 
-function rimuoviCodice(i) {
-  codiciEstratti.splice(i, 1);
+function aggiungiCodice(){
+  const cod  = document.getElementById('add-codice').value.trim().toUpperCase();
+  const qty  = Math.max(1, parseInt(document.getElementById('add-qty').value)||1);
+  const desc = document.getElementById('add-desc').value.trim();
+  if(!cod) return;
+  const existing = codiciList.find(c => c.codice === cod);
+  if(existing){ existing.qty += qty; }
+  else { codiciList.push({codice:cod, qty, descrizione:desc}); }
   renderCodici();
+  calcolaCostoStimato();
+  document.getElementById('add-codice').value = '';
+  document.getElementById('add-qty').value = '1';
+  document.getElementById('add-desc').value = '';
 }
 
-// ── Calcolo costo stimato ─────────────────────────────────────
-function calcolaCosto() {
-  const ganci = parseFloat(document.getElementById('f-ganci').value) || 0;
-  const vel   = parseFloat(document.getElementById('f-velocita').value) || 1.5;
-  const kg    = parseFloat(document.getElementById('f-peso').value) || 0;
+function rimuoviCodice(i){
+  codiciList.splice(i, 1);
+  renderCodici();
+  calcolaCostoStimato();
+}
 
-  if (ganci <= 0) return;
+// ═══════════════════════════════════════════════════════════════
+// SATURAZIONE — aggiorna barra live
+// ═══════════════════════════════════════════════════════════════
+function aggiornaSat(){
+  const g   = parseInt(document.getElementById('f-ganci').value) || 0;
+  const pct = g > 0 ? Math.min(g / N_GANCI_TOT * 100, 100).toFixed(1) : 0;
+  document.getElementById('sat-pct-lbl').textContent = g > 0 ? pct + '%' : '—';
+  const bar = document.getElementById('sat-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = pct > 80 ? '#22c55e' : pct > 50 ? '#f59e0b' : '#ef4444';
+}
+document.getElementById('f-ganci').addEventListener('input', () => { aggiornaSat(); calcolaCostoStimato(); });
+document.getElementById('f-velocita').addEventListener('input', calcolaCostoStimato);
 
-  // Calcolo semplificato lato client (il server farà quello preciso)
-  const lunghezza_m = 170;
-  const tempo_ore   = lunghezza_m / vel / 60;
-  const costo_est   = tempo_ore * 350; // €/h centro lavoro (default)
+// ═══════════════════════════════════════════════════════════════
+// CALCOLO COSTO STIMATO — chiama il primo codice per avere il breakdown
+// ═══════════════════════════════════════════════════════════════
+let _costoTimer = null;
+async function calcolaCostoStimato(){
+  if(codiciList.length === 0) return;
+  clearTimeout(_costoTimer);
+  _costoTimer = setTimeout(async () => {
+    const ganci  = parseInt(document.getElementById('f-ganci').value)    || 0;
+    const vel    = parseFloat(document.getElementById('f-velocita').value) || VEL_DEFAULT;
+    const sat    = ganci > 0 ? Math.min(ganci/N_GANCI_TOT*100, 100) : 100;
+    const npz    = codiciList.reduce((s,c)=>s+c.qty, 0) || 1;
 
-  document.getElementById('costo-val').textContent = '€ ' + costo_est.toFixed(2);
-  document.getElementById('costo-det').textContent =
-    `${lunghezza_m}m ÷ ${vel}m/min = ${(tempo_ore*60).toFixed(1)}min · ${ganci} ganci · ${kg}kg`;
+    // Chiama l'API di calcolo per il PRIMO codice (con i parametri reali del giro)
+    try {
+      // Prima prova a trovare un prodotto nel DB
+      const r = await fetch('/api/analisi_costo/calcola', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          prodotto_id: null,        // server capisce che è una stima globale
+          saturazione: sat,
+          velocita:    vel,
+          n_pezzi:     npz,
+          codici:      codiciList,  // manda tutti i codici
+        })
+      });
+      const d = await r.json();
+      if(!d.error) mostraCostoPreview(d, sat, vel);
+    } catch(e){
+      // Calcolo client-side di fallback
+      const L = {{ cfg.lunghezza_tunnel_m }};
+      const t = L / Math.max(vel, 0.01) / 60;
+      const c = t * {{ cfg.costo_centro_orario }};
+      document.getElementById('cp-totale').textContent = '€ ' + c.toFixed(2);
+      document.getElementById('costo-preview').style.display = 'block';
+    }
+  }, 400);
+}
+
+function mostraCostoPreview(d, sat, vel){
+  const bkd = d.breakdown_giro || d;
+  const tot = d.costo_giro || d.costo_totale || 0;
+
+  document.getElementById('cp-totale').textContent = '€ ' + parseFloat(tot).toFixed(2);
+
+  // Barra breakdown
+  const energia  = bkd.energia    || bkd.costo_energia    || 0;
+  const fisso    = bkd.fisso      || bkd.costo_fisso      || 0;
+  const mdo      = bkd.mdo        || bkd.costo_manodopera || 0;
+  const centro   = bkd.centro     || bkd.costo_termico    || 0;
+  const somma    = energia + fisso + mdo + centro || 1;
+  const bar = document.getElementById('cp-bar');
+  bar.innerHTML = `
+    <div class="bkd-seg" style="background:#3b82f6;width:${energia/somma*100}%" title="Energia €${energia.toFixed(2)}"></div>
+    <div class="bkd-seg" style="background:#8b5cf6;width:${fisso/somma*100}%"    title="Fisso €${fisso.toFixed(2)}"></div>
+    <div class="bkd-seg" style="background:#f59e0b;width:${mdo/somma*100}%"      title="MDO €${mdo.toFixed(2)}"></div>
+    <div class="bkd-seg" style="background:#ef4444;width:${centro/somma*100}%"   title="Centro €${centro.toFixed(2)}"></div>`;
+  document.getElementById('cp-lbl').innerHTML =
+    `<span style="color:#3b82f6">⚡E €${energia.toFixed(2)}</span>
+     <span style="color:#8b5cf6">🏗F €${fisso.toFixed(2)}</span>
+     <span style="color:#f59e0b">👷M €${mdo.toFixed(2)}</span>
+     <span style="color:#ef4444">🔥C €${centro.toFixed(2)}</span>
+     <span style="color:var(--muted)">sat ${sat.toFixed(1)}%</span>`;
+
+  // Tabella per codice (se disponibile)
+  const det = d.dettaglio || [];
+  if(det.length > 0){
+    document.getElementById('cp-codici').innerHTML =
+      '<div style="font-size:.62rem;color:var(--muted);margin-bottom:3px">Costo unitario per codice:</div>' +
+      det.map(c => `
+        <div style="display:flex;justify-content:space-between;font-size:.7rem;padding:2px 0;border-bottom:1px solid var(--bdr)">
+          <span>
+            <code>${c.codice}</code>
+            <span style="color:var(--muted)"> ×${c.qty}</span>
+            ${!c.trovato_db ? '<span style="color:var(--yel);font-size:.6rem"> ⚠ non in DB</span>' : ''}
+          </span>
+          <span style="color:var(--grn-h);font-weight:600">€ ${parseFloat(c.costo_unitario).toFixed(4)}</span>
+        </div>`).join('');
+  }
+
   document.getElementById('costo-preview').style.display = 'block';
 }
 
-document.getElementById('f-ganci').addEventListener('input', calcolaCosto);
-document.getElementById('f-velocita').addEventListener('input', calcolaCosto);
-document.getElementById('f-peso').addEventListener('input', calcolaCosto);
-
-// ── Salva registrazione ───────────────────────────────────────
-async function salvaCarico() {
+// ═══════════════════════════════════════════════════════════════
+// SALVA
+// ═══════════════════════════════════════════════════════════════
+async function salvaCarico(){
+  if(codiciList.length === 0){
+    if(!confirm('Nessun codice pezzo inserito. Vuoi registrare comunque il giro?')) return;
+  }
   const btn = document.getElementById('btn-salva');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Salvataggio...';
+  btn.innerHTML = '<span class="spinner"></span> Salvataggio…';
+
+  const ganci = parseInt(document.getElementById('f-ganci').value) || 0;
+  const vel   = parseFloat(document.getElementById('f-velocita').value) || VEL_DEFAULT;
+  const sat   = ganci > 0 ? Math.min(ganci/N_GANCI_TOT*100, 100).toFixed(1) : '';
 
   const payload = {
-    commessa:   document.getElementById('f-commessa').value,
-    num_serie:  document.getElementById('f-serie').value,
-    cliente:    document.getElementById('f-cliente').value,
-    data:       document.getElementById('f-data').value,
-    colore:     document.getElementById('f-colore').value,
-    operaio:    document.getElementById('f-operaio').value,
-    n_ganci:    parseInt(document.getElementById('f-ganci').value) || 0,
-    velocita:   parseFloat(document.getElementById('f-velocita').value) || 1.5,
-    kg_totali:  parseFloat(document.getElementById('f-peso').value) || 0,
-    note:       document.getElementById('f-note').value,
-    codici:     codiciEstratti,
+    commessa:    document.getElementById('f-commessa').value,
+    num_serie:   document.getElementById('f-serie').value,
+    cliente:     document.getElementById('f-cliente').value,
+    data:        document.getElementById('f-data').value,
+    colore:      document.getElementById('f-colore').value,
+    operaio:     document.getElementById('f-operaio').value,
+    n_ganci:     ganci,
+    velocita:    vel,
+    kg_totali:   parseFloat(document.getElementById('f-peso').value) || 0,
+    saturazione: parseFloat(sat) || 0,
+    note:        document.getElementById('f-note').value,
+    codici:      codiciList,   // [{codice, qty, descrizione}]
   };
 
   try {
     const r = await fetch('/api/carico/salva', {
-      method:  'POST',
-      headers: {'Content-Type': 'application/json'},
-      body:    JSON.stringify(payload),
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
     });
     const d = await r.json();
 
-    if (d.ok) {
-      // Aggiorna KPI
-      document.getElementById('kpi-giri').textContent = d.giri_oggi;
-      document.getElementById('kpi-costo').textContent = '€ ' + Math.round(d.costo_oggi);
-      // Reset form
+    if(d.ok){
+      // ── Aggiorna KPI ──
+      document.getElementById('kpi-giri').textContent   = d.giri_oggi;
+      document.getElementById('kpi-costo').textContent  = '€ ' + Math.round(d.costo_oggi);
+      document.getElementById('kpi-ganci').textContent  = d.ganci_oggi  || ganci;
+      document.getElementById('kpi-sat').textContent    = (d.sat_media_oggi || 0).toFixed(1) + '%';
+      document.getElementById('hdr-operaio').textContent = payload.operaio || '—';
+
+      // ── Mostra costo calcolato ──
+      if(d.dettaglio && d.dettaglio.length > 0) mostraCostoPreview(d, d.saturaz_pct||100, vel);
+
       resetUpload();
-      // Ricarica pagina per vedere il nuovo log
-      setTimeout(() => location.reload(), 800);
+      setTimeout(() => location.reload(), 1200);
     } else {
-      alert('Errore: ' + d.error);
+      alert('Errore: ' + (d.error || 'sconosciuto'));
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-check2-circle"></i>Conferma e registra';
+      btn.innerHTML = '<i class="bi bi-check2-circle"></i>Registra nel sistema';
     }
-  } catch(err) {
+  } catch(err){
     alert('Errore di rete: ' + err);
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-check2-circle"></i>Conferma e registra';
+    btn.innerHTML = '<i class="bi bi-check2-circle"></i>Registra nel sistema';
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOG — espandi/chiudi dettaglio
+// ═══════════════════════════════════════════════════════════════
+function espandiLog(row){
+  const id  = row.dataset.id;
+  const det = document.getElementById('log-det-' + id);
+  if(!det) return;
+  det.style.display = det.style.display === 'none' ? 'block' : 'none';
 }
 </script>
 {% endblock %}
