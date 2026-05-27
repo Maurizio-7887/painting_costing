@@ -3777,36 +3777,36 @@ def api_commessa_piano(mac_id):
 
 @app.route('/carico_giornaliero')
 def carico_giornaliero():
-    """Pagina principale registro giornaliero."""
-    import json
-    from datetime import date, datetime as dt
+    """Pagina principale registro giornaliero verniciatura.
+    Passa al template tutti i dati per il flusso scan → OCR → costo.
+    """
+    from datetime import date
 
     oggi_str = date.today().isoformat()
     oggi_fmt = date.today().strftime('%d/%m/%Y')
+    cfg      = get_config()
 
     log_oggi_raw = CaricoDailyLog.query.filter_by(data=oggi_str)        .order_by(CaricoDailyLog.id.desc()).all()
 
-    log_oggi = []
-    for l in log_oggi_raw:
-        log_oggi.append({
-            'id':             l.id,
-            'ora':            l.ora[:5],
-            'commessa':       l.commessa,
-            'operaio':        l.operaio,
-            'colore':         l.colore,
-            'n_ganci':        l.n_ganci,
-            'kg_totali':      l.kg_totali,
-            'costo_calcolato':l.costo_calcolato,
-        })
-
+    # Passa i log direttamente come oggetti ORM (il template accede agli attr)
     giri_oggi  = len(log_oggi_raw)
     costo_oggi = sum(l.costo_calcolato or 0 for l in log_oggi_raw)
+    ganci_oggi = sum(l.n_ganci or 0 for l in log_oggi_raw)
+
+    # Saturazione media del giorno
+    n_ganci_tot = cfg.n_ganci_totali or 425
+    sat_media   = round(
+        min(ganci_oggi / (n_ganci_tot * max(giri_oggi, 1)) * 100, 100.0), 1
+    ) if giri_oggi else 0.0
 
     return render_template('carico_giornaliero.html',
-        oggi=oggi_fmt,
-        log_oggi=log_oggi,
-        giri_oggi=giri_oggi,
-        costo_oggi=costo_oggi,
+        oggi       = oggi_fmt,
+        log_oggi   = log_oggi_raw,   # oggetti ORM con tutti i campi incluso codici_json
+        giri_oggi  = giri_oggi,
+        costo_oggi = costo_oggi,
+        ganci_oggi = ganci_oggi,
+        sat_media  = sat_media,
+        cfg        = cfg,
     )
 
 
@@ -3871,55 +3871,75 @@ def pagina_produzione():
     )
 
 
+
 @app.route('/api/carico/ocr', methods=['POST'])
 def api_carico_ocr():
     """
-    Riceve immagine ordine NetPro → estrae campi con OCR/AI.
-    Per ora usa pattern fissi sul layout NetPro standard.
-    Quando arriva un ordine reale, si affina il parser.
+    Riceve immagine/PDF ordine NetPro scannerizzato → OCR → estrae campi.
+    Supporta: JPG, PNG, PDF.
+    Ritorna JSON con tutti i campi pronti per il form di conferma.
     """
-    import json, re
     from datetime import date
+    import io
 
     f = request.files.get('file')
     if not f:
-        return jsonify({'error': 'Nessun file'}), 400
+        return jsonify({'error': 'Nessun file caricato'}), 400
 
-    filename = f.filename.lower()
+    fname = f.filename.lower()
+    raw   = f.read()
 
-    # Prova OCR con pytesseract se disponibile
-    estratto = {}
-    try:
-        import pytesseract
-        from PIL import Image
-        import io
+    testo = ''
+    metodo = 'nessuno'
 
-        img = Image.open(io.BytesIO(f.read()))
-        testo = pytesseract.image_to_string(img, lang='ita+eng')
+    # ── PDF: estrai testo con pdfplumber ──
+    if fname.endswith('.pdf'):
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(raw)) as pdf:
+                testo = '\n'.join(p.extract_text() or '' for p in pdf.pages)
+            metodo = 'pdfplumber'
+        except Exception as e:
+            testo = ''
+            metodo = f'pdf_err:{e}'
 
+    # ── Immagine: OCR con pytesseract ──
+    if not testo and fname.split('.')[-1] in ('jpg','jpeg','png','bmp','tiff','webp'):
+        try:
+            import pytesseract
+            from PIL import Image, ImageFilter, ImageOps
+            img = Image.open(io.BytesIO(raw))
+            # Pre-processing: scala, contrasto, binarizzazione
+            img = img.convert('L')                    # grayscale
+            img = ImageOps.autocontrast(img, cutoff=2)
+            img = img.filter(ImageFilter.SHARPEN)
+            if max(img.size) < 1800:
+                scale = 1800 / max(img.size)
+                img = img.resize((int(img.width*scale), int(img.height*scale)), Image.LANCZOS)
+            testo = pytesseract.image_to_string(img, lang='ita+eng',
+                config='--oem 3 --psm 6')
+            metodo = 'tesseract'
+        except ImportError:
+            metodo = 'tesseract_mancante'
+        except Exception as e:
+            metodo = f'ocr_err:{e}'
+
+    # ── Parse del testo estratto ──
+    if testo.strip():
         estratto = _parse_netpro_ocr(testo)
-
-    except ImportError:
-        # pytesseract non disponibile — restituisce form vuoto da compilare
+        estratto['_metodo'] = metodo
+        estratto['_testo_grezzo'] = testo[:500]   # prime 500 char per debug
+    else:
+        # Nessun testo → form vuoto con nota per compilazione manuale
         estratto = {
-            'commessa':   '',
-            'num_serie':  '',
-            'cliente':    '',
-            'data':       date.today().isoformat(),
-            'colore':     'VERDE RAL 6005',
-            'n_ganci':    '',
-            'velocita':   1.5,
-            'kg_totali':  '',
-            'codici':     [],
-            '_nota':      'OCR non disponibile: compila manualmente i campi',
-        }
-    except Exception as e:
-        estratto = {
-            'commessa': '', 'num_serie': '', 'cliente': '',
+            'doc_num': '', 'commessa': '', 'num_serie': '', 'cliente': '',
             'data': date.today().isoformat(), 'colore': '',
-            'n_ganci': '', 'velocita': 1.5, 'kg_totali': '',
+            'n_ganci': '', 'velocita': 1.5, 'kg_totali': '', 'saturazione': '',
             'codici': [],
-            '_nota': f'Errore lettura: {str(e)[:80]}',
+            '_metodo': metodo,
+            '_nota': ('Installa pytesseract + tesseract-ocr per OCR automatico. '
+                      'Compila i campi manualmente.') if 'mancante' in metodo
+                     else f'Testo non estratto ({metodo}). Compila manualmente.',
         }
 
     return jsonify(estratto)
@@ -3927,138 +3947,388 @@ def api_carico_ocr():
 
 def _parse_netpro_ocr(testo: str) -> dict:
     """
-    Parser ordine NetPro — adattare al layout reale quando
-    si riceve il primo ordine scansionato.
+    Parser regex per ordini NetPro Enorossi.
 
-    Layout atteso NetPro (da affinare):
-      COMMESSA: 20310
-      N. SERIE: RB100-2026-0310
-      CLIENTE: Cooperativa Agricola...
-      COLORE: VERDE RAL 6005
-      DATA: 22/05/2026
-      CODICI: PRES-RB100, CART-LAT-M, ROTA-STD
+    Layout ordine verniciatura (cartaceo o PDF):
+    ┌─────────────────────────────────────────────────────────┐
+    │ Documento: NP-2026-0542    Data emissione: 22/05/2026   │
+    │ Numero Commessa: 20310     Operatore SAP: M.Rossi        │
+    │ Numero Serie: RB100-2026-0310                            │
+    │ Cliente: Cooperativa Agricola Val Padana                 │
+    │ Colore verniciatura: VERDE RAL 6005                      │
+    │ Ganci occupati: 312    Velocità catena: 1.5 m/min        │
+    │ Peso totale carico: 847 kg  Saturazione: 73.4 %          │
+    │                                                          │
+    │ Pos │ Codice        │ Descrizione        │ Qty │ Ganci  │
+    │  1  │ FALC-TF280    │ Telaio falciatrice │  2  │   3    │
+    │  2  │ CART-LAT-M    │ Carter laterale    │  4  │   1    │
+    │  3  │ ROTA-STD      │ Rotore standard    │  2  │   2    │
+    └─────────────────────────────────────────────────────────┘
     """
     import re
-    from datetime import date
+    from datetime import date, datetime as dt
 
     def cerca(pattern, default=''):
         m = re.search(pattern, testo, re.IGNORECASE | re.MULTILINE)
         return m.group(1).strip() if m else default
 
-    # Commessa / numero ordine
-    commessa = cerca(r'COMMESSA[:\s]+([A-Z0-9\-]+)')
+    def cerca_float(pattern, default=0.0):
+        m = re.search(pattern, testo, re.IGNORECASE | re.MULTILINE)
+        if not m: return default
+        try: return float(m.group(1).replace(',', '.').strip())
+        except: return default
+
+    def cerca_int(pattern, default=0):
+        m = re.search(pattern, testo, re.IGNORECASE | re.MULTILINE)
+        if not m: return default
+        try: return int(re.sub(r'\D', '', m.group(1)) or 0)
+        except: return default
+
+    # ── Documento NetPro ──
+    doc_num = cerca(r'(?:Documento|Doc\.?)[:\s]+(NP[-\s][\w\-]+)')
+    if not doc_num:
+        doc_num = cerca(r'\b(NP[-\s]\d{4}[-\s]\d{3,6})\b')
+
+    # ── Commessa ──
+    commessa = cerca(r'(?:Numero\s+)?Commessa[:\s]+(\d{4,7})')
     if not commessa:
-        commessa = cerca(r'ORD(?:INE)?[:\s]+([A-Z0-9\-]+)')
+        commessa = cerca(r'COMM\.?[:\s]+(\d{4,7})')
 
-    # Num serie macchina
-    num_serie = cerca(r'N\.?\s*SERIE[:\s]+([A-Z0-9\-]+)')
+    # ── Numero serie ──
+    num_serie = cerca(r'(?:Numero\s+)?(?:N\.?\s*)?Serie[:\s]+([A-Z]{2,8}\d{2,4}[-\w]{3,})')
+    if not num_serie:
+        num_serie = cerca(r'(?:N/S|S/N|SER)[:\s]+([A-Z0-9\-]{6,20})')
 
-    # Cliente
-    cliente = cerca(r'CLIENTE[:\s]+(.+?)(?:\n|DATA|COLORE)')
+    # ── Cliente ──
+    cliente = cerca(r'Cliente[:\s]+(.{4,100}?)(?=\n|\r|Colore|Data\s+cons|Numero\s+Serie)')
+    if not cliente:
+        cliente = cerca(r'CLIENTE[:\s]+(.{4,80})')
+    cliente = cliente.strip().rstrip('|').strip()
 
-    # Data (formati: DD/MM/YYYY o YYYY-MM-DD)
-    data_str = cerca(r'DATA[:\s]+(\d{1,2}/\d{1,2}/\d{4})')
-    if data_str:
-        try:
-            from datetime import datetime
-            data_iso = datetime.strptime(data_str, '%d/%m/%Y').date().isoformat()
-        except Exception:
-            data_iso = date.today().isoformat()
-    else:
-        data_iso = date.today().isoformat()
+    # ── Data ──
+    data_raw = cerca(r'Data\s+(?:emissione|produzione|ordine\s*verniciatura)[:\s]+(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})')
+    if not data_raw:
+        data_raw = cerca(r'(?:^|\s)DATA[:\s]+(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})')
+    data_iso = date.today().isoformat()
+    if data_raw:
+        for fmt in ('%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y', '%d-%m-%y'):
+            try:
+                data_iso = dt.strptime(data_raw.strip(), fmt).date().isoformat()
+                break
+            except: pass
 
-    # Colore
-    colore = cerca(r'(?:COLORE|RAL)[:\s]+([A-Z0-9\s]+(?:RAL\s*\d{4})?)')
+    # ── Colore RAL ──
+    colore = cerca(r'Colore\s+verniciatura[:\s]+([A-Z\s]+RAL\s*\d{4})')
     if not colore:
-        colore = cerca(r'((?:VERDE|ROSSO|NERO|GRIGIO|BLU|GIALLO)\s+RAL\s*\d{4})')
+        colore = cerca(r'\b((?:VERDE|ROSSO|NERO|GRIGIO|BLU|GIALLO|BIANCO|ARANCIO)\s+RAL\s*\d{4})\b')
+    if not colore:
+        ral = cerca(r'RAL\s*(\d{4})')
+        if ral: colore = f'RAL {ral}'
 
-    # Codici prodotto (formato ENOROSSI: lettere-lettere-numeri)
-    codici_trovati = re.findall(r'([A-Z]{2,6}-[A-Z0-9]{2,8}(?:-[A-Z0-9]+)?)', testo)
-    # Filtra falsi positivi
-    codici = list(dict.fromkeys([c for c in codici_trovati if len(c) >= 5]))
+    # ── Parametri catena ──
+    n_ganci  = cerca_int(r'(?:Ganci\s+occupati|N\.?\s*Ganci|GANCI\s+TOT)[:\s]+(\d+)')
+    velocita = cerca_float(r'Velocit[àa]\s+catena[:\s]+([\d,\.]+)\s*m(?:/min)?', 0.0)
+    if not velocita:
+        velocita = cerca_float(r'VEL\.?[:\s]+([\d,\.]+)', 0.0)
+    kg_tot   = cerca_float(r'Peso\s+totale\s+carico[:\s]+([\d,\.]+)\s*kg', 0.0)
+    if not kg_tot:
+        kg_tot = cerca_float(r'KG\s+TOT(?:ALI)?[:\s]+([\d,\.]+)', 0.0)
+    saturaz  = cerca_float(r'Saturazione[:\s]+([\d,\.]+)\s*%', 0.0)
+    if not saturaz:
+        saturaz = cerca_float(r'SAT\.?[:\s]+([\d,\.]+)\s*%', 0.0)
+
+    # ── Codici prodotto con quantità ──
+    codici = []
+    seen   = set()
+
+    # PATTERN A: riga tabella NetPro con posizione
+    # "  1  FALC-TF280  Telaio falciatrice  2  3"
+    # "  1  │ FALC-TF280 │ Telaio … │ 2 │ 3 │"
+    for m in re.finditer(
+        r'^\s*\d+\s*[│|]?\s*'
+        r'(?P<cod>[A-Z]{2,7}-[A-Z0-9]{2,12}(?:-[A-Z0-9]+){0,3})'
+        r'\s*[│|]?\s*(?P<desc>[^│|\n\d]{0,60}?)\s*[│|]?\s*'
+        r'(?P<qty>\d+)\s*[│|]',
+        testo, re.MULTILINE
+    ):
+        cod = m.group('cod').upper().strip()
+        if cod not in seen and not re.match(r'^(RAL|NP|SAP|PDF|CAD|BOM)-', cod):
+            codici.append({
+                'codice': cod,
+                'qty': int(m.group('qty')),
+                'descrizione': m.group('desc').strip().rstrip('│|').strip()
+            })
+            seen.add(cod)
+
+    # PATTERN B: qty × CODICE  (es. "2 × FALC-TF280" o "2x FALC-TF280")
+    for m in re.finditer(
+        r'(?:^|\s)(?P<qty>\d+)\s*[×xX]\s*(?P<cod>[A-Z]{2,7}-[A-Z0-9]{2,12}(?:-[A-Z0-9]+){0,3})',
+        testo, re.MULTILINE
+    ):
+        cod = m.group('cod').upper().strip()
+        if cod not in seen and not re.match(r'^(RAL|NP|SAP|PDF|CAD|BOM)-', cod):
+            codici.append({'codice': cod, 'qty': int(m.group('qty')), 'descrizione': ''})
+            seen.add(cod)
+
+    # PATTERN C: CODICE seguito da qty (es. "FALC-TF280 ... 2 pz")
+    for m in re.finditer(
+        r'(?:^|\s)(?P<cod>[A-Z]{2,7}-[A-Z0-9]{2,12}(?:-[A-Z0-9]+){0,3})'
+        r'[^\n\d]{0,60}?(?P<qty>\d+)\s*(?:pz|pcs?|n\.?)\b',
+        testo, re.MULTILINE | re.IGNORECASE
+    ):
+        cod = m.group('cod').upper().strip()
+        if cod not in seen and not re.match(r'^(RAL|NP|SAP|PDF|CAD|BOM)-', cod):
+            codici.append({'codice': cod, 'qty': int(m.group('qty')), 'descrizione': ''})
+            seen.add(cod)
+
+    # PATTERN D: fallback — qualsiasi codice Enorossi nel testo (qty=1)
+    for m in re.finditer(r'\b([A-Z]{2,7}-[A-Z0-9]{2,12}(?:-[A-Z0-9]+){0,3})\b', testo):
+        cod = m.group(1).upper()
+        if cod not in seen and len(cod) >= 5:
+            if not re.match(r'^(RAL|NP|SAP|PDF|CAD|BOM|STD|RB\d|ML\d)-', cod):
+                codici.append({'codice': cod, 'qty': 1, 'descrizione': ''})
+                seen.add(cod)
 
     return {
-        'commessa':  commessa,
-        'num_serie': num_serie,
-        'cliente':   cliente[:100] if cliente else '',
-        'data':      data_iso,
-        'colore':    colore[:60] if colore else '',
-        'n_ganci':   '',
-        'velocita':  1.5,
-        'kg_totali': '',
-        'codici':    codici,
+        'doc_num':     doc_num,
+        'commessa':    commessa,
+        'num_serie':   num_serie,
+        'cliente':     cliente[:120] if cliente else '',
+        'data':        data_iso,
+        'colore':      colore[:60]  if colore   else '',
+        'n_ganci':     n_ganci    or '',
+        'velocita':    velocita   or 1.5,
+        'kg_totali':   kg_tot     or '',
+        'saturazione': saturaz    or '',
+        'codici':      codici,
     }
 
 
 @app.route('/api/carico/salva', methods=['POST'])
 def api_carico_salva():
-    """Salva la registrazione giornaliera e calcola il costo preciso."""
+    """
+    Salva il registro verniciatura giornaliero e calcola il costo
+    unitario REALE per ogni codice pezzo usando la formula fisica completa:
+
+      C_unitario = C_energia + C_fisso(sat) + C_vernice + C_manodopera + C_termico
+
+    Aggiorna StoricoCosto (registro storico) e la media ponderata per
+    quantità in Prodotto.costo_standard — garantendo che lotti grandi
+    pesino più dei piccoli nella storia annuale.
+
+    Formula media ponderata:
+      nuova_media = (media_old × n_old + C_unit × qty) / (n_old + qty)
+    """
     import json
     from datetime import date, datetime as dt, timezone
 
     data_json = request.get_json(force=True)
-    cfg = get_config()
+    cfg       = get_config()
+    now       = dt.now(timezone.utc)
+    oggi_str  = data_json.get('data', date.today().isoformat())
 
-    # Calcolo costo preciso
-    lunghezza_m    = cfg.lunghezza_tunnel_m or 170.0
-    velocita       = float(data_json.get('velocita', 1.5)) or 1.5
-    tempo_ore      = lunghezza_m / velocita / 60.0
-    costo_orario   = cfg.costo_centro_orario or 350.0
-    costo_calc     = round(tempo_ore * costo_orario, 2)
+    # ═══════════════════════════════════════════════════════════
+    # 1. PARAMETRI OPERATIVI DEL GIRO
+    # ═══════════════════════════════════════════════════════════
+    velocita   = float(data_json.get('velocita')  or cfg.velocita_default  or 1.5)
+    n_ganci    = int(  data_json.get('n_ganci')   or 0)
+    kg_totali  = float(data_json.get('kg_totali') or 0)
+    saturaz_in = float(data_json.get('saturazione') or 0)
 
-    # Salva nel DB
-    now = dt.now(timezone.utc)
+    # Lunghezza tunnel e numero ganci totali (da configurazione)
+    L_tunnel      = float(cfg.lunghezza_tunnel_m   or 170.0)
+    passo_m       = float(cfg.passo_gancio_m       or 0.4)
+    n_ganci_tot   = int(cfg.n_ganci_totali         or round(L_tunnel / passo_m))
+
+    # ── Saturazione effettiva ──
+    # Priorità: 1) valore OCR, 2) n_ganci/n_ganci_tot, 3) default 100%
+    if saturaz_in > 0:
+        saturaz_pct = min(float(saturaz_in), 100.0)
+    elif n_ganci > 0:
+        saturaz_pct = round(min(n_ganci / n_ganci_tot * 100.0, 100.0), 1)
+    else:
+        saturaz_pct = 100.0
+
+    # ── Tempo ciclo completo (da prima sosta a uscita tunnel) ──
+    t_ciclo_min = L_tunnel / max(velocita, 0.01)   # minuti
+    t_ciclo_ore = t_ciclo_min / 60.0
+
+    # ═══════════════════════════════════════════════════════════
+    # 2. COSTO TOTALE IMPIANTO PER QUESTO GIRO
+    #    (usato come check e per fallback codici sconosciuti)
+    # ═══════════════════════════════════════════════════════════
+    kw_impianto    = cfg.costo_orario_esercizio / max(cfg.costo_kwh or 0.22, 0.001)
+    c_energia_giro = kw_impianto * t_ciclo_ore * (cfg.costo_kwh or 0.22)
+
+    costo_fisso_ora = max(cfg.costo_orario_esercizio - (c_energia_giro / t_ciclo_ore if t_ciclo_ore else 0), 0)
+    c_fisso_giro    = costo_fisso_ora * t_ciclo_ore * (100.0 / max(saturaz_pct, 5.0))
+
+    c_mdo_giro      = cfg.costo_manodopera_ora * t_ciclo_ore
+    c_centro_giro   = cfg.costo_centro_orario  * t_ciclo_ore
+
+    costo_giro_tot  = round(c_energia_giro + c_fisso_giro + c_mdo_giro + c_centro_giro, 2)
+
+    # ═══════════════════════════════════════════════════════════
+    # 3. NORMALIZZA LISTA CODICI (stringa o dict)
+    # ═══════════════════════════════════════════════════════════
+    codici_raw  = data_json.get('codici', [])
+    codici_list = []   # [{codice, qty, descrizione}]
+    for c in codici_raw:
+        if isinstance(c, dict):
+            cod = (c.get('codice') or '').upper().strip()
+            qty = max(int(c.get('qty', 1) or 1), 1)
+            desc = c.get('descrizione', '') or ''
+        elif isinstance(c, str) and c.strip():
+            cod, qty, desc = c.upper().strip(), 1, ''
+        else:
+            continue
+        if cod:
+            codici_list.append({'codice': cod, 'qty': qty, 'descrizione': desc})
+
+    n_pezzi_tot = sum(c['qty'] for c in codici_list) or 1
+
+    # ═══════════════════════════════════════════════════════════
+    # 4. COSTO UNITARIO PER OGNI CODICE + AGGIORNAMENTO STORICO
+    # ═══════════════════════════════════════════════════════════
+    dettaglio = []
+
+    for item in codici_list:
+        cod  = item['codice']
+        qty  = item['qty']
+        prod = Prodotto.query.filter_by(codice=cod).first()
+
+        # ── A. Calcolo costo unitario ──
+        if prod and (prod.superficie_m2 or 0) > 0:
+            # Formula fisica completa (vedi calcola_costo_unitario)
+            try:
+                cu = calcola_costo_unitario(
+                    cfg, prod,
+                    velocita_override = velocita,
+                    saturazione_pct   = saturaz_pct,
+                    n_pezzi_blocco    = n_pezzi_tot
+                )
+                c_unit    = cu['costo_totale']
+                bkd       = cu
+            except Exception as exc:
+                # Fallback geometrico: ripartizione proporzionale per superficie
+                sup_tot = sum(
+                    (Prodotto.query.filter_by(codice=x['codice']).first() or type('P', (), {'superficie_m2': 0})()).superficie_m2 * x['qty']
+                    for x in codici_list
+                ) or 1
+                fraz   = ((prod.superficie_m2 or 0) / sup_tot)
+                c_unit = round(costo_giro_tot * fraz, 4)
+                bkd    = {}
+        else:
+            # Codice sconosciuto: ripartizione uniforme sul numero pezzi
+            c_unit = round(costo_giro_tot / n_pezzi_tot, 4)
+            bkd    = {}
+
+        c_riga = round(c_unit * qty, 4)
+
+        # ── B. Media ponderata per quantità in Prodotto ──
+        # Ogni giro contribuisce pro-quota al costo standard storico
+        if prod:
+            n_old  = max(int(prod.n_campioni_standard or 0), 0)
+            m_old  = float(prod.costo_standard or 0.0)
+            # Media ponderata: i lotti grandi pesano proporzionalmente di più
+            prod.costo_standard      = round((m_old * n_old + c_unit * qty) / (n_old + qty), 4)
+            prod.n_campioni_standard = n_old + qty
+
+        # ── C. Riga StoricoCosto ──
+        if prod:
+            try:
+                data_obj = date.fromisoformat(oggi_str)
+            except Exception:
+                data_obj = date.today()
+
+            sc = StoricoCosto(
+                prodotto_id      = prod.id,
+                data             = data_obj,
+                quantita         = qty,
+                costo_materiale  = round(bkd.get('costo_vernice',    0), 4),
+                costo_processo   = round(bkd.get('costo_processo',   0), 4),
+                costo_manodopera = round(bkd.get('costo_manodopera', 0), 4),
+                costo_totale     = round(c_unit, 4),
+                velocita_catena  = velocita,
+                costo_orario     = cfg.costo_orario_esercizio,
+                costo_termico    = round(bkd.get('costo_termico',    0), 4),
+                saturazione_pct  = saturaz_pct,
+                tempo_min        = round(bkd.get('t_occ_min', t_ciclo_min / n_pezzi_tot), 3),
+            )
+            db.session.add(sc)
+
+        dettaglio.append({
+            'codice':         cod,
+            'qty':            qty,
+            'costo_unitario': round(c_unit, 4),
+            'costo_riga':     round(c_riga, 4),
+            'trovato_db':     prod is not None,
+            'superficie_m2':  round(prod.superficie_m2, 4) if prod and prod.superficie_m2 else None,
+            'breakdown': {
+                'energia':    round(bkd.get('costo_energia',    0), 4),
+                'fisso':      round(bkd.get('costo_fisso',      0), 4),
+                'vernice':    round(bkd.get('costo_vernice',    0), 4),
+                'manodopera': round(bkd.get('costo_manodopera', 0), 4),
+                'termico':    round(bkd.get('costo_termico',    0), 4),
+            } if bkd else {},
+        })
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. SALVA CaricoDailyLog
+    # ═══════════════════════════════════════════════════════════
     log = CaricoDailyLog(
-        data            = data_json.get('data', date.today().isoformat()),
-        ora             = now.strftime('%H:%M:%S'),
-        commessa        = data_json.get('commessa', ''),
-        num_serie       = data_json.get('num_serie', ''),
-        cliente         = data_json.get('cliente', ''),
-        colore          = data_json.get('colore', ''),
-        operaio         = data_json.get('operaio', ''),
-        n_ganci         = int(data_json.get('n_ganci', 0) or 0),
-        velocita_mmin   = velocita,
-        kg_totali       = float(data_json.get('kg_totali', 0) or 0),
-        codici_json     = json.dumps(data_json.get('codici', [])),
-        note            = data_json.get('note', ''),
-        costo_calcolato = costo_calc,
+        data          = oggi_str,
+        ora           = now.strftime('%H:%M:%S'),
+        commessa      = (data_json.get('commessa')  or '')[:80],
+        num_serie     = (data_json.get('num_serie') or '')[:100],
+        cliente       = (data_json.get('cliente')   or '')[:200],
+        colore        = (data_json.get('colore')    or '')[:80],
+        operaio       = (data_json.get('operaio')   or '')[:100],
+        n_ganci       = n_ganci,
+        velocita_mmin = velocita,
+        kg_totali     = kg_totali,
+        codici_json   = json.dumps(codici_list, ensure_ascii=False),
+        note          = (data_json.get('note') or '')[:500],
+        costo_calcolato = costo_giro_tot,
     )
     db.session.add(log)
-
-    # Aggiorna Storico Costi per ogni codice verniciato
-    codici = data_json.get('codici', [])
-    for cod in codici:
-        prod = Prodotto.query.filter_by(codice=cod).first()
-        if prod:
-            # Distribuisce il costo equamente tra i codici
-            costo_per_codice = costo_calc / max(len(codici), 1)
-            # Aggiorna media mobile
-            n = max(prod.n_campioni_standard, 0)
-            vecchia_media = prod.costo_standard or 0.0
-            prod.costo_standard     = round((vecchia_media * n + costo_per_codice) / (n + 1), 4)
-            prod.n_campioni_standard = n + 1
-
     db.session.commit()
 
-    # Calcola totali della giornata
-    oggi_str  = date.today().isoformat()
-    log_oggi  = CaricoDailyLog.query.filter_by(data=oggi_str).all()
-    giri_oggi = len(log_oggi)
-    costo_oggi = sum(l.costo_calcolato or 0 for l in log_oggi)
+    # ═══════════════════════════════════════════════════════════
+    # 6. KPI GIORNATA (per aggiornamento UI in tempo reale)
+    # ═══════════════════════════════════════════════════════════
+    log_oggi     = CaricoDailyLog.query.filter_by(data=oggi_str).all()
+    giri_oggi    = len(log_oggi)
+    costo_oggi   = round(sum(l.costo_calcolato or 0 for l in log_oggi), 2)
+    ganci_oggi   = sum(l.n_ganci or 0 for l in log_oggi)
+    sat_media    = round(min(ganci_oggi / (n_ganci_tot * giri_oggi) * 100, 100.0), 1) if giri_oggi else 0.0
 
     return jsonify({
-        'ok':         True,
-        'log_id':     log.id,
-        'costo_calc': costo_calc,
-        'giri_oggi':  giri_oggi,
-        'costo_oggi': round(costo_oggi, 2),
+        'ok':              True,
+        'log_id':          log.id,
+        # Costo giro
+        'costo_giro':      costo_giro_tot,
+        't_ciclo_min':     round(t_ciclo_min, 1),
+        'saturaz_pct':     saturaz_pct,
+        'n_pezzi':         n_pezzi_tot,
+        # Dettaglio per codice
+        'dettaglio':       dettaglio,
+        # KPI giornata
+        'giri_oggi':       giri_oggi,
+        'costo_oggi':      costo_oggi,
+        'sat_media_oggi':  sat_media,
+        'ganci_oggi':      ganci_oggi,
+        # Breakdown costo giro (per display)
+        'breakdown_giro': {
+            'energia':  round(c_energia_giro, 2),
+            'fisso':    round(c_fisso_giro,   2),
+            'mdo':      round(c_mdo_giro,     2),
+            'centro':   round(c_centro_giro,  2),
+            'totale':   costo_giro_tot,
+        },
     })
 
 
-
-# ══════════════════════════════════════════════════════════════════
-# ROUTE: PANNELLO CONFIGURAZIONE INTERMEDIO (post-upload, pre-nesting)
-# ══════════════════════════════════════════════════════════════════
 
 @app.route('/cad/bom/<int:asm_id>/configura')
 def cad_configura(asm_id):
