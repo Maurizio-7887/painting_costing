@@ -67,6 +67,11 @@ elif _db_url.startswith('postgresql://') and '+psycopg2' not in _db_url:
 
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Railway mette in sospensione il servizio solo se per 10 minuti non esce traffico: con il pool le connessioni
+# al database restano aperte e il servizio non si addormenta mai. NullPool apre la connessione a ogni richiesta e la chiude subito.
+if _db_url.startswith('postgresql'):
+    from sqlalchemy.pool import NullPool
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'poolclass': NullPool}
 
 # ── GLB STORAGE (Railway Volume o static/glb locale) ────────────
 # Su Railway: crea un Volume montato su /data e imposta GLB_DIR=/data/glb
